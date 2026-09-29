@@ -1,4 +1,4 @@
-From 954aa86600761c9423d70875ef57ff2baf072981 Mon Sep 17 00:00:00 2001
+From dadd09d1c8ddfaf2c2f1c7e1769d8163db904035 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 3/5] mb/lenovo/sklkbl_thinkpad: Add a power resource for the

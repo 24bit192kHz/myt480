@@ -1,4 +1,4 @@
-From ba2b9cbfea78fc1461503b8a2d41d0c3f4fbbbca Mon Sep 17 00:00:00 2001
+From 4f60b03bdc983b929ba65c7d493b8e9ffcfd6527 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 4/5] mb/lenovo/sklkbl_thinkpad: Keep the option of a disabled
