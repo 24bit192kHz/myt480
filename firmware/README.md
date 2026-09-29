@@ -34,5 +34,8 @@ Hold the power button for 4 s, then power on. coreboot sees the forced power-off
 clears the dGPU request and asks GRUB to show its menu. If that does not help, write
 your last good image, or the dump of the stock firmware, with the external programmer.
 
-The kernel has no watchdog (`nowatchdog`, no `iTCO_wdt`) and `panic=0`: a hang stays a
-hang. Do not test firmware when nobody can reach the power button.
+The kernel command line has `panic=10`: after a kernel panic the machine restarts.
+There is no watchdog (`nowatchdog`, no `iTCO_wdt`), so a hang that is not a panic stays
+a hang. Do not test firmware when nobody can reach the power button.
+
+For a hang that leaves no trace, see "Debug build" in `coreboot/README.md`.

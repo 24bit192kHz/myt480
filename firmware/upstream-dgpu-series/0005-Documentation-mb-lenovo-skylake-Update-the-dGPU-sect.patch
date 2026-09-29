@@ -1,0 +1,50 @@
+From 1b72b39935c45b77db770a732dc8739c32d61676 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 22:37:55 +0300
+Subject: [PATCH 5/5] Documentation/mb/lenovo/skylake: Update the dGPU section
+
+The power sequence and the proprietary driver work now. Describe the
+option, the full reset on the first boot with the GPU and the power
+management.
+
+---
+ Documentation/mainboard/lenovo/skylake.md | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/mainboard/lenovo/skylake.md b/Documentation/mainboard/lenovo/skylake.md
+index 672be9f4db..ae62f02ec5 100644
+--- a/Documentation/mainboard/lenovo/skylake.md
++++ b/Documentation/mainboard/lenovo/skylake.md
+@@ -193,11 +193,25 @@ binaries if only flashing the `bios` region.
+ 
+ ## Known Issues
+ 
+-- Nvidia dGPU is finicky
+-  - Needs option ROM
+-  - Power enable code is buggy
+-  - Proprietary driver does not work at all
++- Nvidia dGPU (T480, T480s, T580)
++  - Tested on a T480 with a GeForce MX150 only
++  - The GPU has no ROM of its own: add the VBIOS of the vendor firmware to CBFS as
++    `pci10de,1d10.rom` (type `optionrom`), the driver reads it through ACPI `_ROM`
+   - Nouveau only works on linux 6.8-6.9
++  - The vendor firmware's GC6 and Optimus `_DSM` methods are not implemented
++
++### Nvidia dGPU
++
++The option `dgpu_enable` powers the GPU in the bootblock, so that it is on the PCIe
++bus when FSP-S looks at root port 1. FSP-S disables a root port without a link, and the
++port then stays disabled until the next power cycle. The first boot after the option
++was turned on therefore does one full reset.
++
++An ACPI power resource lets the OS turn the GPU off (D3cold) while no driver uses it.
++The GPU is also turned off before the system enters S3, S4 or S5.
++
++Tested with the proprietary driver 580.178.04 on Linux 7.2: render offload with OpenGL
++and Vulkan, suspend and resume.
+ 
+ ## Verified Working
+ 
+-- 
+2.55.0
+

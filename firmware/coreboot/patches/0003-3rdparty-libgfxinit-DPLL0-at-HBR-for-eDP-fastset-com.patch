@@ -1,7 +1,7 @@
 From 59c8da22652c0aef956478f8a98d8b2fc5bf5145 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 14:54:27 +0300
-Subject: [PATCH 03/13] 3rdparty/libgfxinit: DPLL0 at HBR for eDP
+Subject: [PATCH 03/14] 3rdparty/libgfxinit: DPLL0 at HBR for eDP
  (fastset-compatible takeover)
 
 ---

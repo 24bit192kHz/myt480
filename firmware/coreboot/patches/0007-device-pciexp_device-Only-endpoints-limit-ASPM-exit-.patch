@@ -1,7 +1,7 @@
 From 0dc6728e0cac0e8189573f335449f14056f1b302 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:54:47 +0300
-Subject: [PATCH 07/13] device/pciexp_device: Only endpoints limit ASPM exit
+Subject: [PATCH 07/14] device/pciexp_device: Only endpoints limit ASPM exit
  latency
 
 The L0s/L1 Acceptable Latency fields of Device Capabilities exist for

@@ -17,6 +17,16 @@ Results on this machine: firmware hands over to GRUB after about 1.2 s, the lapt
 idles at 6.7 W on battery with the MX150 off, and the MX150 is ready about 2 s after a
 program asks for it.
 
+## Branches
+
+| Branch | Firmware | State |
+|---|---|---|
+| `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
+| `main` | C35: C32 plus a wait for the GPU link, a checked `_ROM` length, `panic=10`, a debug build, and the series for upstream after review | builds; **not flashed yet** |
+
+Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
+Use `speed` if you want what is known to work today.
+
 ## Layout
 
 Every directory has its own README.

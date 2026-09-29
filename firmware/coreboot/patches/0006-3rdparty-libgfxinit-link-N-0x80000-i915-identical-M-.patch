@@ -1,7 +1,7 @@
 From 61c71ac243d13f8cae32f99a84255f4e74d566ac Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 15:07:58 +0300
-Subject: [PATCH 06/13] 3rdparty/libgfxinit: link N = 0x80000 (i915-identical
+Subject: [PATCH 06/14] 3rdparty/libgfxinit: link N = 0x80000 (i915-identical
  M/N)
 
 ---

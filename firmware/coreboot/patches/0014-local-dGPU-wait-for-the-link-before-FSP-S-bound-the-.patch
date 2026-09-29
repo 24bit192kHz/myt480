@@ -1,0 +1,266 @@
+From e71b9a73650e11cdc9e3a896a2f93e7854203ae5 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 22:42:24 +0300
+Subject: [PATCH 14/14] [local] dGPU: wait for the link before FSP-S, bound the
+ _ROM length
+
+The review fixes of the upstream series, on the flashed code: up to 100 ms
+for the link of root port 1 before FSP-S, image lengths of an option ROM
+checked against the size of the CBFS file, one log prefix.
+---
+ src/device/pci_rom.c                          | 31 ++++++++++--
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 47 ++++++++++++++++---
+ .../lenovo/sklkbl_thinkpad/dgpu_early.c       |  3 +-
+ .../lenovo/sklkbl_thinkpad/ramstage.c         |  3 ++
+ .../lenovo/sklkbl_thinkpad/variant.h          |  1 +
+ .../variants/t480/include/variant/dgpu.h      |  1 +
+ .../variants/t480s/include/variant/dgpu.h     |  1 +
+ .../variants/t580/include/variant/dgpu.h      |  1 +
+ 8 files changed, 77 insertions(+), 11 deletions(-)
+
+diff --git a/src/device/pci_rom.c b/src/device/pci_rom.c
+index 66cd2f12a4..59c404d0db 100644
+--- a/src/device/pci_rom.c
++++ b/src/device/pci_rom.c
+@@ -42,6 +42,15 @@ static void *cbfs_boot_map_optionrom(uint16_t vendor, uint16_t device)
+ 	return cbfs_map(name, NULL);
+ }
+ 
++static size_t cbfs_boot_optionrom_size(uint16_t vendor, uint16_t device)
++{
++	char name[17] = "pciXXXX,XXXX.rom";
++
++	snprintf(name, sizeof(name), "pci%04hx,%04hx.rom", vendor, device);
++
++	return cbfs_get_size(name);
++}
++
+ struct rom_header *pci_rom_probe(const struct device *dev)
+ {
+ 	struct rom_header *rom_header = NULL;
+@@ -348,17 +357,27 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
+  * The size field of the ROM header is a single byte and cannot describe more
+  * than 127.5 KiB, and it only covers the first image. Add up the image
+  * lengths of the PCI data structures to get the size of the whole ROM.
++ * Stay within max bytes, if max is not zero.
+  */
+-static size_t pci_rom_images_size(const struct rom_header *rom)
++static size_t pci_rom_images_size(const struct rom_header *rom, const size_t max)
+ {
+ 	size_t size = 0;
+ 
+-	while (le16_to_cpu(rom->signature) == PCI_ROM_HDR) {
+-		const struct pci_data *data = (void *)rom + le16_to_cpu(rom->data);
++	while (!max || size + sizeof(*rom) <= max) {
++		if (le16_to_cpu(rom->signature) != PCI_ROM_HDR)
++			break;
++
++		const size_t offset = le16_to_cpu(rom->data);
++		if (max && size + offset + sizeof(struct pci_data) > max)
++			break;
++
++		const struct pci_data *data = (void *)rom + offset;
+ 		const size_t ilen = le16_to_cpu(data->ilen) * 512;
+ 
+ 		if (le32_to_cpu(data->signature) != PCI_DATA_HDR || !ilen)
+ 			break;
++		if (max && size + ilen > max)
++			break;
+ 
+ 		size += ilen;
+ 		if (data->indicator & 0x80)	/* last image */
+@@ -404,7 +423,11 @@ void pci_rom_ssdt(const struct device *device)
+ 		}
+ 
+ 		/* Prepare memory */
+-		const size_t cbrom_length = MAX(pci_rom_images_size(rom), rom->size * 512);
++		/* Zero for a ROM that comes from the device: its size is not known */
++		const u32 vendev = map_oprom_vendev((device->vendor << 16) | device->device);
++		const size_t file_size = cbfs_boot_optionrom_size(vendev >> 16, vendev & 0xffff);
++		const size_t cbrom_length = MAX(pci_rom_images_size(rom, file_size),
++						rom->size * 512);
+ 		if (!cbrom_length) {
+ 			printk(BIOS_ERR, "%s: ROM has zero length!\n",
+ 			dev_path(device));
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+index 3f9d18dc9c..e4763ca764 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+@@ -4,15 +4,50 @@
+ #include <acpi/acpigen.h>
+ #include <cf9_reset.h>
+ #include <console/console.h>
++#include <delay.h>
+ #include <device/device.h>
++#include <device/pci_def.h>
++#include <device/pci_ops.h>
+ #include <gpio.h>
+ #include <intelblocks/pmclib.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
+ #include <soc/pm.h>
+ #include <soc/pmc.h>
+ #include <static.h>
++#include <timer.h>
+ #include <variant/dgpu.h>
+ 
++#define DGPU_LINK_TIMEOUT_MS	100
++
++/*
++ * FSP-S disables root port 1 if it has no link. PCIe gives a device 100 ms
++ * after its reset; do not let a fast boot path be faster than that.
++ */
++void dgpu_wait_for_link(void)
++{
++	const pci_devfn_t rp = PCI_DEV(0, 0x1c, 0);
++	struct stopwatch sw;
++	u16 cap;
++
++	if (!gpio_tx_get(GPIO_GPU_RST))
++		return;
++
++	cap = pci_s_find_capability(rp, PCI_CAP_ID_PCIE);
++	if (!cap)
++		return;
++
++	stopwatch_init_msecs_expire(&sw, DGPU_LINK_TIMEOUT_MS);
++	while (!(pci_s_read_config16(rp, cap + PCI_EXP_LNKSTA) & PCI_EXP_LNKSTA_DLLLA)) {
++		if (stopwatch_expired(&sw)) {
++			printk(BIOS_WARNING, "dGPU: no link after %d ms\n",
++			       DGPU_LINK_TIMEOUT_MS);
++			return;
++		}
++		mdelay(1);
++	}
++	printk(BIOS_DEBUG, "dGPU: link after %lld ms\n", stopwatch_duration_msecs(&sw));
++}
++
+ static void dgpu_power_off(void)
+ {
+ 	gpio_set(GPIO_GPU_RST, 0);
+@@ -66,16 +101,16 @@ void dgpu_detect(void)
+ 	int dgfx_vram_id;
+ 
+ 	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0) { // active low
+-		printk(BIOS_DEBUG, "Discrete GPU not present\n");
++		printk(BIOS_DEBUG, "dGPU: not present\n");
+ 		dgpu->enabled = 0;
+ 		return;
+ 	}
+ 
+ 	dgfx_vram_id = gpio_get(GPIO_DGFX_VRAM_ID0) | gpio_get(GPIO_DGFX_VRAM_ID1) << 1;
+-	printk(BIOS_DEBUG, "Discrete GPU present with %s VRAM\n", dgfx_vram_id_str[dgfx_vram_id]);
++	printk(BIOS_DEBUG, "dGPU: present with %s VRAM\n", dgfx_vram_id_str[dgfx_vram_id]);
+ 
+ 	if (!gpio_tx_get(GPIO_1R8VIDEO_AON_ON)) {
+-		printk(BIOS_DEBUG, "Discrete GPU will remain disabled\n");
++		printk(BIOS_DEBUG, "dGPU: disabled\n");
+ 		dgpu->enabled = 0;
+ 		return;
+ 	}
+@@ -91,17 +126,17 @@ void dgpu_detect(void)
+ 		const struct chipset_power_state *ps = pmc_get_power_state();
+ 
+ 		if (ps && (ps->gen_pmcon_a & MEM_SR)) {
+-			printk(BIOS_INFO, "Discrete GPU: root port is disabled, full reset\n");
++			printk(BIOS_INFO, "dGPU: root port is disabled, full reset\n");
+ 			full_reset();
+ 		}
+ 	}
+ 
+ 	if (!rp || !rp->enabled) {
+-		printk(BIOS_ERR, "Discrete GPU has no PCIe link, powering it off\n");
++		printk(BIOS_ERR, "dGPU: no PCIe link, powering it off\n");
+ 		dgpu_power_off();
+ 		dgpu->enabled = 0;
+ 		return;
+ 	}
+ 
+-	printk(BIOS_INFO, "Discrete GPU enabled\n");
++	printk(BIOS_INFO, "dGPU: enabled\n");
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+index d5e2b16993..cd1b60cea3 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+@@ -12,6 +12,7 @@
+ #include <variant/dgpu.h>
+ 
+ #define DGPU_PWRGD_TIMEOUT_MS	100
++/* The vendor firmware waits 8 ms between power and the end of the reset */
+ #define DGPU_RESET_DELAY_MS	10
+ 
+ /*
+@@ -29,7 +30,7 @@ void dgpu_power_on(void)
+ {
+ 	static const struct pad_config pads[] = {
+ 		PAD_CFG_GPI_TRIG_OWN(GPIO_DISCRETE_PRESENCE, UP_20K, DEEP, OFF, ACPI),
+-		PAD_CFG_GPI_TRIG_OWN(GPIO_DGFX_PWRGD, NONE, DEEP, OFF, ACPI),
++		PAD_CFG_GPI_TRIG_OWN(GPIO_DGFX_PWRGD, NONE, DGFX_PWRGD_RESET, OFF, ACPI),
+ 		PAD_CFG_NF(GPIO_DGFX_CLKREQ, NONE, DEEP, NF1),
+ 		PAD_CFG_TERM_GPO(GPIO_GPU_RST, 0, UP_20K, RSMRST),
+ 	};
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index c41844f9dc..fc006f862b 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -39,6 +39,9 @@ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
+ {
+ 	// Setup GPIOs
+ 	variant_config_gpios();
++
++	if (CONFIG(VARIANT_HAS_DGPU))
++		dgpu_wait_for_link();
+ }
+ 
+ static void mainboard_enable(struct device *dev)
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index f503894faa..c13d15c3e7 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -12,6 +12,7 @@ uint8_t variant_memory_sku(void);
+ #define  DGPU_REQUEST		0xd6
+ 
+ void dgpu_power_on(void);
++void dgpu_wait_for_link(void);
+ void dgpu_detect(void);
+ void dgpu_fill_ssdt(const struct device *dev);
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
+index 763236e462..1fd5485e48 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define  DGFX_PWRGD_RESET		DEEP	// as in the GPIO table
+ #define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
+index 763236e462..e790116d97 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define  DGFX_PWRGD_RESET		PLTRST	// as in the GPIO table
+ #define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
+index 763236e462..1fd5485e48 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define  DGFX_PWRGD_RESET		DEEP	// as in the GPIO table
+ #define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+-- 
+2.55.0
+

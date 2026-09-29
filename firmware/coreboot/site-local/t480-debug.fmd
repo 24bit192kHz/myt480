@@ -1,0 +1,14 @@
+# T480 with a console in the flash, for a boot that hangs and leaves no other
+# trace. Same as the default layout, with CONSOLE taken from the start of CBFS.
+FLASH 0x1000000 {
+	SI_DESC@0x0 0x1000
+	SI_GBE@0x1000 0x2000
+	SI_ME@0x3000 0x111000
+	BIOS@0x120000 0xee0000 {
+		RW_MRC_CACHE@0x0 0x10000
+		RW_SPD_CACHE@0x10000 0x1000
+		FMAP@0x11000 0x1000
+		CONSOLE@0x12000 0x20000
+		COREBOOT(CBFS)@0x32000
+	}
+}

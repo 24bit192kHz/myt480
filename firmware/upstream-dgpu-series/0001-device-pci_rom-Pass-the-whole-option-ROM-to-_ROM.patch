@@ -1,7 +1,7 @@
-From fb0015c2fc6bff66c36f2e678e721afc3155e9c8 Mon Sep 17 00:00:00 2001
+From 1bcac84eecdc97614aa9a1435bc40be0f3318480 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
-Date: Tue, 29 Sep 2026 19:53:22 +0300
-Subject: [PATCH 1/4] device/pci_rom: Pass the whole option ROM to _ROM
+Date: Tue, 29 Sep 2026 22:37:54 +0300
+Subject: [PATCH 1/5] device/pci_rom: Pass the whole option ROM to _ROM
 
 pci_rom_ssdt() takes the length of an option ROM from the size field of
 its header. That field is a single byte, so it cannot describe more
@@ -16,19 +16,37 @@ initialize the GPU:
 
 For ROMs that are not loaded yet, add up the image lengths of the PCI
 data structures instead, with the size of the header as lower bound.
+For a ROM from CBFS, do not go beyond the size of the file.
 
 TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS as
-     pci10de,1d10.rom in CBFS: the NVIDIA driver initializes the GPU.
+     pci10de,1d10.rom in CBFS: _ROM returns 182272 bytes and the
+     NVIDIA driver initializes the GPU.
 
 ---
- src/device/pci_rom.c | 36 +++++++++++++++++++++++++++++++++---
- 1 file changed, 33 insertions(+), 3 deletions(-)
+ src/device/pci_rom.c | 59 +++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 56 insertions(+), 3 deletions(-)
 
 diff --git a/src/device/pci_rom.c b/src/device/pci_rom.c
-index dc41ef14ce..66cd2f12a4 100644
+index dc41ef14ce..59c404d0db 100644
 --- a/src/device/pci_rom.c
 +++ b/src/device/pci_rom.c
-@@ -344,10 +344,37 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
+@@ -42,6 +42,15 @@ static void *cbfs_boot_map_optionrom(uint16_t vendor, uint16_t device)
+ 	return cbfs_map(name, NULL);
+ }
+ 
++static size_t cbfs_boot_optionrom_size(uint16_t vendor, uint16_t device)
++{
++	char name[17] = "pciXXXX,XXXX.rom";
++
++	snprintf(name, sizeof(name), "pci%04hx,%04hx.rom", vendor, device);
++
++	return cbfs_get_size(name);
++}
++
+ struct rom_header *pci_rom_probe(const struct device *dev)
+ {
+ 	struct rom_header *rom_header = NULL;
+@@ -344,10 +353,47 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
  	return current;
  }
  
@@ -36,16 +54,26 @@ index dc41ef14ce..66cd2f12a4 100644
 + * The size field of the ROM header is a single byte and cannot describe more
 + * than 127.5 KiB, and it only covers the first image. Add up the image
 + * lengths of the PCI data structures to get the size of the whole ROM.
++ * Stay within max bytes, if max is not zero.
 + */
-+static size_t pci_rom_images_size(const struct rom_header *rom)
++static size_t pci_rom_images_size(const struct rom_header *rom, const size_t max)
 +{
 +	size_t size = 0;
 +
-+	while (le16_to_cpu(rom->signature) == PCI_ROM_HDR) {
-+		const struct pci_data *data = (void *)rom + le16_to_cpu(rom->data);
++	while (!max || size + sizeof(*rom) <= max) {
++		if (le16_to_cpu(rom->signature) != PCI_ROM_HDR)
++			break;
++
++		const size_t offset = le16_to_cpu(rom->data);
++		if (max && size + offset + sizeof(struct pci_data) > max)
++			break;
++
++		const struct pci_data *data = (void *)rom + offset;
 +		const size_t ilen = le16_to_cpu(data->ilen) * 512;
 +
 +		if (le32_to_cpu(data->signature) != PCI_DATA_HDR || !ilen)
++			break;
++		if (max && size + ilen > max)
 +			break;
 +
 +		size += ilen;
@@ -66,7 +94,7 @@ index dc41ef14ce..66cd2f12a4 100644
  
  	/* Only handle display devices */
  	if ((device->class >> 16) != PCI_BASE_CLASS_DISPLAY)
-@@ -359,7 +386,9 @@ void pci_rom_ssdt(const struct device *device)
+@@ -359,7 +405,9 @@ void pci_rom_ssdt(const struct device *device)
  
  	/* Already loaded into DRAM? */
  	rom = device->pci_vga_option_rom;
@@ -77,16 +105,20 @@ index dc41ef14ce..66cd2f12a4 100644
  		/* Probe for option rom */
  		rom = pci_rom_probe(device);
  		if (!rom || !rom->size) {
-@@ -375,7 +404,7 @@ void pci_rom_ssdt(const struct device *device)
+@@ -375,7 +423,11 @@ void pci_rom_ssdt(const struct device *device)
  		}
  
  		/* Prepare memory */
 -		const size_t cbrom_length = rom->size * 512;
-+		const size_t cbrom_length = MAX(pci_rom_images_size(rom), rom->size * 512);
++		/* Zero for a ROM that comes from the device: its size is not known */
++		const u32 vendev = map_oprom_vendev((device->vendor << 16) | device->device);
++		const size_t file_size = cbfs_boot_optionrom_size(vendev >> 16, vendev & 0xffff);
++		const size_t cbrom_length = MAX(pci_rom_images_size(rom, file_size),
++						rom->size * 512);
  		if (!cbrom_length) {
  			printk(BIOS_ERR, "%s: ROM has zero length!\n",
  			dev_path(device));
-@@ -394,6 +423,7 @@ void pci_rom_ssdt(const struct device *device)
+@@ -394,6 +446,7 @@ void pci_rom_ssdt(const struct device *device)
  		memcpy(cbrom, rom, cbrom_length);
  
  		rom = cbrom;
@@ -94,7 +126,7 @@ index dc41ef14ce..66cd2f12a4 100644
  	}
  
  	const char *scope = acpi_device_path(device);
-@@ -404,7 +434,7 @@ void pci_rom_ssdt(const struct device *device)
+@@ -404,7 +457,7 @@ void pci_rom_ssdt(const struct device *device)
  
  	/* write _ROM method */
  	acpigen_write_scope(scope);
