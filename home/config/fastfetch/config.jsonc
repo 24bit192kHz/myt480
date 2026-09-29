@@ -1,0 +1,39 @@
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    // Grayscale to match ~/.config/theme/palette.conf (FG/ACCENT/GRAY_*/MUTED/BORDER).
+    // Logo is animated by ~/.local/bin/ffa; plain `fastfetch` shows it static.
+    "logo": {
+        "type": "file",
+        "source": "~/.config/fastfetch/artix.txt",
+        "color": { "1": "#cfcfcf" },
+        "padding": { "left": 1, "right": 3 }
+    },
+    "display": {
+        "separator": "  ",
+        "color": {
+            "keys": "#909090",
+            "title": "#ededed",
+            "output": "#e4e4e4",
+            "separator": "#3a3a3a"
+        }
+    },
+    "modules": [
+        { "type": "title", "color": { "at": "#6e6e6e", "host": "#b8b8b8" } },
+        { "type": "custom", "format": "{#38;2;58;58;58}──────────────────────────" },
+        { "type": "os",       "key": "os     " },
+        { "type": "kernel",   "key": "kernel " },
+        { "type": "packages", "key": "pkgs   ", "format": "{all}" },
+        { "type": "cpu",      "key": "cpu    " },
+        { "type": "gpu",      "key": "gpu    " },
+        { "type": "memory",   "key": "mem    " },
+        {
+            "type": "command",
+            "key": "bat    ",
+            "text": "awk 'FILENAME ~ /now$/ {n+=$1} FILENAME ~ /full$/ {f+=$1} FILENAME ~ /status$/ && $0==\"Charging\" {c=1} END {if (f>0) printf \"%d%%%s\\n\", (n*100+f/2)/f, c?\" ↑\":\"\"; else print \"N/A\"}' /sys/class/power_supply/BAT*/energy_now /sys/class/power_supply/BAT*/energy_full /sys/class/power_supply/BAT*/status 2>/dev/null"
+        },
+        { "type": "uptime",   "key": "up     " },
+        { "type": "shell",    "key": "shell  " },
+        { "type": "terminal", "key": "term   " },
+        { "type": "colors", "symbol": "circle", "paddingLeft": 0 }
+    ]
+}

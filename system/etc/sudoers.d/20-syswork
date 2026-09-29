@@ -1,0 +1,6 @@
+# btw is already in wheel with full sudo via 10-installer; this rule exists
+# for convenience (passwordless, non-interactive use by automation) and as an
+# audit marker for the syswork CLI only. Tighten by restricting args (e.g. a
+# Cmnd_Alias of safe subcommands) or dropping NOPASSWD if syswork gains
+# dangerous subcommands.
+btw ALL=(root) NOPASSWD: /usr/local/bin/syswork *

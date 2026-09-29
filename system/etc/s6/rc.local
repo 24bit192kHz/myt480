@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# Enter custom commands here. By default, they will be executed on startup in parallel
+# with the other services. If you need these commands to wait on certain services before
+# being up, you can add empty files named after the wanted services in the
+# /etc/s6/adminsv/rc-local/dependencies.d directory and then recompile the database.
+
+# Dynamic hibernate cap: 40% RAM so small use = small image, full use fits swap.
+[ -x /usr/local/bin/hibernate-tune ] && /usr/local/bin/hibernate-tune || true

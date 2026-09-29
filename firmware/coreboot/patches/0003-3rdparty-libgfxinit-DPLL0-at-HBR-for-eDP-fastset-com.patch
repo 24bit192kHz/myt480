@@ -1,0 +1,20 @@
+From 59c8da22652c0aef956478f8a98d8b2fc5bf5145 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 14:54:27 +0300
+Subject: [PATCH 03/13] 3rdparty/libgfxinit: DPLL0 at HBR for eDP
+ (fastset-compatible takeover)
+
+---
+ 3rdparty/libgfxinit | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/3rdparty/libgfxinit b/3rdparty/libgfxinit
+index 6e74c70313..7e9bbda541 160000
+--- a/3rdparty/libgfxinit
++++ b/3rdparty/libgfxinit
+@@ -1 +1 @@
+-Subproject commit 6e74c703132a8b4af4354a5158f286dc8f2407ab
++Subproject commit 7e9bbda541cad88790e2bca2a9f0ce9aa045a7ce
+-- 
+2.55.0
+

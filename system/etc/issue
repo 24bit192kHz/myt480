@@ -1,0 +1,21 @@
+[m[1m[36m                   '[m                       [m[1m[36mOS[m: [mArtix Linux x86_64
+[1m[36m                  'o'[m                      [m[1m[36mHost[m: [mT480 (1.0)
+[1m[36m                 'ooo'[m                     [m[1m[36mKernel[m: [mLinux 7.2.5-rt3-arch1-1-rt
+[1m[36m                'ooxoo'[m                    [m[1m[36mUptime[m: [m3 seconds
+[1m[36m               'ooxxxoo'[m                   [m[1m[36mPackages[m: [m877 (pacman)
+[1m[36m              'oookkxxoo'[m                  [m[1m[36mShell[m: [msh
+[1m[36m             'oiioxkkxxoo'[m                 [m[1m[36mDisplay (IVO057D)[m: [m1920x1080 in 14", 60 Hz [Built-in]
+[1m[36m            ':;:iiiioxxxoo'[m                [m[1m[36mCursor[m: [mAdwaita
+[1m[36m               `'.;::ioxxoo'[m               [m[1m[36mTerminal[m: [mforx
+[1m[36m          '-.      `':;jiooo'[m              [m[1m[36mCPU[m: [mIntel(R) Core(TM) i7-8650U (8) @ 4.20 GHz
+[1m[36m         'oooio-..     `'i:io'[m             [m[1m[36mGPU[m: [mIntel UHD Graphics 620 @ 1.15 GHz [Integrated]
+[1m[36m        'ooooxxxxoio:,.   `'-;'[m            [m[1m[36mMemory[m: [m554.18 MiB / 31.25 GiB ([32m2%[m)
+[1m[36m       'ooooxxxxxkkxoooIi:-.  `'[m           [m[1m[36mSwap[m: [mDisabled
+[1m[36m      'ooooxxxxxkkkkxoiiiiiji'[m             [m[1m[36mDisk (/)[m: [m27.70 GiB / 199.83 GiB ([32m14%[m) - ext4
+[1m[36m     'ooooxxxxxkxxoiiii:'`     .i'[m         [m[1m[36mBattery (45N1057)[m: [m[32m58%[m (4 hours, 59 mins remaining) [Discharging]
+[1m[36m    'ooooxxxxxoi:::'`       .;ioxo'[m        [m[1m[36mBattery (01AV421)[m: [m[32m100%[m
+[1m[36m   'ooooxooi::'`         .:iiixkxxo'[m       [m[1m[36mLocale[m: [mC
+[1m[36m  'ooooi:'`                `'';ioxxo'[m
+[1m[36m 'i:'`                          '':io'[m
+[1m[36m'`                                   `'[m
+[mt1-marker

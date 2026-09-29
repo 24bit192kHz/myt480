@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""dgpu: choose whether coreboot powers the MX150 at boot.
+
+Writes CMOS byte 0x6f: 0xd6 = on, 0 = off. coreboot (sklkbl_thinkpad
+dgpu_early.c) reads it in the bootblock of every boot and S3 resume; the
+choice holds until changed and takes effect at the next boot.
+Usage: dgpu on|off|status
+"""
+import glob
+import os
+import sys
+
+CMOS_DGPU, DGPU_REQUEST = 0x6F, 0xD6
+USAGE = "usage: dgpu on|off|status"
+
+if len(sys.argv) != 2 or sys.argv[1] not in ("on", "off", "status"):
+    sys.exit(USAGE)
+cmd = sys.argv[1]
+
+if os.geteuid() != 0:
+    os.execvp("sudo", ["sudo", sys.executable, os.path.abspath(__file__), cmd])
+
+fd = os.open("/dev/port", os.O_RDWR)
+if cmd != "status":
+    os.pwrite(fd, bytes([CMOS_DGPU]), 0x70)
+    os.pwrite(fd, bytes([DGPU_REQUEST if cmd == "on" else 0]), 0x71)
+os.pwrite(fd, bytes([CMOS_DGPU]), 0x70)
+requested = os.pread(fd, 1, 0x71)[0] == DGPU_REQUEST
+os.close(fd)
+
+if cmd != "status":
+    if requested != (cmd == "on"):
+        sys.exit("dgpu: CMOS write did not stick")
+    print(f"dGPU {cmd} from the next boot.")
+    sys.exit(0)
+
+print(f"next boot: dGPU {'on' if requested else 'off'} (CMOS 0x6f)")
+gpus = [d for d in glob.glob("/sys/bus/pci/devices/*")
+        if open(f"{d}/vendor").read().strip() == "0x10de"]
+if not gpus:
+    print("now: no NVIDIA device on the PCI bus")
+for d in gpus:
+    drv = os.path.basename(os.readlink(f"{d}/driver")) if os.path.exists(f"{d}/driver") else "none"
+    state = open(f"{d}/power_state").read().strip() if os.path.exists(f"{d}/power_state") else "?"
+    print(f"now: {os.path.basename(d)} {open(f'{d}/device').read().strip()} driver={drv} power={state}")

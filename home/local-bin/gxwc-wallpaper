@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+# Supervise the active GPU ASCII planet wallpaper (Earth by default) for one X display.
+set -u
+umask 077
+
+USER_HOME="$(getent passwd "$(id -u)" | awk -F: 'NR == 1 { print $6 }')"
+STATE="${GXWC_STATE:-$USER_HOME/.local/state/gxwc-wallpaper}"
+LOG="$STATE/gxwc.log"
+LOCK="$STATE/control.lock"
+OWNER_LOCK="$STATE/owner.lock"
+BIN="$USER_HOME/.local/bin/gxwc"
+# 30/15 fps: gxwc 3 presents only a globe-sized disc window (stars are a
+# static root pixmap), ~3% of one core while visible, 0 while covered.
+ARGS=(--fps-ac 15 --fps-bat 15)  # 30 on AC doubled compositing for no visible gain
+# Which planet: `gxwc-wallpaper planet NAME` writes it; planets are installed
+# from ~/Projects/software/gxwc/planets (params + baked maps).
+PLANETS="$USER_HOME/.local/share/gxwc/planets"
+PLANET_FILE="$USER_HOME/.config/gxwc/planet"
+planet=earth
+[[ -r "$PLANET_FILE" ]] && IFS= read -r planet <"$PLANET_FILE"
+[[ -r "$PLANETS/$planet/params" ]] || planet=earth
+# earth too: its params (size, ocean cutoff) differ from the built-in defaults
+[[ -r "$PLANETS/$planet/params" ]] && ARGS+=(--planet "$PLANETS/$planet")
+# Vulkan: Intel only. Unrestricted, the loader also opens lavapipe, which
+# maps ~90 MB of libLLVM into the process (RSS 130 MB -> 28 MB).
+export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.json
+# gxwc 2 needs DRI3 (Vulkan present); exit status 3 means the X server lacks
+# it, then the old renderer runs for the rest of this X session.
+FALLBACK_BIN="$USER_HOME/.local/bin/gxwc.v1"
+FALLBACK_ARGS=(earth 15 6 12 12 4 50)
+RESTART_DELAY="${GXWC_RESTART_DELAY:-0.1}"
+RESTART_DELAY_MAX="${GXWC_RESTART_DELAY_MAX:-5}"
+export DISPLAY="${GXWC_DISPLAY:-${DISPLAY:-:0}}"
+export XAUTHORITY="${GXWC_XAUTHORITY:-${XAUTHORITY:-$USER_HOME/.Xauthority}}"
+
+[[ -d "$USER_HOME" ]] || { echo "gxwc-wallpaper: cannot resolve user home" >&2; exit 1; }
+[[ -x "$BIN" ]] || { echo "gxwc-wallpaper: missing renderer $BIN" >&2; exit 1; }
+[[ "$RESTART_DELAY" =~ ^(0|[0-9]+([.][0-9]+)?)$ ]] || {
+    echo "gxwc-wallpaper: invalid GXWC_RESTART_DELAY=$RESTART_DELAY" >&2
+    exit 1
+}
+[[ "$RESTART_DELAY_MAX" =~ ^(0|[0-9]+([.][0-9]+)?)$ ]] || {
+    echo "gxwc-wallpaper: invalid GXWC_RESTART_DELAY_MAX=$RESTART_DELAY_MAX" >&2
+    exit 1
+}
+
+pid_from() {
+    local file="$1" pid
+    [[ -f "$file" ]] || return 1
+    IFS= read -r pid <"$file" || return 1
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    printf '%s' "$pid"
+}
+
+command_line() {
+    tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null || true
+}
+
+supervisor_alive() {
+    local pid expected
+    pid="$(pid_from "$STATE/supervisor.pid")" || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    expected="$(command_line "$pid")"
+    [[ "$expected" == *"$0 supervise"* ]]
+}
+
+renderer_alive() {
+    local pid supervisor parent
+    pid="$(pid_from "$STATE/renderer.pid")" || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    case "$(command_line "$pid")" in
+        "$BIN ${ARGS[*]} "|"$FALLBACK_BIN ${FALLBACK_ARGS[*]} ") ;;
+        *) return 1 ;;
+    esac
+    supervisor="$(pid_from "$STATE/supervisor.pid")" || return 1
+    parent="$(awk '/^PPid:/ { print $2; exit }' "/proc/$pid/status" 2>/dev/null)"
+    [[ "$parent" == "$supervisor" ]]
+}
+
+x_up() {
+    xdpyinfo -display "$DISPLAY" >/dev/null 2>&1
+}
+
+wait_delay() {
+    local remaining="$1"
+    while awk -v remaining="$remaining" 'BEGIN { exit !(remaining > 0) }'; do
+        [[ -e "$STATE/stopping" ]] && return 0
+        sleep 0.05
+        remaining="$(awk -v remaining="$remaining" 'BEGIN { print (remaining > 0.05 ? remaining - 0.05 : 0) }')"
+    done
+}
+
+log() {
+    printf '%s %s\n' "$(date +%T)" "$*" >>"$LOG"
+}
+
+remove_if_owned() {
+    local file="$1" owner="$2" current
+    current="$(cat "$file" 2>/dev/null || true)"
+    [[ "$current" == "$owner" ]] && rm -f "$file"
+}
+
+clear_renderer() {
+    remove_if_owned "$STATE/renderer.pid" "${renderer:-}"
+}
+
+stop_child() {
+    local pid="${renderer:-}"
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null || return 0
+    kill -TERM "$pid" 2>/dev/null || true
+    for _ in {1..30}; do
+        kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null || true; return 0; }
+        sleep 0.1
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+}
+
+supervise() {
+    local renderer status delay started
+    mkdir -p "$STATE"
+    exec 7>&-
+    exec 8>"$OWNER_LOCK"
+    chmod 700 "$STATE"
+    flock -n 8 || return 1
+    trap 'stop_child; clear_renderer; exit 0' TERM INT HUP
+    trap 'clear_renderer; remove_if_owned "$STATE/supervisor.pid" "$$"; rm -f "$STATE/stopping"' EXIT
+    echo "$$" >"$STATE/supervisor.pid"
+    : >"$LOG"
+    delay="$RESTART_DELAY"
+
+    while [[ ! -e "$STATE/stopping" ]]; do
+        while ! x_up; do
+            [[ -e "$STATE/stopping" ]] && exit 0
+            sleep 0.5
+        done
+        started=$SECONDS
+        "$BIN" "${ARGS[@]}" 7>&- 8>&- >>"$LOG" 2>&1 &
+        renderer=$!
+        echo "$renderer" >"$STATE/renderer.pid"
+        log "renderer started pid=$renderer"
+        wait "$renderer"
+        status=$?
+        clear_renderer
+        [[ -e "$STATE/stopping" ]] && break
+        if (( status == 3 )) && [[ "$BIN" != "$FALLBACK_BIN" && -x "$FALLBACK_BIN" ]]; then
+            log "renderer cannot present (no DRI3); using $FALLBACK_BIN"
+            BIN="$FALLBACK_BIN"
+            ARGS=("${FALLBACK_ARGS[@]}")
+            delay=0
+        fi
+        log "renderer exited status=$status; retrying in ${delay}s"
+        while ! x_up && [[ ! -e "$STATE/stopping" ]]; do sleep 0.1; done
+        [[ -e "$STATE/stopping" ]] && break
+        if (( SECONDS - started >= 30 )); then
+            delay="$RESTART_DELAY"
+        else
+            delay="$(awk -v current="$delay" -v max="$RESTART_DELAY_MAX" 'BEGIN { print (current * 2 > max ? max : current * 2) }')"
+        fi
+        wait_delay "$delay"
+    done
+}
+
+stop_locked() {
+    local supervisor renderer_pid n
+    touch "$STATE/stopping"
+    supervisor="$(pid_from "$STATE/supervisor.pid" 2>/dev/null || true)"
+    renderer_pid="$(pid_from "$STATE/renderer.pid" 2>/dev/null || true)"
+    if [[ "$supervisor" =~ ^[1-9][0-9]*$ ]] && supervisor_alive; then
+        kill -TERM "$supervisor" 2>/dev/null || true
+        for _ in {1..50}; do
+            supervisor_alive || break
+            sleep 0.1
+        done
+        if supervisor_alive; then
+            kill -KILL "$supervisor" 2>/dev/null || true
+        fi
+    fi
+    if [[ "$renderer_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$renderer_pid" 2>/dev/null; then
+        local current
+        current="$(command_line "$renderer_pid")"
+        if [[ "$current" == "$BIN ${ARGS[*]} " ]]; then
+            kill -TERM "$renderer_pid" 2>/dev/null || true
+            for _ in {1..30}; do
+                kill -0 "$renderer_pid" 2>/dev/null || break
+                sleep 0.1
+            done
+            kill -0 "$renderer_pid" 2>/dev/null && kill -KILL "$renderer_pid" 2>/dev/null || true
+        fi
+    fi
+    # wait (max 5 s) only while the old supervisor is really still alive;
+    # a stale pid from the previous session must not cost the timeout
+    for n in {1..50}; do
+        supervisor_alive || break
+        sleep 0.1
+    done
+    rm -f "$STATE/stopping" "$STATE/supervisor.pid" "$STATE/renderer.pid"
+}
+
+cmd_start() {
+    local ready=0
+    mkdir -p "$STATE"
+    exec 7>"$LOCK"
+    flock 7
+    x_up || { echo "gxwc-wallpaper: X display $DISPLAY is unavailable" >&2; return 1; }
+    if supervisor_alive && renderer_alive; then
+        echo "gxwc-wallpaper: already running (renderer $(cat "$STATE/renderer.pid"))"
+        return 0
+    fi
+    stop_locked
+    setsid -f "$0" supervise >>"$LOG" 2>&1 < /dev/null
+    for _ in {1..100}; do
+        if supervisor_alive && renderer_alive; then
+            ready=1
+            break
+        fi
+        sleep 0.1
+    done
+    if (( ! ready )); then
+        stop_locked
+        echo "gxwc-wallpaper: failed to start (see $LOG)" >&2
+        return 1
+    fi
+    echo "gxwc-wallpaper: supervised (renderer $(cat "$STATE/renderer.pid"))"
+}
+
+cmd_stop() {
+    mkdir -p "$STATE"
+    exec 7>"$LOCK"
+    flock 7
+    stop_locked
+    if supervisor_alive || renderer_alive; then
+        echo "gxwc-wallpaper: failed to stop cleanly" >&2
+        return 1
+    fi
+    echo "gxwc-wallpaper: stopped"
+}
+
+cmd_status() {
+    if supervisor_alive && renderer_alive; then
+        echo "wallpaper: up (supervisor $(cat "$STATE/supervisor.pid"), renderer $(cat "$STATE/renderer.pid"))"
+        ps -o pid=,ppid=,stat=,etimes=,%cpu=,%mem=,cmd= -p \
+            "$(cat "$STATE/supervisor.pid"),$(cat "$STATE/renderer.pid")" 2>/dev/null || true
+        return 0
+    fi
+    echo "wallpaper: down"
+    return 1
+}
+
+planet_names() {
+    local d
+    echo earth
+    for d in "$PLANETS"/*/; do
+        [[ -r "$d/params" && "${d%/}" != */earth ]] && basename "$d"
+    done
+}
+
+# planet [NAME|next|random]: show, set, step to the next (alphabetical), or
+# pick a random other planet; restarts the wallpaper
+cmd_planet() {
+    local want="${1:-}" names
+    mapfile -t names < <(planet_names)
+    if [[ -z "$want" ]]; then
+        echo "planet: $planet (available: ${names[*]})"
+        return 0
+    fi
+    if [[ "$want" == random ]]; then
+        local others=() n
+        for n in "${names[@]}"; do [[ "$n" != "$planet" ]] && others+=("$n"); done
+        (( ${#others[@]} )) && want="${others[RANDOM % ${#others[@]}]}" || want="$planet"
+    elif [[ "$want" == next ]]; then
+        local i
+        for i in "${!names[@]}"; do [[ "${names[i]}" == "$planet" ]] && break; done
+        want="${names[(i + 1) % ${#names[@]}]}"
+    fi
+    [[ " ${names[*]} " == *" $want "* ]] || { echo "gxwc-wallpaper: unknown planet $want (available: ${names[*]})" >&2; return 2; }
+    mkdir -p "${PLANET_FILE%/*}"
+    printf '%s\n' "$want" >"$PLANET_FILE"
+    "$0" stop >/dev/null
+    "$0" start >/dev/null
+    echo "planet: $want"
+}
+
+case "${1:-status}" in
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    supervise) supervise ;;
+    status) cmd_status ;;
+    planet) cmd_planet "${2:-}" ;;
+    *) echo "usage: gxwc-wallpaper {start|stop|status|planet [NAME|next|random]}" >&2; exit 2 ;;
+esac

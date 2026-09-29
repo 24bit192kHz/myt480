@@ -1,0 +1,28 @@
+From c7c371ea40a07a27700c3969b24ba4c8f9345a0f Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:54:47 +0300
+Subject: [PATCH 08/13] mb/lenovo/sklkbl_thinkpad: Enable the SMBus controller
+
+The chipset default leaves 00:1f.4 off, which hides it from the OS. The
+Synaptics touchpad and TrackPoint on these ThinkPads use RMI4 over SMBus
+(psmouse intertouch) with the vendor firmware; without the controller
+Linux reports "SMbus companion is not ready yet" and stays on PS/2.
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/devicetree.cb | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/devicetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/devicetree.cb
+index e946737134..6a037cb256 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/devicetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/devicetree.cb
+@@ -76,5 +76,7 @@ chip soc/intel/skylake
+ 			end
+ 		end
+ 		device ref hda on end
++		# Synaptics touchpad/TrackPoint RMI4 (intertouch) and DIMM SPDs
++		device ref smbus on end
+ 	end
+ end
+-- 
+2.55.0
+

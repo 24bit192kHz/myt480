@@ -1,0 +1,24 @@
+# fetch (areofyl/fetch + local patches in ~/build/fetch3d, branch "pinned")
+# Spinning Artix header started from ~/.zshrc. Grayscale per
+# ~/.config/theme/palette.conf.
+os
+kernel
+uptime
+packages
+wm
+memory
+battery
+
+compact=1
+# MUTED labels, FG values
+label_color=38;5;242
+value_color=38;2;228;228;228
+# GRAY_HI faces, MUTED sides
+logo_inner=38;2;237;237;237
+logo_outer=38;2;110;110;110
+light=top-left
+spin=xy
+speed=1.0
+fps=12
+size=0.7
+width=36

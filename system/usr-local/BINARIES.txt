@@ -1,0 +1,13 @@
+bin/bottime
+bin/cbmem
+bin/dmenu
+bin/dwm
+bin/gpu-power
+bin/slock
+bin/slock-ly
+bin/st
+bin/stest
+bin/super-tap-c
+bin/thermald
+bin/thermald-t480
+bin/tinygreet

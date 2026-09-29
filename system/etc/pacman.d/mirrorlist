@@ -1,0 +1,201 @@
+# STARTED AT: 2026-09-11 22:48:25.655123487 +03:00
+# VERSION: 0.28.2
+# ARGS: rate-mirrors --allow-root --save /tmp/artix-ranked artix
+# DEDUP: 55 -> 53 mirrors
+# MIRRORS LEFT AFTER FILTERING: 53
+# JUMP #1
+# EXPLORING US
+# VISITED US
+#     + NEIGHBOR CN (by HubsFirst)
+#     + NEIGHBOR UK (by HubsFirst)
+#     + NEIGHBOR CA (by HubsFirst)
+#     + NEIGHBOR DE (by DistanceFirst)
+#     + NEIGHBOR FR (by DistanceFirst)
+#     + NEIGHBOR KR (by DistanceFirst)
+# TOO FEW BYTES LOADED https://mirror.vinehost.net/artix-linux/
+# TOO FEW BYTES LOADED https://mirrors.aliyun.com/artixlinux/
+# [KR] FAILED TO CONNECT TO https://mirror.funami.tech/artix/world/os/x86_64/world.files
+# [DE] SpeedTestResult { speed: 9.0 MB/s; elapsed: 818ms; connection_time: 423ms }
+# [DE] SpeedTestResult { speed: 2.8 MB/s; elapsed: 966ms; connection_time: 510ms }
+# [FR] SpeedTestResult { speed: 5.5 MB/s; elapsed: 999ms; connection_time: 711ms }
+# [CA] SpeedTestResult { speed: 172.9 KB/s; elapsed: 852ms; connection_time: 811ms }
+# [FR] SpeedTestResult { speed: 317.7 KB/s; elapsed: 927ms; connection_time: 898ms }
+# [CA] SpeedTestResult { speed: 362.9 KB/s; elapsed: 947ms; connection_time: 915ms }
+# [KR] SpeedTestResult { speed: 222.9 KB/s; elapsed: 971ms; connection_time: 891ms }
+# [US] SpeedTestResult { speed: 280.5 KB/s; elapsed: 992ms; connection_time: 1.24s }
+# [US] SpeedTestResult { speed: 478.9 KB/s; elapsed: 991ms; connection_time: 1.44s }
+# [CN] SpeedTestResult { speed: 383.7 KB/s; elapsed: 981ms; connection_time: 1.68s }
+#     TOP NEIGHBOR - CONNECTION TIME: DE - 423ms
+#     TOP NEIGHBOR - SPEED: DE - 9.0 MB/s
+# 
+# JUMP #2
+# EXPLORING DE
+#     + NEIGHBOR DK (by HubsFirst)
+#     + NEIGHBOR JP (by HubsFirst)
+#     + NEIGHBOR SG (by HubsFirst)
+#     + NEIGHBOR PL (by DistanceFirst)
+#     + NEIGHBOR MC (by DistanceFirst)
+#     + NEIGHBOR IT (by DistanceFirst)
+# [IT] SpeedTestResult { speed: 10.5 MB/s; elapsed: 955ms; connection_time: 600ms }
+# [PL] SpeedTestResult { speed: 3.7 MB/s; elapsed: 911ms; connection_time: 598ms }
+# [MC] SpeedTestResult { speed: 2.6 MB/s; elapsed: 921ms; connection_time: 723ms }
+# [DK] SpeedTestResult { speed: 935.8 KB/s; elapsed: 805ms; connection_time: 758ms }
+# [DK] SpeedTestResult { speed: 975.0 KB/s; elapsed: 738ms; connection_time: 793ms }
+# [SG] SpeedTestResult { speed: 442.6 KB/s; elapsed: 887ms; connection_time: 1.10s }
+# TOO FEW BYTES LOADED https://www.miraa.jp/artix-linux/
+#     TOP NEIGHBOR - CONNECTION TIME: PL - 598ms
+#     TOP NEIGHBOR - SPEED: IT - 10.5 MB/s
+# 
+# JUMP #3
+# EXPLORING PL
+#     + NEIGHBOR SE (by DistanceFirst)
+#     + NEIGHBOR RO (by DistanceFirst)
+#     + NEIGHBOR BG (by DistanceFirst)
+# EXPLORING IT
+#     + NEIGHBOR NL (by DistanceFirst)
+#     + NEIGHBOR GR (by DistanceFirst)
+#     + NEIGHBOR VN (by DistanceFirst)
+# TOO FEW BYTES LOADED https://mirror.meowsmp.net/artixlinux/
+# [VN] SpeedTestResult { speed: 437.5 KB/s; elapsed: 861ms; connection_time: 619ms }
+# [GR] SpeedTestResult { speed: 3.2 MB/s; elapsed: 989ms; connection_time: 734ms }
+# [BG] SpeedTestResult { speed: 2.6 MB/s; elapsed: 999ms; connection_time: 771ms }
+# [SE] SpeedTestResult { speed: 400.4 KB/s; elapsed: 977ms; connection_time: 893ms }
+# [NL] FAILED TO CONNECT TO https://artist-mirror.artixlinux.org/world/os/x86_64/world.files
+# [RO] FAILED TO CONNECT TO https://hitman.go.ro/mirror/artix-linux/world/os/x86_64/world.files
+#     TOP NEIGHBOR - CONNECTION TIME: VN - 619ms
+#     TOP NEIGHBOR - SPEED: GR - 3.2 MB/s
+# 
+# JUMP #4
+# EXPLORING VN
+#     + NEIGHBOR TW (by DistanceFirst)
+#     + NEIGHBOR IN (by DistanceFirst)
+#     + NEIGHBOR AU (by DistanceFirst)
+# EXPLORING GR
+# [TW] SpeedTestResult { speed: 9.0 MB/s; elapsed: 935ms; connection_time: 608ms }
+# [IN] SpeedTestResult { speed: 105.3 KB/s; elapsed: 965ms; connection_time: 1.19s }
+# [AU] SpeedTestResult { speed: 104.0 KB/s; elapsed: 929ms; connection_time: 1.61s }
+#     TOP NEIGHBOR - CONNECTION TIME: TW - 608ms
+#     TOP NEIGHBOR - SPEED: TW - 9.0 MB/s
+# 
+# JUMP #5
+# EXPLORING TW
+# BLANK ITERATION
+# COUNTRY JUMPING YIELDED TOO FEW MIRRORS (23), ADDING OTHERS TO UNLABELED
+# 
+
+# TESTING UNLABELED MIRRORS
+# TOO FEW BYTES LOADED https://mirrors.cicku.me/artix/
+# TOO FEW BYTES LOADED http://mirrors.redcorelinux.org/artixlinux/
+# [DE] SpeedTestResult { speed: 5.3 MB/s; elapsed: 859ms; connection_time: 473ms }
+# [DE] SpeedTestResult { speed: 6.4 MB/s; elapsed: 942ms; connection_time: 529ms }
+# [DE] SpeedTestResult { speed: 11.0 MB/s; elapsed: 1.00s; connection_time: 575ms }
+# [DE] SpeedTestResult { speed: 271.2 KB/s; elapsed: 973ms; connection_time: 593ms }
+# [DE] SpeedTestResult { speed: 1.9 MB/s; elapsed: 940ms; connection_time: 627ms }
+# [DE] SpeedTestResult { speed: 5.3 MB/s; elapsed: 998ms; connection_time: 555ms }
+# [US] SpeedTestResult { speed: 301.7 KB/s; elapsed: 999ms; connection_time: 687ms }
+# TOO FEW BYTES LOADED https://gnlug.org/pub/artix-linux/
+# [US] SpeedTestResult { speed: 454.1 KB/s; elapsed: 916ms; connection_time: 715ms }
+# [DE] SpeedTestResult { speed: 1.3 MB/s; elapsed: 959ms; connection_time: 756ms }
+# [US] SpeedTestResult { speed: 261.9 KB/s; elapsed: 890ms; connection_time: 790ms }
+# SpeedTestResult { speed: 312.0 KB/s; elapsed: 996ms; connection_time: 890ms }
+# [US] SpeedTestResult { speed: 631.8 KB/s; elapsed: 984ms; connection_time: 885ms }
+# [US] SpeedTestResult { speed: 133.7 KB/s; elapsed: 856ms; connection_time: 852ms }
+# [US] SpeedTestResult { speed: 483.2 KB/s; elapsed: 847ms; connection_time: 941ms }
+# [CA] SpeedTestResult { speed: 235.5 KB/s; elapsed: 833ms; connection_time: 946ms }
+# TOO FEW BYTES LOADED https://artix.wheaton.edu/repos/
+# [KR] SpeedTestResult { speed: 225.8 KB/s; elapsed: 958ms; connection_time: 1.31s }
+# [CN] SpeedTestResult { speed: 184.2 KB/s; elapsed: 976ms; connection_time: 1.54s }
+# [US] SpeedTestResult { speed: 553.0 KB/s; elapsed: 998ms; connection_time: 1.64s }
+# [CL] FAILED TO CONNECT TO https://mirror1.cl.netactuate.com/artix/repos/world/os/x86_64/world.files
+# 
+
+# RE-TESTING TOP MIRRORS
+# [DE] SpeedTestResult { speed: 15.9 MB/s; elapsed: 953ms; connection_time: 490ms }
+# [IT] SpeedTestResult { speed: 10.5 MB/s; elapsed: 937ms; connection_time: 437ms }
+# [TW] SpeedTestResult { speed: 17.0 MB/s; elapsed: 1.00s; connection_time: 168ms }
+# [DE] SpeedTestResult { speed: 26.3 MB/s; elapsed: 825ms; connection_time: 702ms }
+# [DE] SpeedTestResult { speed: 7.2 MB/s; elapsed: 933ms; connection_time: 410ms }
+# ==== RESULTS (top re-tested) ====
+#   1. [DE] SpeedTestResult { speed: 26.3 MB/s; elapsed: 825ms; connection_time: 702ms } -> https://mirror3.artixlinux.org/repos/
+#   2. [TW] SpeedTestResult { speed: 17.0 MB/s; elapsed: 1.00s; connection_time: 168ms } -> https://mirrors.cloud.tencent.com/artixlinux/
+#   3. [DE] SpeedTestResult { speed: 15.9 MB/s; elapsed: 953ms; connection_time: 490ms } -> https://tools.sphnet.in/mirror/artix/
+#   4. [IT] SpeedTestResult { speed: 10.5 MB/s; elapsed: 937ms; connection_time: 437ms } -> https://artixlinux.mirror.garr.it/
+#   5. [DE] SpeedTestResult { speed: 7.2 MB/s; elapsed: 933ms; connection_time: 410ms } -> https://mirror.pascalpuffke.de/artix-linux/
+#   6. [FR] SpeedTestResult { speed: 5.5 MB/s; elapsed: 999ms; connection_time: 711ms } -> https://ftp.crifo.org/artix/repos/
+#   7. [DE] SpeedTestResult { speed: 5.3 MB/s; elapsed: 998ms; connection_time: 555ms } -> https://ftp.halifax.rwth-aachen.de/artixlinux/
+#   8. [DE] SpeedTestResult { speed: 5.3 MB/s; elapsed: 859ms; connection_time: 473ms } -> https://mirror.rabisu.com/mirrors/artixlinux/
+#   9. [PL] SpeedTestResult { speed: 3.7 MB/s; elapsed: 911ms; connection_time: 598ms } -> https://artix.sakamoto.pl/
+#  10. [GR] SpeedTestResult { speed: 3.2 MB/s; elapsed: 989ms; connection_time: 734ms } -> https://ftp.cc.uoc.gr/mirrors/linux/artixlinux/
+#  11. [DE] SpeedTestResult { speed: 2.8 MB/s; elapsed: 966ms; connection_time: 510ms } -> https://mirror2.artixlinux.org/
+#  12. [BG] SpeedTestResult { speed: 2.6 MB/s; elapsed: 999ms; connection_time: 771ms } -> https://artix.arkhost.com/repos/
+#  13. [MC] SpeedTestResult { speed: 2.6 MB/s; elapsed: 921ms; connection_time: 723ms } -> https://qontinuum.space/mirror/artixlinux/
+#  14. [DE] SpeedTestResult { speed: 1.9 MB/s; elapsed: 940ms; connection_time: 627ms } -> https://mirror.netcologne.de/artix-linux/
+#  15. [DE] SpeedTestResult { speed: 1.3 MB/s; elapsed: 959ms; connection_time: 756ms } -> https://artix.unixpeople.org/repos/
+#  16. [DK] SpeedTestResult { speed: 975.0 KB/s; elapsed: 738ms; connection_time: 793ms } -> https://mirror.group.one/artix/
+#  17. [DK] SpeedTestResult { speed: 935.8 KB/s; elapsed: 805ms; connection_time: 758ms } -> https://mirrors.dotsrc.org/artix-linux/repos/
+#  18. [US] SpeedTestResult { speed: 631.8 KB/s; elapsed: 984ms; connection_time: 885ms } -> https://mirror.clarkson.edu/artix-linux/repos/
+#  19. [US] SpeedTestResult { speed: 553.0 KB/s; elapsed: 998ms; connection_time: 1.64s } -> https://mirrors.rit.edu/artixlinux/
+#  20. [US] SpeedTestResult { speed: 483.2 KB/s; elapsed: 847ms; connection_time: 941ms } -> https://mirror.cs.odu.edu/artixlinux/
+#  21. [US] SpeedTestResult { speed: 478.9 KB/s; elapsed: 991ms; connection_time: 1.44s } -> https://mirrors.ocf.berkeley.edu/artix-linux/
+#  22. [US] SpeedTestResult { speed: 454.1 KB/s; elapsed: 916ms; connection_time: 715ms } -> https://mirror.lug.umbc.edu/artix-linux/
+#  23. [SG] SpeedTestResult { speed: 442.6 KB/s; elapsed: 887ms; connection_time: 1.10s } -> https://mirror.freedif.org/artix/
+#  24. [VN] SpeedTestResult { speed: 437.5 KB/s; elapsed: 861ms; connection_time: 619ms } -> https://mirrors.nguyenhoang.cloud/artix-linux/
+#  25. [SE] SpeedTestResult { speed: 400.4 KB/s; elapsed: 977ms; connection_time: 893ms } -> https://ftp.ludd.ltu.se/mirrors/artix/
+#  26. [CN] SpeedTestResult { speed: 383.7 KB/s; elapsed: 981ms; connection_time: 1.68s } -> https://mirror.nju.edu.cn/artixlinux/
+#  27. [CA] SpeedTestResult { speed: 362.9 KB/s; elapsed: 947ms; connection_time: 915ms } -> https://artix.tuxmirrors.xyz/
+#  28. [FR] SpeedTestResult { speed: 317.7 KB/s; elapsed: 927ms; connection_time: 898ms } -> https://artix.toret.fr/
+#  29. SpeedTestResult { speed: 312.0 KB/s; elapsed: 996ms; connection_time: 890ms } -> https://ftp.sh.cvut.cz/artix-linux/
+#  30. [US] SpeedTestResult { speed: 301.7 KB/s; elapsed: 999ms; connection_time: 687ms } -> http://www.nylxs.com/mirror/repos/
+#  31. [US] SpeedTestResult { speed: 280.5 KB/s; elapsed: 992ms; connection_time: 1.24s } -> https://mirror.akardam.net/artix/
+#  32. [DE] SpeedTestResult { speed: 271.2 KB/s; elapsed: 973ms; connection_time: 593ms } -> https://ftp.uni-bayreuth.de/linux/artix-linux/
+#  33. [US] SpeedTestResult { speed: 261.9 KB/s; elapsed: 890ms; connection_time: 790ms } -> https://mirror.sanin.dev/artix-linux/
+#  34. [CA] SpeedTestResult { speed: 235.5 KB/s; elapsed: 833ms; connection_time: 946ms } -> https://mirror.csclub.uwaterloo.ca/artixlinux/
+#  35. [KR] SpeedTestResult { speed: 225.8 KB/s; elapsed: 958ms; connection_time: 1.31s } -> https://mirror2.keiminem.com/artix/
+#  36. [KR] SpeedTestResult { speed: 222.9 KB/s; elapsed: 971ms; connection_time: 891ms } -> https://mirror.keiminem.com/artix/
+#  37. [CN] SpeedTestResult { speed: 184.2 KB/s; elapsed: 976ms; connection_time: 1.54s } -> https://mirrors.tuna.tsinghua.edu.cn/artixlinux/
+#  38. [CA] SpeedTestResult { speed: 172.9 KB/s; elapsed: 852ms; connection_time: 811ms } -> https://artix-linux.mirrors.prairievoice.ca/
+#  39. [US] SpeedTestResult { speed: 133.7 KB/s; elapsed: 856ms; connection_time: 852ms } -> https://mirrors.lug.mtu.edu/artixlinux/
+#  40. [IN] SpeedTestResult { speed: 105.3 KB/s; elapsed: 965ms; connection_time: 1.19s } -> https://mirror.albony.in/artix/
+#  41. [AU] SpeedTestResult { speed: 104.0 KB/s; elapsed: 929ms; connection_time: 1.61s } -> https://mirror.aarnet.edu.au/pub/artix/
+# FINISHED AT: 2026-09-11 22:48:58.012869690 +03:00
+Server = https://mirror3.artixlinux.org/repos/$repo/os/$arch
+Server = https://mirrors.cloud.tencent.com/artixlinux/$repo/os/$arch
+Server = https://tools.sphnet.in/mirror/artix/$repo/os/$arch
+Server = https://artixlinux.mirror.garr.it/$repo/os/$arch
+Server = https://mirror.pascalpuffke.de/artix-linux/$repo/os/$arch
+Server = https://ftp.crifo.org/artix/repos/$repo/os/$arch
+Server = https://ftp.halifax.rwth-aachen.de/artixlinux/$repo/os/$arch
+Server = https://mirror.rabisu.com/mirrors/artixlinux/$repo/os/$arch
+Server = https://artix.sakamoto.pl/$repo/os/$arch
+Server = https://ftp.cc.uoc.gr/mirrors/linux/artixlinux/$repo/os/$arch
+Server = https://mirror2.artixlinux.org/$repo/os/$arch
+Server = https://artix.arkhost.com/repos/$repo/os/$arch
+Server = https://qontinuum.space/mirror/artixlinux/$repo/os/$arch
+Server = https://mirror.netcologne.de/artix-linux/$repo/os/$arch
+Server = https://artix.unixpeople.org/repos/$repo/os/$arch
+Server = https://mirror.group.one/artix/$repo/os/$arch
+Server = https://mirrors.dotsrc.org/artix-linux/repos/$repo/os/$arch
+Server = https://mirror.clarkson.edu/artix-linux/repos/$repo/os/$arch
+Server = https://mirrors.rit.edu/artixlinux/$repo/os/$arch
+Server = https://mirror.cs.odu.edu/artixlinux/$repo/os/$arch
+Server = https://mirrors.ocf.berkeley.edu/artix-linux/$repo/os/$arch
+Server = https://mirror.lug.umbc.edu/artix-linux/$repo/os/$arch
+Server = https://mirror.freedif.org/artix/$repo/os/$arch
+Server = https://mirrors.nguyenhoang.cloud/artix-linux/$repo/os/$arch
+Server = https://ftp.ludd.ltu.se/mirrors/artix/$repo/os/$arch
+Server = https://mirror.nju.edu.cn/artixlinux/$repo/os/$arch
+Server = https://artix.tuxmirrors.xyz/$repo/os/$arch
+Server = https://artix.toret.fr/$repo/os/$arch
+Server = https://ftp.sh.cvut.cz/artix-linux/$repo/os/$arch
+Server = http://www.nylxs.com/mirror/repos/$repo/os/$arch
+Server = https://mirror.akardam.net/artix/$repo/os/$arch
+Server = https://ftp.uni-bayreuth.de/linux/artix-linux/$repo/os/$arch
+Server = https://mirror.sanin.dev/artix-linux/$repo/os/$arch
+Server = https://mirror.csclub.uwaterloo.ca/artixlinux/$repo/os/$arch
+Server = https://mirror2.keiminem.com/artix/$repo/os/$arch
+Server = https://mirror.keiminem.com/artix/$repo/os/$arch
+Server = https://mirrors.tuna.tsinghua.edu.cn/artixlinux/$repo/os/$arch
+Server = https://artix-linux.mirrors.prairievoice.ca/$repo/os/$arch
+Server = https://mirrors.lug.mtu.edu/artixlinux/$repo/os/$arch
+Server = https://mirror.albony.in/artix/$repo/os/$arch
+Server = https://mirror.aarnet.edu.au/pub/artix/$repo/os/$arch

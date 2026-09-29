@@ -1,0 +1,13 @@
+#!/bin/sh
+# dwm-titus sddm session: mirrors ~/.xinitrc env + helpers
+export NO_AT_BRIDGE=1
+export GTK_A11Y=none
+export QT_QPA_PLATFORMTHEME=gtk3
+export XCURSOR_THEME=Capitaine-Cursors-White
+export XCURSOR_SIZE=32
+[ -f /home/btw/.config/dwm-titus/theme-env.sh ] && . /home/btw/.config/dwm-titus/theme-env.sh
+feh --no-fehbg --bg-fill /home/btw/Pictures/t480-exploded.png >/dev/null 2>&1 &
+pgrep -x pulseaudio >/dev/null || pulseaudio --start 2>/dev/null &
+xset r rate 250 50 2>/dev/null &
+pgrep -f super-tap >/dev/null || DISPLAY=:0 XAUTHORITY=/home/btw/.Xauthority nohup /usr/local/bin/super-tap >/dev/null 2>&1 &
+exec /usr/local/bin/dwm

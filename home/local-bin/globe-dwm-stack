@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# globe-dwm-stack: live globe wallpaper on dwm (X11) — xwinwrap + xterm + globe.
+# xwinwrap hosts an override-redirect below window; the embedded xterm fills it
+# and runs globe in screensaver mode. Same WID contract as earth-dwm-stack.
+# Usage: globe-dwm-stack {start|stop|status}
+set -u
+
+STATE="$HOME/.local/state/globe-dwm"
+LOG="$STATE/globe.log"
+XWINWRAP="$HOME/.local/bin/xwinwrap"
+BIN="${GLOBE_BIN:-/home/btw/test/globe/target/release/globe}"
+# 6x12 cell: the smallest bitmap cell that carries braille and keeps the
+# renderer's 1:2 cell aspect (Canvas char_pix default), so the globe is round.
+FONT="${GLOBE_FONT:-Terminus:pixelsize=12}"
+GLOBE_ARGS="${GLOBE_ARGS:--s -g 9 -r 60}"
+export DISPLAY="${GLOBE_DISPLAY:-:0}"
+export XAUTHORITY="${GLOBE_XAUTHORITY:-$HOME/.Xauthority}"
+
+alive() { [[ -f "$1" ]] && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+cmd_start() {
+    mkdir -p "$STATE"
+    if alive "$STATE/xwinwrap.pid"; then
+        echo "globe-dwm-stack: already running (pid $(cat "$STATE/xwinwrap.pid"))"
+        return 0
+    fi
+    [[ -x "$BIN" ]] || { echo "globe-dwm-stack: missing globe binary $BIN" >&2; return 1; }
+    # xwinwrap substitutes the literal WID argument with its host window id;
+    # xterm reparents into it (-into) and sizes its grid to the window.
+    ( setsid nohup "$XWINWRAP" -ov -fs -ni -b -nf -- \
+        sh -c "exec xterm -into \"\$1\" -b 0 -fa \"$FONT\" -bg black -fg white -e \"$BIN\" $GLOBE_ARGS" sh WID \
+        >>"$LOG" 2>&1 < /dev/null & echo $! > "$STATE/xwinwrap.pid" )
+    sleep 1
+    if alive "$STATE/xwinwrap.pid"; then
+        echo "globe-dwm-stack: started (globe $GLOBE_ARGS, font $FONT)"
+    else
+        echo "globe-dwm-stack: failed to start (see $LOG)" >&2
+        return 1
+    fi
+}
+
+cmd_stop() {
+    local pid
+    if alive "$STATE/xwinwrap.pid"; then
+        pid="$(cat "$STATE/xwinwrap.pid")"
+        pkill -P "$pid" 2>/dev/null || true   # embedded xterm
+        kill "$pid" 2>/dev/null || true
+    fi
+    pkill -f 'xterm -into' 2>/dev/null || true
+    rm -f "$STATE/xwinwrap.pid"
+    echo "globe-dwm-stack: stopped"
+}
+
+cmd_status() {
+    if alive "$STATE/xwinwrap.pid"; then
+        echo "wallpaper: up (xwinwrap pid $(cat "$STATE/xwinwrap.pid"))"
+        pgrep -a -P "$(cat "$STATE/xwinwrap.pid")" || true
+    else
+        echo "wallpaper: down"
+    fi
+}
+
+case "${1:-status}" in
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    *) echo "usage: globe-dwm-stack {start|stop|status}" >&2; exit 2 ;;
+esac

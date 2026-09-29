@@ -1,0 +1,99 @@
+From 5da0e2fd1e8497798fb9b62da30b24be65a41594 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:01:52 +0300
+Subject: [PATCH 10/14] at_keyboard coreboot: Decode keys pressed before GRUB
+ started
+
+grub_keyboard_controller_init() drained and dropped whatever the
+keyboard had buffered, so a Shift held since power-on was lost; after
+the scancode set is reprogrammed the keyboard does not necessarily
+repeat a key that is already down, so "keystatus --shift" and holding
+Shift to interrupt a hidden timeout never saw it. Keep the drained
+keyboard bytes (not mouse ones) and run them through the decoder in the
+set the controller was delivering (translation bit of the command byte).
+---
+ grub-core/term/at_keyboard.c | 44 ++++++++++++++++++++++++++++++++++++
+ include/grub/at_keyboard.h   |  2 ++
+ 2 files changed, 46 insertions(+)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index d050bd69f..f05379cf4 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -273,16 +273,60 @@ grub_at_keyboard_getkey (struct grub_term_input *term __attribute__ ((unused)))
+ static void
+ grub_keyboard_controller_init (void)
+ {
++#if defined (GRUB_MACHINE_COREBOOT)
++  grub_uint8_t pending[32];
++  unsigned int npending = 0, i;
++#endif
++
+   ps2_state.at_keyboard_status = 0;
+   /* Drain input buffer. */
+   while (1)
+     {
++#if defined (GRUB_MACHINE_COREBOOT)
++      grub_uint8_t status, byte;
++
++      keyboard_controller_wait_until_ready ();
++      status = grub_inb (KEYBOARD_REG_STATUS);
++      if (! KEYBOARD_ISREADY (status))
++	break;
++      keyboard_controller_wait_until_ready ();
++      byte = grub_inb (KEYBOARD_REG_DATA);
++      /* Keep keyboard bytes (not mouse ones) for decoding below.  */
++      if (!(status & KEYBOARD_STATUS_AUX) && npending < ARRAY_SIZE (pending))
++	pending[npending++] = byte;
++#else
+       keyboard_controller_wait_until_ready ();
+       if (! KEYBOARD_ISREADY (grub_inb (KEYBOARD_REG_STATUS)))
+ 	break;
+       keyboard_controller_wait_until_ready ();
+       grub_inb (KEYBOARD_REG_DATA);
++#endif
+     }
++#if defined (GRUB_MACHINE_COREBOOT)
++  /* The keyboard buffered whatever was pressed before GRUB started.
++     Decode it instead of dropping it, in the set the controller was
++     delivering, so that a Shift held since power-on is reported by
++     keystatus even if the keyboard does not repeat it after being
++     reprogrammed below.  Other keys are still dropped.  */
++  if (npending)
++    {
++      grub_uint8_t ctl = 0;
++
++      at_command (KEYBOARD_COMMAND_READ);
++      for (i = 0; i < 20; i++)
++	{
++	  if (KEYBOARD_ISREADY (grub_inb (KEYBOARD_REG_STATUS)))
++	    {
++	      ctl = grub_inb (KEYBOARD_REG_DATA);
++	      break;
++	    }
++	  grub_millisleep (1);
++	}
++      ps2_state.current_set = (ctl & KEYBOARD_AT_TRANSLATE) ? 1 : 2;
++      for (i = 0; i < npending; i++)
++	grub_ps2_process_incoming_byte (&ps2_state, pending[i]);
++    }
++#endif
+ #if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
+   grub_keyboard_controller_orig = 0;
+   grub_keyboard_orig_set = 2;
+diff --git a/include/grub/at_keyboard.h b/include/grub/at_keyboard.h
+index bcb4d9ba7..9a4cd66ae 100644
+--- a/include/grub/at_keyboard.h
++++ b/include/grub/at_keyboard.h
+@@ -31,6 +31,8 @@
+ 
+ #define KEYBOARD_ISMAKE(x)	!((x) & 0x80)
+ #define KEYBOARD_ISREADY(x)	((x) & 0x01)
++/* Output buffer byte came from the auxiliary (mouse) port.  */
++#define KEYBOARD_STATUS_AUX	0x20
+ #define KEYBOARD_SCANCODE(x)	((x) & 0x7f)
+ 
+ extern void grub_at_keyboard_init (void);
+-- 
+2.55.0
+

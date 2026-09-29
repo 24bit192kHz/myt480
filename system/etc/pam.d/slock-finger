@@ -1,0 +1,6 @@
+# Fingerprint-only authentication for the session locker.
+# slock-ly keeps ONE transaction armed for the whole lock; pam_fprintd
+# re-prompts internally on no-match. Password lives in slock-password.
+auth       sufficient                  pam_fprintd.so      max-tries=10 timeout=600
+auth       requisite                   pam_deny.so
+account    required                    pam_permit.so

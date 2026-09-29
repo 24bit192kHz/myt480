@@ -1,0 +1,8 @@
+# Overrides /usr/share/dbus-1/system-services/net.reactivated.Fprint.service.
+# open-fprintd is supervised by s6; bus activation must not spawn a second,
+# unsupervised copy (two daemons fighting over the Validity sensor).
+# Activation completes when the s6 instance owns the name.
+[D-BUS Service]
+Name=net.reactivated.Fprint
+Exec=/bin/sh -c "/usr/bin/s6-svc -u /run/service/open-fprintd; sleep 10"
+User=root

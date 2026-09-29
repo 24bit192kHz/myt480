@@ -1,0 +1,3624 @@
+diff --git a/Makefile b/Makefile
+index 15db421..0e8aa31 100644
+--- a/Makefile
++++ b/Makefile
+@@ -4,7 +4,7 @@
+ 
+ include config.mk
+ 
+-SRC = st.c x.c
++SRC = st.c x.c boxdraw.c rowcolumn_diacritics_helpers.c graphics.c
+ OBJ = $(SRC:.c=.o)
+ 
+ all: st
+@@ -15,8 +15,10 @@ config.h:
+ .c.o:
+ 	$(CC) $(STCFLAGS) -c $<
+ 
+-st.o: config.h st.h win.h
+-x.o: arg.h config.h st.h win.h
++st.o: config.h st.h win.h graphics.h
++x.o: arg.h config.h st.h win.h graphics.h
++boxdraw.o: config.h st.h boxdraw_data.h
++graphics.c: graphics.h khash.h kvec.h st.h
+ 
+ $(OBJ): config.h config.mk
+ 
+@@ -29,7 +31,7 @@ clean:
+ dist: clean
+ 	mkdir -p st-$(VERSION)
+ 	cp -R FAQ LEGACY TODO LICENSE Makefile README config.mk\
+-		config.def.h st.info st.1 arg.h st.h win.h $(SRC)\
++		config.def.h st.info st.1 arg.h st.h win.h boxdraw_data.h $(SRC)\
+ 		st-$(VERSION)
+ 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
+ 	rm -rf st-$(VERSION)
+diff --git a/config.def.h b/config.def.h
+index 2cd740a..9f050c6 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -6,8 +6,30 @@
+  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
+  */
+ static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
++/* Spare fonts: IBM Plex Sans Arabic first (matches mono Latin), then fallback */
++static char *font2[] = {
++/*	"Inconsolata for Powerline:pixelsize=12:antialias=true:autohint=true", */
++/*	"Hack Nerd Font Mono:pixelsize=11:antialias=true:autohint=true", */
++	"IBM Plex Sans Arabic:pixelsize=12:antialias=true:autohint=true",
++	"Vazirmatn:pixelsize=12:antialias=true:autohint=true",
++	"Noto Sans Arabic:pixelsize=12:antialias=true:autohint=true",
++	"Noto Naskh Arabic:pixelsize=12:antialias=true:autohint=true",
++};
++
++/* bidi / Arabic shaping, display-only (buffer stays logical order) */
++int bidi_enabled = 1; /* implicit bidi reorder per line; 0 = visual passthrough (vim/tmux) */
++char *bidi_base = "auto"; /* paragraph dir with no strong char: "auto"|"ltr"|"rtl" */
++int arabicshaping = 1; /* HarfBuzz joining/ligatures/harakat; 0 = reorder only */
++
+ static int borderpx = 2;
+ 
++/* How to align the content in the window when the size of the terminal
++ * doesn't perfectly match the size of the window. The values are percentages.
++ * 50 means center, 0 means flush left/top, 100 means flush right/bottom.
++ */
++static int anysize_halign = 0;
++static int anysize_valign = 0;
++
+ /*
+  * What program is execed by st depends of these precedence rules:
+  * 1: program passed with -e
+@@ -23,7 +45,8 @@ char *scroll = NULL;
+ char *stty_args = "stty raw pass8 nl -echo -iexten -cstopb 38400";
+ 
+ /* identification sequence returned in DA and DECID */
+-char *vtiden = "\033[?6c";
++/* By default, use the same one as kitty. */
++char *vtiden = "\033[?62c";
+ 
+ /* Kerning / character bounding-box multipliers */
+ static float cwscale = 1.0;
+@@ -56,6 +79,12 @@ int allowwindowops = 0;
+ static double minlatency = 2;
+ static double maxlatency = 33;
+ 
++/*
++ * Synchronized-Update timeout in ms
++ * https://gitlab.com/gnachman/iterm2/-/wikis/synchronized-updates-spec
++ */
++static uint su_timeout = 200;
++
+ /*
+  * blinking timeout (set to 0 to disable blinking) for the terminal blinking
+  * attribute.
+@@ -67,6 +96,18 @@ static unsigned int blinktimeout = 800;
+  */
+ static unsigned int cursorthickness = 2;
+ 
++/*
++ * 1: render most of the lines/blocks characters without using the font for
++ *    perfect alignment between cells (U2500 - U259F except dashes/diagonals).
++ *    Bold affects lines thickness if boxdraw_bold is not 0. Italic is ignored.
++ * 0: disable (render all U25XX glyphs normally from the font).
++ */
++const int boxdraw = 1;
++const int boxdraw_bold = 0;
++
++/* braille (U28XX):  1: render as adjacent "pixels",  0: use font */
++const int boxdraw_braille = 1;
++
+ /*
+  * bell volume. It must be a value between -100 and 100. Use 0 for disabling
+  * it
+@@ -93,6 +134,9 @@ char *termname = "st-256color";
+  */
+ unsigned int tabspaces = 8;
+ 
++/* bg opacity */
++float alpha = 0.8;
++
+ /* Terminal colors (16 first used in escape sequence) */
+ static const char *colorname[] = {
+ 	/* 8 normal colors */
+@@ -163,6 +207,28 @@ static unsigned int mousebg = 0;
+  */
+ static unsigned int defaultattr = 11;
+ 
++/*
++ * Graphics configuration
++ */
++
++/// The template for the cache directory.
++const char graphics_cache_dir_template[] = "/tmp/st-images-XXXXXX";
++/// The max size of a single image file, in bytes.
++unsigned graphics_max_single_image_file_size = 20 * 1024 * 1024;
++/// The max size of the cache, in bytes.
++unsigned graphics_total_file_cache_size = 300 * 1024 * 1024;
++/// The max ram size of an image or placement, in bytes.
++unsigned graphics_max_single_image_ram_size = 100 * 1024 * 1024;
++/// The max total size of all images loaded into RAM.
++unsigned graphics_max_total_ram_size = 300 * 1024 * 1024;
++/// The max total number of image placements and images.
++unsigned graphics_max_total_placements = 4096;
++/// The ratio by which limits can be exceeded. This is to reduce the frequency
++/// of image removal.
++double graphics_excess_tolerance_ratio = 0.05;
++/// The minimum delay between redraws caused by animations, in milliseconds.
++unsigned graphics_animation_min_delay = 20;
++
+ /*
+  * Force mouse select/shortcuts while mask is active (when MODE_MOUSE is set).
+  * Note that if you want to use ShiftMask with selmasks, set this to an other
+@@ -170,12 +236,49 @@ static unsigned int defaultattr = 11;
+  */
+ static uint forcemousemod = ShiftMask;
+ 
++/* Internal keyboard shortcuts. */
++#define MODKEY Mod1Mask
++#define TERMMOD (ControlMask|ShiftMask)
++
+ /*
+  * Internal mouse shortcuts.
+  * Beware that overloading Button1 will disable the selection.
+  */
++/*
++ * URLs: Ctrl+click opens the URL under the pointer with urlhandler
++ * (Ctrl+Shift+click inside mouse-mode apps like vim/tmux).
++ */
++char *urlhandler = "xdg-open";
++char urlchars[] =
++	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
++	"abcdefghijklmnopqrstuvwxyz"
++	"0123456789-._~:/?#@!$&'()*+,;=%";
++char *urlprefixes[] = { "https://", "http://", "file://", "ftp://", "www.", NULL };
++
++/*
++ * externalpipe commands:
++ * TERMMOD+O  pick a URL on screen with dmenu and open it (alacritty hints)
++ * TERMMOD+H  whole scrollback in less, in a new window (kitty show_scrollback)
++ */
++static char *openurlcmd[] = { "/bin/sh", "-c",
++	"grep -Eo '(https?|ftp|file)://[A-Za-z0-9._~:/?#@!$&*+,;=%()-]+' | tac | "
++	"awk '{ do { n = sub(/[.,;:!?]+$/, \"\"); o = gsub(/\\(/, \"(\"); "
++	"c = gsub(/\\)/, \")\"); if (c > o) n += sub(/\\)$/, \"\") } while (n); "
++	"if (!seen[$0]++) print }' | "
++	"dmenu -l 10 -p 'open url:' | xargs -r xdg-open",
++	NULL };
++static char *scrollbackcmd[] = { "/bin/sh", "-c",
++	"f=$(mktemp /tmp/st-scrollback.XXXXXX) && cat > \"$f\" && "
++	"st -t scrollback -e less +G \"$f\"; rm -f \"$f\"",
++	NULL };
++
+ static MouseShortcut mshortcuts[] = {
+ 	/* mask                 button   function        argument       release */
++	{ ControlMask,          Button1, clickurl,       {.i = 0} },
++	{ ShiftMask,            Button4, kscrollup,      {.i = 1} },
++	{ ShiftMask,            Button5, kscrolldown,    {.i = 1} },
++	{ TERMMOD,              Button3, previewimage,   {.s = "feh"} },
++	{ TERMMOD,              Button2, showimageinfo,  {},            1 },
+ 	{ XK_ANY_MOD,           Button2, selpaste,       {.i = 0},      1 },
+ 	{ ShiftMask,            Button4, ttysend,        {.s = "\033[5;2~"} },
+ 	{ XK_ANY_MOD,           Button4, ttysend,        {.s = "\031"} },
+@@ -183,10 +286,6 @@ static MouseShortcut mshortcuts[] = {
+ 	{ XK_ANY_MOD,           Button5, ttysend,        {.s = "\005"} },
+ };
+ 
+-/* Internal keyboard shortcuts. */
+-#define MODKEY Mod1Mask
+-#define TERMMOD (ControlMask|ShiftMask)
+-
+ static Shortcut shortcuts[] = {
+ 	/* mask                 keysym          function        argument */
+ 	{ XK_ANY_MOD,           XK_Break,       sendbreak,      {.i =  0} },
+@@ -201,6 +300,15 @@ static Shortcut shortcuts[] = {
+ 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
+ 	{ ShiftMask,            XK_Insert,      selpaste,       {.i =  0} },
+ 	{ TERMMOD,              XK_Num_Lock,    numlock,        {.i =  0} },
++	{ TERMMOD,              XK_Return,      newterm,        {.i =  0} },
++	{ TERMMOD,              XK_O,           externalpipe,   {.v = openurlcmd} },
++	{ TERMMOD,              XK_H,           scrollbackpipe, {.v = scrollbackcmd} },
++	{ ShiftMask,            XK_Page_Up,     kscrollup,      {.i = -1} },
++    { ShiftMask,            XK_Page_Down,   kscrolldown,    {.i = -1} },
++	{ TERMMOD,              XK_F1,          togglegrdebug,  {.i =  0} },
++	{ TERMMOD,              XK_F6,          dumpgrstate,    {.i =  0} },
++	{ TERMMOD,              XK_F7,          unloadimages,   {.i =  0} },
++	{ TERMMOD,              XK_F8,          toggleimages,   {.i =  0} },
+ };
+ 
+ /*
+diff --git a/config.mk b/config.mk
+index 2fc854e..485d454 100644
+--- a/config.mk
++++ b/config.mk
+@@ -14,13 +14,20 @@ PKG_CONFIG = pkg-config
+ 
+ # includes and libs
+ INCS = -I$(X11INC) \
++       `$(PKG_CONFIG) --cflags imlib2` \
+        `$(PKG_CONFIG) --cflags fontconfig` \
+-       `$(PKG_CONFIG) --cflags freetype2`
+-LIBS = -L$(X11LIB) -lm -lrt -lX11 -lutil -lXft \
++       `$(PKG_CONFIG) --cflags freetype2` \
++       `$(PKG_CONFIG) --cflags fribidi harfbuzz`
++LIBS = -L$(X11LIB) -lm -lrt -lX11 -lutil -lXft -lXrender \
++       `$(PKG_CONFIG) --libs imlib2` \
++       `$(PKG_CONFIG) --libs zlib` \
+        `$(PKG_CONFIG) --libs fontconfig` \
+-       `$(PKG_CONFIG) --libs freetype2`
++       `$(PKG_CONFIG) --libs freetype2` \
++       `$(PKG_CONFIG) --libs fribidi harfbuzz`
+ 
+ # flags
++CFLAGS  ?= -O2 -march=native -pipe
++LDFLAGS ?= -s -Wl,-O1,--as-needed
+ STCPPFLAGS = -DVERSION=\"$(VERSION)\" -D_XOPEN_SOURCE=600
+ STCFLAGS = $(INCS) $(STCPPFLAGS) $(CPPFLAGS) $(CFLAGS)
+ STLDFLAGS = $(LIBS) $(LDFLAGS)
+diff --git a/st.c b/st.c
+index 8e57991..652af43 100644
+--- a/st.c
++++ b/st.c
+@@ -14,11 +14,15 @@
+ #include <sys/types.h>
+ #include <sys/wait.h>
+ #include <termios.h>
++#include <time.h>
+ #include <unistd.h>
+ #include <wchar.h>
+ 
+ #include "st.h"
+ #include "win.h"
++#include "graphics.h"
++
++extern char *argv0;
+ 
+ #if   defined(__linux)
+  #include <pty.h>
+@@ -35,6 +39,11 @@
+ #define ESC_ARG_SIZ   16
+ #define STR_BUF_SIZ   ESC_BUF_SIZ
+ #define STR_ARG_SIZ   ESC_ARG_SIZ
++#define HISTSIZE      10000 /* lines allocated on first use (lazy), not up front */
++
++/* PUA character used as an image placeholder */
++#define IMAGE_PLACEHOLDER_CHAR 0x10EEEE
++#define IMAGE_PLACEHOLDER_CHAR_OLD 0xEEEE
+ 
+ /* macros */
+ #define IS_SET(flag)		((term.mode & (flag)) != 0)
+@@ -42,6 +51,9 @@
+ #define ISCONTROLC1(c)		(BETWEEN(c, 0x80, 0x9f))
+ #define ISCONTROL(c)		(ISCONTROLC0(c) || ISCONTROLC1(c))
+ #define ISDELIM(u)		(u && wcschr(worddelimiters, u))
++#define TLINE(y)		((y) < term.scr ? term.hist[((y) + term.histi - \
++            term.scr + HISTSIZE + 1) % HISTSIZE] : \
++            term.line[(y) - term.scr])
+ 
+ enum term_mode {
+ 	MODE_WRAP        = 1 << 0,
+@@ -113,8 +125,14 @@ typedef struct {
+ typedef struct {
+ 	int row;      /* nb row */
+ 	int col;      /* nb col */
++	int pixw;     /* width of the text area in pixels */
++	int pixh;     /* height of the text area in pixels */
+ 	Line *line;   /* screen */
+ 	Line *alt;    /* alternate screen */
++	Line hist[HISTSIZE]; /* history buffer, lines allocated on first use */
++	int histi;    /* history index */
++	int histn;    /* number of filled history lines */
++	int scr;      /* scroll back */
+ 	int *dirty;   /* dirtyness of lines */
+ 	TCursor c;    /* cursor */
+ 	int ocx;      /* old cursor col */
+@@ -153,6 +171,7 @@ typedef struct {
+ } STREscape;
+ 
+ static void execsh(char *, char **);
++static int chdir_by_pid(pid_t pid);
+ static void stty(char **);
+ static void sigchld(int);
+ static void ttywriteraw(const char *, size_t);
+@@ -185,8 +204,8 @@ static void tnewline(int);
+ static void tputtab(int);
+ static void tputc(Rune);
+ static void treset(void);
+-static void tscrollup(int, int);
+-static void tscrolldown(int, int);
++static void tscrollup(int, int, int);
++static void tscrolldown(int, int, int);
+ static void tsetattr(const int *, int);
+ static void tsetchar(Rune, const Glyph *, int, int);
+ static void tsetdirt(int, int);
+@@ -213,7 +232,6 @@ static Rune utf8decodebyte(char, size_t *);
+ static char utf8encodebyte(Rune, size_t);
+ static size_t utf8validate(Rune *, size_t);
+ 
+-static char *base64dec(const char *);
+ static char base64dec_getc(const char **);
+ 
+ static ssize_t xwrite(int, const char *, size_t);
+@@ -232,6 +250,10 @@ static const uchar utfmask[UTF_SIZ + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8};
+ static const Rune utfmin[UTF_SIZ + 1] = {       0,    0,  0x80,  0x800,  0x10000};
+ static const Rune utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
+ 
++/* Converts a diacritic to a row/column/etc number. The result is 1-base, 0
++ * means "couldn't convert". Defined in rowcolumn_diacritics_helpers.c */
++uint16_t diacritic_to_num(uint32_t code);
++
+ ssize_t
+ xwrite(int fd, const char *s, size_t len)
+ {
+@@ -315,6 +337,58 @@ utf8decodebyte(char c, size_t *i)
+ 	return 0;
+ }
+ 
++/*
++ * Combining marks stored with their base cell (Glyph.comb, two 8-bit
++ * codes). Covers Arabic harakat + Quranic marks, Hebrew points and the
++ * common Latin/general combining blocks; anything else is still dropped.
++ */
++static const struct { Rune lo, hi; } combrange[] = {
++	{ 0x064b, 0x065f }, { 0x0670, 0x0670 }, { 0x06d6, 0x06ed },
++	{ 0x0300, 0x036f }, { 0x20d0, 0x20f0 }, { 0x0591, 0x05c7 },
++};
++
++static int
++combenc(Rune u)
++{
++	int i, base = 1;
++
++	for (i = 0; i < LEN(combrange); i++) {
++		if (u >= combrange[i].lo && u <= combrange[i].hi)
++			return base + (u - combrange[i].lo);
++		base += combrange[i].hi - combrange[i].lo + 1;
++	}
++	return 0;
++}
++
++static Rune
++combdec(int c)
++{
++	int i, base = 1;
++
++	for (i = 0; c && i < LEN(combrange); i++) {
++		int n = combrange[i].hi - combrange[i].lo + 1;
++		if (c < base + n)
++			return combrange[i].lo + (c - base);
++		base += n;
++	}
++	return 0;
++}
++
++/* marks of g in input order into out[0..1]; returns how many */
++int
++combmarks(const Glyph *g, Rune *out)
++{
++	int n = 0;
++
++	if (g->mode & ATTR_IMAGE)
++		return 0;
++	if (g->comb & 0xff)
++		out[n++] = combdec(g->comb & 0xff);
++	if (g->comb >> 8)
++		out[n++] = combdec(g->comb >> 8);
++	return n;
++}
++
+ size_t
+ utf8encode(Rune u, char *c)
+ {
+@@ -409,10 +483,10 @@ tlinelen(int y)
+ {
+ 	int i = term.col;
+ 
+-	if (term.line[y][i - 1].mode & ATTR_WRAP)
++	if (TLINE(y)[i - 1].mode & ATTR_WRAP)
+ 		return i;
+ 
+-	while (i > 0 && term.line[y][i - 1].u == ' ')
++	while (i > 0 && TLINE(y)[i - 1].u == ' ')
+ 		--i;
+ 
+ 	return i;
+@@ -521,7 +595,7 @@ selsnap(int *x, int *y, int direction)
+ 		 * Snap around if the word wraps around at the end or
+ 		 * beginning of a line.
+ 		 */
+-		prevgp = &term.line[*y][*x];
++		prevgp = &TLINE(*y)[*x];
+ 		prevdelim = ISDELIM(prevgp->u);
+ 		for (;;) {
+ 			newx = *x + direction;
+@@ -536,14 +610,14 @@ selsnap(int *x, int *y, int direction)
+ 					yt = *y, xt = *x;
+ 				else
+ 					yt = newy, xt = newx;
+-				if (!(term.line[yt][xt].mode & ATTR_WRAP))
++				if (!(TLINE(yt)[xt].mode & ATTR_WRAP))
+ 					break;
+ 			}
+ 
+ 			if (newx >= tlinelen(newy))
+ 				break;
+ 
+-			gp = &term.line[newy][newx];
++			gp = &TLINE(newy)[newx];
+ 			delim = ISDELIM(gp->u);
+ 			if (!(gp->mode & ATTR_WDUMMY) && (delim != prevdelim
+ 					|| (delim && gp->u != prevgp->u)))
+@@ -564,14 +638,14 @@ selsnap(int *x, int *y, int direction)
+ 		*x = (direction < 0) ? 0 : term.col - 1;
+ 		if (direction < 0) {
+ 			for (; *y > 0; *y += direction) {
+-				if (!(term.line[*y-1][term.col-1].mode
++				if (!(TLINE(*y-1)[term.col-1].mode
+ 						& ATTR_WRAP)) {
+ 					break;
+ 				}
+ 			}
+ 		} else if (direction > 0) {
+ 			for (; *y < term.row-1; *y += direction) {
+-				if (!(term.line[*y][term.col-1].mode
++				if (!(TLINE(*y)[term.col-1].mode
+ 						& ATTR_WRAP)) {
+ 					break;
+ 				}
+@@ -591,7 +665,7 @@ getsel(void)
+ 	if (sel.ob.x == -1)
+ 		return NULL;
+ 
+-	bufsize = (term.col+1) * (sel.ne.y-sel.nb.y+1) * UTF_SIZ;
++	bufsize = (term.col+1) * (sel.ne.y-sel.nb.y+1) * UTF_SIZ * 3; /* + 2 marks */
+ 	ptr = str = xmalloc(bufsize);
+ 
+ 	/* append every set & selected glyph to the selection */
+@@ -602,13 +676,13 @@ getsel(void)
+ 		}
+ 
+ 		if (sel.type == SEL_RECTANGULAR) {
+-			gp = &term.line[y][sel.nb.x];
++			gp = &TLINE(y)[sel.nb.x];
+ 			lastx = sel.ne.x;
+ 		} else {
+-			gp = &term.line[y][sel.nb.y == y ? sel.nb.x : 0];
++			gp = &TLINE(y)[sel.nb.y == y ? sel.nb.x : 0];
+ 			lastx = (sel.ne.y == y) ? sel.ne.x : term.col-1;
+ 		}
+-		last = &term.line[y][MIN(lastx, linelen-1)];
++		last = &TLINE(y)[MIN(lastx, linelen-1)];
+ 		while (last >= gp && last->u == ' ')
+ 			--last;
+ 
+@@ -616,7 +690,19 @@ getsel(void)
+ 			if (gp->mode & ATTR_WDUMMY)
+ 				continue;
+ 
++			if (gp->mode & ATTR_IMAGE) {
++				// TODO: Copy diacritics as well
++				ptr += utf8encode(IMAGE_PLACEHOLDER_CHAR, ptr);
++				continue;
++			}
++
+ 			ptr += utf8encode(gp->u, ptr);
++			{
++				Rune m[2];
++				int k, nm = combmarks(gp, m);
++				for (k = 0; k < nm; k++)
++					ptr += utf8encode(m[k], ptr);
++			}
+ 		}
+ 
+ 		/*
+@@ -715,11 +801,14 @@ sigchld(int a)
+ 	int stat;
+ 	pid_t p;
+ 
+-	if ((p = waitpid(pid, &stat, WNOHANG)) < 0)
++	if ((p = waitpid(-1, &stat, WNOHANG)) < 0)
+ 		die("waiting for pid %hd failed: %s\n", pid, strerror(errno));
+ 
+-	if (pid != p)
++	if (pid != p) {
++		/* reinstall sigchld handler */
++		signal(SIGCHLD, sigchld);
+ 		return;
++	}
+ 
+ 	if (WIFEXITED(stat) && WEXITSTATUS(stat))
+ 		die("child exited with status %d\n", WEXITSTATUS(stat));
+@@ -806,6 +895,7 @@ ttynew(const char *line, char *cmd, const char *out, char **args)
+ 		if (pledge("stdio rpath tty proc", NULL) == -1)
+ 			die("pledge\n");
+ #endif
++		fcntl(m, F_SETFD, FD_CLOEXEC);
+ 		close(s);
+ 		cmdfd = m;
+ 		signal(SIGCHLD, sigchld);
+@@ -814,15 +904,60 @@ ttynew(const char *line, char *cmd, const char *out, char **args)
+ 	return cmdfd;
+ }
+ 
++/*
++ * Synchronized updates (appsync patch, extended with mode 2026):
++ * between BSU and ESU the frontend does not draw, so apps (tmux, nvim)
++ * never show half-drawn frames. BSU/ESU are CSI ? 2026 h/l or the older
++ * DCS = 1 s / DCS = 2 s. A missing ESU is dropped after su_timeout ms.
++ */
++static int su = 0;
++static struct timespec sutv;
++static int twrite_aborted = 0;
++
++static void
++tsync_begin(void)
++{
++	clock_gettime(CLOCK_MONOTONIC, &sutv);
++	su = 1;
++}
++
++static void
++tsync_end(void)
++{
++	su = 0;
++}
++
++int
++tinsync(uint timeout)
++{
++	struct timespec now;
++
++	if (su && !clock_gettime(CLOCK_MONOTONIC, &now)
++	       && TIMEDIFF(now, sutv) >= timeout)
++		su = 0;
++	return su;
++}
++
++/* twrite() stopped at an ESU: the rest of buf is processed after a draw */
++int
++ttyread_pending(void)
++{
++	return twrite_aborted;
++}
++
+ size_t
+ ttyread(void)
+ {
+ 	static char buf[BUFSIZ];
+ 	static int buflen = 0;
+-	int ret, written;
++	static int already_processing = 0;
++	int ret, written = 0, pending = twrite_aborted;
++
++	if (buflen >= LEN(buf) && !pending)
++		return 0;
+ 
+ 	/* append read bytes to unprocessed bytes */
+-	ret = read(cmdfd, buf+buflen, LEN(buf)-buflen);
++	ret = pending ? 1 : read(cmdfd, buf+buflen, LEN(buf)-buflen);
+ 
+ 	switch (ret) {
+ 	case 0:
+@@ -830,8 +965,25 @@ ttyread(void)
+ 	case -1:
+ 		die("couldn't read from shell: %s\n", strerror(errno));
+ 	default:
+-		buflen += ret;
+-		written = twrite(buf, buflen, 0);
++		buflen += pending ? 0 : ret;
++		if (already_processing) {
++			/* Avoid recursive call to twrite() */
++			return ret;
++		}
++		already_processing = 1;
++		while (1) {
++			int buflen_before_processing = buflen;
++			written += twrite(buf + written, buflen - written, 0);
++			// If buflen changed during the call to twrite, there is
++			// new data, and we need to keep processing, otherwise
++			// we can exit. This will not loop forever because the
++			// buffer is limited, and we don't clean it in this
++			// loop, so at some point ttywrite will have to drop
++			// some data.
++			if (buflen_before_processing == buflen)
++				break;
++		}
++		already_processing = 0;
+ 		buflen -= written;
+ 		/* keep any incomplete UTF-8 byte sequence for the next call */
+ 		if (buflen > 0)
+@@ -844,6 +996,9 @@ void
+ ttywrite(const char *s, size_t n, int may_echo)
+ {
+ 	const char *next;
++	Arg arg = (Arg) { .i = term.scr };
++
++	kscrolldown(&arg);
+ 
+ 	if (may_echo && IS_SET(MODE_ECHO))
+ 		twrite(s, n, 1);
+@@ -874,6 +1029,7 @@ ttywriteraw(const char *s, size_t n)
+ 	fd_set wfd, rfd;
+ 	ssize_t r;
+ 	size_t lim = 256;
++	int retries_left = 100;
+ 
+ 	/*
+ 	 * Remember that we are using a pty, which might be a modem line.
+@@ -882,6 +1038,9 @@ ttywriteraw(const char *s, size_t n)
+ 	 * FIXME: Migrate the world to Plan 9.
+ 	 */
+ 	while (n > 0) {
++		if (retries_left-- <= 0)
++			goto too_many_retries;
++
+ 		FD_ZERO(&wfd);
+ 		FD_ZERO(&rfd);
+ 		FD_SET(cmdfd, &wfd);
+@@ -923,11 +1082,16 @@ ttywriteraw(const char *s, size_t n)
+ 
+ write_error:
+ 	die("write error on tty: %s\n", strerror(errno));
++too_many_retries:
++	fprintf(stderr, "Could not write %zu bytes to tty\n", n);
+ }
+ 
+ void
+ ttyresize(int tw, int th)
+ {
++	term.pixw = tw;
++	term.pixh = th;
++
+ 	struct winsize w;
+ 
+ 	w.ws_row = term.row;
+@@ -1015,7 +1179,8 @@ treset(void)
+ 	term.c = (TCursor){{
+ 		.mode = ATTR_NULL,
+ 		.fg = defaultfg,
+-		.bg = defaultbg
++		.bg = defaultbg,
++		.decor = DECOR_DEFAULT_COLOR
+ 	}, .x = 0, .y = 0, .state = CURSOR_DEFAULT};
+ 
+ 	memset(term.tabs, 0, term.col * sizeof(*term.tabs));
+@@ -1038,7 +1203,9 @@ treset(void)
+ void
+ tnew(int col, int row)
+ {
+-	term = (Term){ .c = { .attr = { .fg = defaultfg, .bg = defaultbg } } };
++	term = (Term){.c = {.attr = {.fg = defaultfg,
++				     .bg = defaultbg,
++				     .decor = DECOR_DEFAULT_COLOR}}};
+ 	tresize(col, row);
+ 	treset();
+ }
+@@ -1054,14 +1221,306 @@ tswapscreen(void)
+ 	tfulldirt();
+ }
+ 
++/*
++ * Run argv detached: the intermediate child exits at once, so the command
++ * is reparented to init and never lingers as a zombie of st. With pipefd,
++ * the command's stdin is a pipe whose write end is returned there.
++ */
++static int
++spawn(char *const argv[], int *pipefd)
++{
++	int to[2];
++	pid_t p;
++
++	if (pipefd && pipe(to) == -1)
++		return -1;
++	if ((p = fork()) == -1) {
++		if (pipefd) {
++			close(to[0]);
++			close(to[1]);
++		}
++		return -1;
++	}
++	if (p == 0) {
++		if (fork() == 0) {
++			if (pipefd) {
++				dup2(to[0], STDIN_FILENO);
++				close(to[0]);
++				close(to[1]);
++			}
++			execvp(argv[0], argv);
++			fprintf(stderr, "st: execvp %s: %s\n", argv[0],
++			        strerror(errno));
++			_exit(1);
++		}
++		_exit(0);
++	}
++	if (pipefd) {
++		close(to[0]);
++		*pipefd = to[1];
++	}
++	waitpid(p, NULL, 0);
++	return 0;
++}
++
++/* one row as UTF-8, blank tail trimmed; soft-wrapped rows get no newline */
++static int
++twriterow(int fd, const Glyph *gp)
++{
++	char buf[UTF_SIZ];
++	int x, len = term.col, wrap = gp[term.col - 1].mode & ATTR_WRAP;
++	Rune u;
++
++	if (!wrap)
++		while (len > 0 && gp[len - 1].u == ' ')
++			len--;
++	for (x = 0; x < len; x++) {
++		if (gp[x].mode & ATTR_WDUMMY)
++			continue;
++		u = (gp[x].mode & ATTR_IMAGE || !gp[x].u) ? ' ' : gp[x].u;
++		if (xwrite(fd, buf, utf8encode(u, buf)) < 0)
++			return -1;
++		{
++			Rune m[2];
++			int k, nm = combmarks(&gp[x], m);
++			for (k = 0; k < nm; k++)
++				if (xwrite(fd, buf, utf8encode(m[k], buf)) < 0)
++					return -1;
++		}
++	}
++	return wrap ? 0 : xwrite(fd, "\n", 1);
++}
++
++/* pipe the screen (and optionally the history before it) to a command */
++static void
++tpipe(const Arg *arg, int withhist)
++{
++	/* in the alt screen the history belongs to the saved main screen */
++	Line *scr = (withhist && IS_SET(MODE_ALTSCREEN)) ? term.alt : term.line;
++	void (*oldsigpipe)(int);
++	int fd, k, x, y, last;
++
++	if (spawn((char *const *)arg->v, &fd) < 0)
++		return;
++	/* ignore SIGPIPE in case the command exits early */
++	oldsigpipe = signal(SIGPIPE, SIG_IGN);
++	if (withhist) {
++		for (k = term.histn - 1; k >= 0; k--) {
++			if (twriterow(fd, term.hist[(term.histi - k + HISTSIZE)
++			                            % HISTSIZE]) < 0)
++				goto done;
++		}
++	}
++	for (last = term.row - 1; last > 0; last--) {
++		for (x = 0; x < term.col && scr[last][x].u == ' '; x++)
++			;
++		if (x < term.col)
++			break;
++	}
++	for (y = 0; y <= last; y++)
++		if (twriterow(fd, scr[y]) < 0)
++			break;
++done:
++	close(fd);
++	signal(SIGPIPE, oldsigpipe);
++}
++
++void
++externalpipe(const Arg *arg)
++{
++	tpipe(arg, 0);
++}
++
++void
++scrollbackpipe(const Arg *arg)
++{
++	tpipe(arg, 1);
++}
++
++/*
++ * Ctrl+click: open the URL under the pointer with urlhandler. Works on the
++ * scrolled view and joins soft-wrapped rows, so long URLs open whole.
++ */
++void
++openurl(int col, int row)
++{
++	Rune *r;
++	char *url, **pfx;
++	char *argv[] = { urlhandler, NULL, NULL };
++	int y0, y1, y, x, n, click, s, e, i, plen = 0, open;
++
++	if (!BETWEEN(row, 0, term.row - 1) || !BETWEEN(col, 0, term.col - 1))
++		return;
++	for (y0 = row; y0 > 0 && (TLINE(y0 - 1)[term.col - 1].mode & ATTR_WRAP); y0--)
++		;
++	for (y1 = row; y1 < term.row - 1 && (TLINE(y1)[term.col - 1].mode & ATTR_WRAP); y1++)
++		;
++
++	r = xmalloc((y1 - y0 + 1) * term.col * sizeof(*r));
++	for (n = 0, click = -1, y = y0; y <= y1; y++) {
++		for (x = 0; x < term.col; x++) {
++			const Glyph *g = &TLINE(y)[x];
++			if (g->mode & ATTR_WDUMMY)
++				continue;
++			if (y == row && x <= col)
++				click = n;
++			r[n++] = (g->mode & ATTR_IMAGE) ? ' ' : g->u;
++		}
++	}
++
++	for (s = 0; s < n; s++) {
++		for (pfx = urlprefixes; *pfx; pfx++) {
++			plen = strlen(*pfx);
++			for (i = 0; i < plen && s + i < n && r[s + i] == (uchar)(*pfx)[i]; i++)
++				;
++			if (i == plen)
++				break;
++		}
++		if (!*pfx)
++			continue;
++		for (e = s; e < n && r[e] && r[e] < 128 && strchr(urlchars, r[e]); e++)
++			;
++		/* trailing punctuation and an unbalanced ')' are prose */
++		for (open = 0, i = s; i < e; i++)
++			open += (r[i] == '(') - (r[i] == ')');
++		while (e > s + plen && (strchr(".,;:!?'\"", r[e - 1]) ||
++		       (r[e - 1] == ')' && open < 0))) {
++			open += (r[e - 1] == ')');
++			e--;
++		}
++		if (e > s + plen && s <= click && click < e) {
++			url = xmalloc(e - s + sizeof("https://"));
++			i = (r[s] == 'w') ? sprintf(url, "https://") : 0;
++			for (x = s; x < e; x++)
++				url[i++] = r[x];
++			url[i] = '\0';
++			argv[1] = url;
++			spawn(argv, NULL);
++			free(url);
++			break;
++		}
++		s = MAX(s, e - 1);
++	}
++	free(r);
++}
++
++/* spawn a new st in the shell's current directory (newterm patch) */
++void
++newterm(const Arg* a)
++{
++	char exe[PATH_MAX];
++	ssize_t n;
++	pid_t p;
++
++	switch ((p = fork())) {
++	case -1:
++		die("fork failed: %s\n", strerror(errno));
++		break;
++	case 0:
++		switch (fork()) {
++		case -1:
++			fprintf(stderr, "fork failed: %s\n", strerror(errno));
++			_exit(1);
++			break;
++		case 0:
++			chdir_by_pid(pid);
++			/* exec the resolved path so the process is named st,
++			 * not exe (pkill/pgrep/swallow match on it) */
++			if ((n = readlink("/proc/self/exe", exe, sizeof(exe) - 1)) > 0) {
++				exe[n] = '\0';
++				execl(exe, argv0, NULL);
++			}
++			execlp(argv0, argv0, NULL);
++			_exit(1);
++			break;
++		default:
++			_exit(0);
++		}
++	default:
++		waitpid(p, NULL, 0);
++	}
++}
++
++static int
++chdir_by_pid(pid_t pid)
++{
++	char buf[32];
++	snprintf(buf, sizeof buf, "/proc/%ld/cwd", (long)pid);
++	return chdir(buf);
++}
++
++void
++kscrolldown(const Arg* a)
++{
++	int n = a->i;
++
++	if (n < 0)
++		n = term.row + n;
++
++	if (n > term.scr)
++		n = term.scr;
++
++	if (term.scr > 0) {
++		term.scr -= n;
++		selscroll(0, -n);
++		tfulldirt();
++	}
++}
++
++void
++kscrollup(const Arg* a)
++{
++	int n = a->i;
++
++	if (n < 0)
++		n = term.row + n;
++
++	n = MIN(n, term.histn - term.scr);
++	if (n > 0) {
++		term.scr += n;
++		selscroll(0, n);
++		tfulldirt();
++	}
++}
++
++/* scrollback that follows the alternate screen:
++ * full-screen apps (less, vim, tmux, ...) get the wheel as key input,
++ * the normal shell scrolls history — like alacritty */
++void
++wheelscrollup(const Arg *a)
++{
++	if (IS_SET(MODE_ALTSCREEN))
++		ttywrite("\033[5;2~", sizeof("\033[5;2~") - 1, 1);
++	else
++		kscrollup(a);
++}
++
+ void
+-tscrolldown(int orig, int n)
++wheelscrolldown(const Arg *a)
++{
++	if (IS_SET(MODE_ALTSCREEN))
++		ttywrite("\033[6;2~", sizeof("\033[6;2~") - 1, 1);
++	else
++		kscrolldown(a);
++}
++
++void
++tscrolldown(int orig, int n, int copyhist)
+ {
+ 	int i;
+ 	Line temp;
+ 
+ 	LIMIT(n, 0, term.bot-orig+1);
+ 
++	if (copyhist) {
++		term.histi = (term.histi - 1 + HISTSIZE) % HISTSIZE;
++		temp = term.hist[term.histi];
++		term.hist[term.histi] = term.line[term.bot];
++		term.line[term.bot] = temp ? temp : xmalloc(term.col * sizeof(Glyph));
++		term.histn = MAX(term.histn - 1, 1);
++		term.scr = MIN(term.scr, term.histn);
++	}
++
+ 	tsetdirt(orig, term.bot-n);
+ 	tclearregion(0, term.bot-n+1, term.col-1, term.bot);
+ 
+@@ -1071,17 +1530,30 @@ tscrolldown(int orig, int n)
+ 		term.line[i-n] = temp;
+ 	}
+ 
+-	selscroll(orig, n);
++	if (term.scr == 0)
++		selscroll(orig, n);
+ }
+ 
+ void
+-tscrollup(int orig, int n)
++tscrollup(int orig, int n, int copyhist)
+ {
+ 	int i;
+ 	Line temp;
+ 
+ 	LIMIT(n, 0, term.bot-orig+1);
+ 
++	if (copyhist) {
++		term.histi = (term.histi + 1) % HISTSIZE;
++		temp = term.hist[term.histi];
++		term.hist[term.histi] = term.line[orig];
++		/* cleared by tclearregion() below */
++		term.line[orig] = temp ? temp : xmalloc(term.col * sizeof(Glyph));
++		term.histn = MIN(term.histn + 1, HISTSIZE);
++	}
++
++	if (term.scr > 0)
++		term.scr = MIN(term.scr + n, term.histn);
++
+ 	tclearregion(0, orig, term.col-1, orig+n-1);
+ 	tsetdirt(orig+n, term.bot);
+ 
+@@ -1091,7 +1563,8 @@ tscrollup(int orig, int n)
+ 		term.line[i+n] = temp;
+ 	}
+ 
+-	selscroll(orig, -n);
++	if (term.scr == 0)
++		selscroll(orig, -n);
+ }
+ 
+ void
+@@ -1120,7 +1593,7 @@ tnewline(int first_col)
+ 	int y = term.c.y;
+ 
+ 	if (y == term.bot) {
+-		tscrollup(term.top, 1);
++		tscrollup(term.top, 1, 1);
+ 	} else {
+ 		y++;
+ 	}
+@@ -1209,15 +1682,34 @@ tsetchar(Rune u, const Glyph *attr, int x, int y)
+ 		if (x+1 < term.col) {
+ 			term.line[y][x+1].u = ' ';
+ 			term.line[y][x+1].mode &= ~ATTR_WDUMMY;
++			term.line[y][x+1].comb = 0;
+ 		}
+ 	} else if (term.line[y][x].mode & ATTR_WDUMMY) {
+ 		term.line[y][x-1].u = ' ';
+ 		term.line[y][x-1].mode &= ~ATTR_WIDE;
++		term.line[y][x-1].comb = 0;
++	}
++
++	if (u == ' ' && term.line[y][x].mode & ATTR_IMAGE &&
++	    tgetisclassicplaceholder(&term.line[y][x])) {
++		// This is a workaround: don't overwrite classic placement
++		// placeholders with space symbols (unlike Unicode placeholders
++		// which must be overwritten by anything).
++		term.line[y][x].bg = attr->bg;
++		term.dirty[y] = 1;
++		return;
+ 	}
+ 
+ 	term.dirty[y] = 1;
+ 	term.line[y][x] = *attr;
+ 	term.line[y][x].u = u;
++
++	if (u == IMAGE_PLACEHOLDER_CHAR || u == IMAGE_PLACEHOLDER_CHAR_OLD) {
++		term.line[y][x].u = 0;
++		term.line[y][x].mode |= ATTR_IMAGE;
++	} else if (isboxdraw(u)) {
++		term.line[y][x].mode |= ATTR_BOXDRAW;
++	}
+ }
+ 
+ void
+@@ -1244,8 +1736,107 @@ tclearregion(int x1, int y1, int x2, int y2)
+ 				selclear();
+ 			gp->fg = term.c.attr.fg;
+ 			gp->bg = term.c.attr.bg;
++			gp->decor = term.c.attr.decor;
+ 			gp->mode = 0;
+ 			gp->u = ' ';
++			gp->comb = 0;
++		}
++	}
++}
++
++/// Fills a rectangle area with an image placeholder. The starting point is the
++/// cursor. Adds empty lines if needed. The placeholder will be marked as
++/// classic.
++void tcreateimgplaceholder(uint32_t image_id, uint32_t placement_id, int cols,
++			   int rows, char do_not_move_cursor,
++			   Glyph *text_underneath) {
++	for (int row = 0; row < rows; ++row) {
++		int y = term.c.y;
++		term.dirty[y] = 1;
++		for (int col = 0; col < cols; ++col) {
++			int x = term.c.x + col;
++			if (x >= term.col)
++				break;
++			Glyph *gp = &term.line[y][x];
++			if (selected(x, y))
++				selclear();
++			if (text_underneath) {
++				Glyph *to_save = gp;
++				// If there is already a classic placeholder,
++				// use the text underneath it. This will leave
++				// holes in images, but at least we are
++				// guaranteed to restore the original text.
++				if (gp->mode & ATTR_IMAGE &&
++				    tgetisclassicplaceholder(gp)) {
++					Glyph *under =
++						gr_get_glyph_underneath_image(
++							tgetimgid(gp),
++							tgetimgplacementid(gp),
++							tgetimgcol(gp),
++							tgetimgrow(gp));
++					if (under)
++						to_save = under;
++				}
++				text_underneath[cols * row + col] = *to_save;
++			}
++			gp->mode = ATTR_IMAGE;
++			gp->u = 0;
++			tsetimgrow(gp, row + 1);
++			tsetimgcol(gp, col + 1);
++			tsetimgid(gp, image_id);
++			tsetimgplacementid(gp, placement_id);
++			tsetimgdiacriticcount(gp, 3);
++			tsetisclassicplaceholder(gp, 1);
++		}
++		// If moving the cursor is not allowed and this is the last line
++		// of the terminal, we are done.
++		if (do_not_move_cursor && y == term.row - 1)
++			break;
++		// Move the cursor down, maybe creating a new line. The x is
++		// preserved (we never change term.c.x in the loop above).
++		if (row != rows - 1)
++			tnewline(/*first_col=*/0);
++	}
++	if (do_not_move_cursor) {
++		// Return the cursor to the original position.
++		tmoveto(term.c.x, term.c.y - rows + 1);
++	} else {
++		// Move the cursor beyond the last column, as required by the
++		// protocol. If the cursor goes beyond the screen edge, insert a
++		// newline to match the behavior of kitty.
++		if (term.c.x + cols >= term.col)
++			tnewline(/*first_col=*/1);
++		else
++			tmoveto(term.c.x + cols, term.c.y);
++	}
++}
++
++void gr_for_each_image_cell(int (*callback)(void *data, Glyph *gp),
++			    void *data) {
++	for (int row = 0; row < term.row; ++row) {
++		for (int col = 0; col < term.col; ++col) {
++			Glyph *gp = &term.line[row][col];
++			if (gp->mode & ATTR_IMAGE) {
++				if (callback(data, gp))
++					term.dirty[row] = 1;
++			}
++		}
++	}
++}
++
++void gr_schedule_image_redraw_by_id(uint32_t image_id) {
++	for (int row = 0; row < term.row; ++row) {
++		if (term.dirty[row])
++			continue;
++		for (int col = 0; col < term.col; ++col) {
++			Glyph *gp = &term.line[row][col];
++			if (gp->mode & ATTR_IMAGE) {
++				uint32_t cell_image_id = tgetimgid(gp);
++				if (cell_image_id == image_id) {
++					term.dirty[row] = 1;
++					break;
++				}
++			}
+ 		}
+ 	}
+ }
+@@ -1288,14 +1879,14 @@ void
+ tinsertblankline(int n)
+ {
+ 	if (BETWEEN(term.c.y, term.top, term.bot))
+-		tscrolldown(term.c.y, n);
++		tscrolldown(term.c.y, n, 0);
+ }
+ 
+ void
+ tdeleteline(int n)
+ {
+ 	if (BETWEEN(term.c.y, term.top, term.bot))
+-		tscrollup(term.c.y, n);
++		tscrollup(term.c.y, n, 0);
+ }
+ 
+ int32_t
+@@ -1368,6 +1959,7 @@ tsetattr(const int *attr, int l)
+ 				ATTR_STRUCK     );
+ 			term.c.attr.fg = defaultfg;
+ 			term.c.attr.bg = defaultbg;
++			term.c.attr.decor = DECOR_DEFAULT_COLOR;
+ 			break;
+ 		case 1:
+ 			term.c.attr.mode |= ATTR_BOLD;
+@@ -1380,6 +1972,20 @@ tsetattr(const int *attr, int l)
+ 			break;
+ 		case 4:
+ 			term.c.attr.mode |= ATTR_UNDERLINE;
++			if (i + 1 < l) {
++				idx = attr[++i];
++				if (BETWEEN(idx, 1, 5)) {
++					tsetdecorstyle(&term.c.attr, idx);
++				} else if (idx == 0) {
++					term.c.attr.mode &= ~ATTR_UNDERLINE;
++					tsetdecorstyle(&term.c.attr, 0);
++				} else {
++					fprintf(stderr,
++						"erresc: unknown underline "
++						"style %d\n",
++						idx);
++				}
++			}
+ 			break;
+ 		case 5: /* slow blink */
+ 			/* FALLTHROUGH */
+@@ -1403,6 +2009,7 @@ tsetattr(const int *attr, int l)
+ 			break;
+ 		case 24:
+ 			term.c.attr.mode &= ~ATTR_UNDERLINE;
++			tsetdecorstyle(&term.c.attr, 0);
+ 			break;
+ 		case 25:
+ 			term.c.attr.mode &= ~ATTR_BLINK;
+@@ -1431,10 +2038,11 @@ tsetattr(const int *attr, int l)
+ 			term.c.attr.bg = defaultbg;
+ 			break;
+ 		case 58:
+-			/* This starts a sequence to change the color of
+-			 * "underline" pixels. We don't support that and
+-			 * instead eat up a following "5;n" or "2;r;g;b". */
+-			tdefcolor(attr, &i, l);
++			if ((idx = tdefcolor(attr, &i, l)) >= 0)
++				tsetdecorcolor(&term.c.attr, idx);
++			break;
++		case 59:
++			tsetdecorcolor(&term.c.attr, DECOR_DEFAULT_COLOR);
+ 			break;
+ 		default:
+ 			if (BETWEEN(attr[i], 30, 37)) {
+@@ -1560,6 +2168,12 @@ tsetmode(int priv, int set, const int *args, int narg)
+ 			case 2004: /* 2004: bracketed paste mode */
+ 				xsetmode(set, MODE_BRCKTPASTE);
+ 				break;
++			case 2026: /* synchronized update (BSU/ESU) */
++				if (set)
++					tsync_begin();
++				else
++					tsync_end();
++				break;
+ 			/* Not implemented mouse modes. See comments there. */
+ 			case 1001: /* mouse highlight mode; can hang the
+ 				      terminal by design when implemented. */
+@@ -1739,11 +2353,11 @@ csihandle(void)
+ 	case 'S': /* SU -- Scroll <n> line up */
+ 		if (csiescseq.priv) break;
+ 		DEFAULT(csiescseq.arg[0], 1);
+-		tscrollup(term.top, csiescseq.arg[0]);
++		tscrollup(term.top, csiescseq.arg[0], 0);
+ 		break;
+ 	case 'T': /* SD -- Scroll <n> line down */
+ 		DEFAULT(csiescseq.arg[0], 1);
+-		tscrolldown(term.top, csiescseq.arg[0]);
++		tscrolldown(term.top, csiescseq.arg[0], 0);
+ 		break;
+ 	case 'L': /* IL -- Insert <n> blank lines */
+ 		DEFAULT(csiescseq.arg[0], 1);
+@@ -1813,6 +2427,15 @@ csihandle(void)
+ 			tcursor(CURSOR_LOAD);
+ 		}
+ 		break;
++	case '$':
++		if (csiescseq.mode[1] != 'p' || !csiescseq.priv)
++			goto unknown;
++		/* DECRQM -- only synchronized update is reported */
++		len = snprintf(buf, sizeof(buf), "\033[?%d;%d$y",
++		               csiescseq.arg[0], csiescseq.arg[0] == 2026 ?
++		               (su ? 1 : 2) : 0);
++		ttywrite(buf, len, 0);
++		break;
+ 	case ' ':
+ 		switch (csiescseq.mode[1]) {
+ 		case 'q': /* DECSCUSR -- Set Cursor Style */
+@@ -1823,6 +2446,39 @@ csihandle(void)
+ 			goto unknown;
+ 		}
+ 		break;
++	case '>':
++		switch (csiescseq.mode[1]) {
++		case 'q': /* XTVERSION -- Print terminal name and version */
++			len = snprintf(buf, sizeof(buf),
++				       "\033P>|st-graphics(%s)\033\\", VERSION);
++			ttywrite(buf, len, 0);
++			break;
++		default:
++			goto unknown;
++		}
++		break;
++	case 't': /* XTWINOPS -- Window manipulation */
++		switch (csiescseq.arg[0]) {
++		case 14: /* Report text area size in pixels. */
++			len = snprintf(buf, sizeof(buf), "\033[4;%i;%it",
++					term.pixh, term.pixw);
++			ttywrite(buf, len, 0);
++			break;
++		case 16: /* Report character cell size in pixels. */
++			len = snprintf(buf, sizeof(buf), "\033[6;%i;%it",
++					term.pixh / term.row,
++					term.pixw / term.col);
++			ttywrite(buf, len, 0);
++			break;
++		case 18: /* Report the size of the text area in characters. */
++			len = snprintf(buf, sizeof(buf), "\033[8;%i;%it",
++					term.row, term.col);
++			ttywrite(buf, len, 0);
++			break;
++		default:
++			goto unknown;
++		}
++		break;
+ 	}
+ }
+ 
+@@ -1985,8 +2641,33 @@ strhandle(void)
+ 	case 'k': /* old title set compatibility */
+ 		xsettitle(strescseq.args[0]);
+ 		return;
+-	case 'P': /* DCS -- Device Control String */
+ 	case '_': /* APC -- Application Program Command */
++		if (gr_parse_command(strescseq.buf, strescseq.len)) {
++			GraphicsCommandResult *res = &graphics_command_result;
++			if (res->create_placeholder) {
++				tcreateimgplaceholder(
++					res->placeholder.image_id,
++					res->placeholder.placement_id,
++					res->placeholder.columns,
++					res->placeholder.rows,
++					res->placeholder.do_not_move_cursor,
++					res->placeholder.text_underneath);
++			}
++			if (res->response[0])
++				ttywrite(res->response, strlen(res->response),
++					 0);
++			if (res->redraw)
++				tfulldirt();
++			return;
++		}
++		return;
++	case 'P': /* DCS -- Device Control String */
++		/* https://gitlab.com/gnachman/iterm2/-/wikis/synchronized-updates-spec */
++		if (strstr(strescseq.buf, "=1s") == strescseq.buf)
++			tsync_begin();  /* BSU */
++		else if (strstr(strescseq.buf, "=2s") == strescseq.buf)
++			tsync_end();  /* ESU */
++		return;
+ 	case '^': /* PM -- Privacy Message */
+ 		return;
+ 	}
+@@ -2108,8 +2789,13 @@ tdumpline(int n)
+ 	bp = &term.line[n][0];
+ 	end = &bp[MIN(tlinelen(n), term.col) - 1];
+ 	if (bp != end || bp->u != ' ') {
+-		for ( ; bp <= end; ++bp)
++		for ( ; bp <= end; ++bp) {
++			Rune m[2];
++			int k, nm = combmarks(bp, m);
+ 			tprinter(buf, utf8encode(bp->u, buf));
++			for (k = 0; k < nm; k++)
++				tprinter(buf, utf8encode(m[k], buf));
++		}
+ 	}
+ 	tprinter("\n", 1);
+ }
+@@ -2332,7 +3018,7 @@ eschandle(uchar ascii)
+ 		return 0;
+ 	case 'D': /* IND -- Linefeed */
+ 		if (term.c.y == term.bot) {
+-			tscrollup(term.top, 1);
++			tscrollup(term.top, 1, 1);
+ 		} else {
+ 			tmoveto(term.c.x, term.c.y+1);
+ 		}
+@@ -2345,7 +3031,7 @@ eschandle(uchar ascii)
+ 		break;
+ 	case 'M': /* RI -- Reverse index */
+ 		if (term.c.y == term.top) {
+-			tscrolldown(term.top, 1);
++			tscrolldown(term.top, 1, 1);
+ 		} else {
+ 			tmoveto(term.c.x, term.c.y-1);
+ 		}
+@@ -2492,6 +3178,51 @@ check_control_code:
+ 	if (selected(term.c.x, term.c.y))
+ 		selclear();
+ 
++	// wcwidth is broken on some systems, set the width to 0 if it's a known
++	// diacritic used for images.
++	uint16_t num = diacritic_to_num(u);
++	if (num != 0)
++		width = 0;
++	// Set the width to 1 if it's an image placeholder character.
++	if (u == IMAGE_PLACEHOLDER_CHAR || u == IMAGE_PLACEHOLDER_CHAR_OLD)
++		width = 1;
++
++	if (width == 0) {
++		// It's probably a combining char. Combining characters are not
++		// supported, so we just ignore them, unless it denotes the row and
++		// column of an image character.
++		if (term.c.y <= 0 && term.c.x <= 0)
++			return;
++		else if (term.c.x == 0)
++			gp = &term.line[term.c.y-1][term.col-1];
++		else if (term.c.state & CURSOR_WRAPNEXT)
++			gp = &term.line[term.c.y][term.c.x];
++		else
++			gp = &term.line[term.c.y][term.c.x-1];
++		if (num && (gp->mode & ATTR_IMAGE)) {
++			unsigned diaccount = tgetimgdiacriticcount(gp);
++			if (diaccount == 0)
++				tsetimgrow(gp, num);
++			else if (diaccount == 1)
++				tsetimgcol(gp, num);
++			else if (diaccount == 2)
++				tsetimg4thbyteplus1(gp, num);
++			tsetimgdiacriticcount(gp, diaccount + 1);
++		} else if (!(gp->mode & ATTR_IMAGE) && (num = combenc(u))) {
++			/* combining mark: ride on the base cell (2 slots) */
++			int ly = term.c.x == 0 ? term.c.y - 1 : term.c.y;
++			if (gp->mode & ATTR_WDUMMY && gp > term.line[ly])
++				gp--; /* wide base: mark goes on the glyph cell */
++			if (!(gp->comb & 0xff))
++				gp->comb = num;
++			else if (!(gp->comb >> 8))
++				gp->comb |= num << 8;
++			term.dirty[ly] = 1;
++		}
++		term.lastc = u;
++		return;
++	}
++
+ 	gp = &term.line[term.c.y][term.c.x];
+ 	if (IS_SET(MODE_WRAP) && (term.c.state & CURSOR_WRAPNEXT)) {
+ 		gp->mode |= ATTR_WRAP;
+@@ -2539,6 +3270,9 @@ twrite(const char *buf, int buflen, int show_ctrl)
+ 	int charsize;
+ 	Rune u;
+ 	int n;
++	int su0 = su;
++
++	twrite_aborted = 0;
+ 
+ 	for (n = 0; n < buflen; n += charsize) {
+ 		if (IS_SET(MODE_UTF8)) {
+@@ -2550,6 +3284,10 @@ twrite(const char *buf, int buflen, int show_ctrl)
+ 			u = buf[n] & 0xFF;
+ 			charsize = 1;
+ 		}
++		if (su0 && !su) {
++			twrite_aborted = 1;
++			break;  /* ESU - allow rendering before a new BSU */
++		}
+ 		if (show_ctrl && ISCONTROL(u)) {
+ 			if (u & 0x80) {
+ 				u &= 0x7f;
+@@ -2568,7 +3306,7 @@ twrite(const char *buf, int buflen, int show_ctrl)
+ void
+ tresize(int col, int row)
+ {
+-	int i;
++	int i, j;
+ 	int minrow = MIN(row, term.row);
+ 	int mincol = MIN(col, term.col);
+ 	int *bp;
+@@ -2605,6 +3343,16 @@ tresize(int col, int row)
+ 	term.dirty = xrealloc(term.dirty, row * sizeof(*term.dirty));
+ 	term.tabs = xrealloc(term.tabs, col * sizeof(*term.tabs));
+ 
++	for (i = 0; i < HISTSIZE; i++) {
++		if (!term.hist[i])
++			continue;
++		term.hist[i] = xrealloc(term.hist[i], col * sizeof(Glyph));
++		for (j = mincol; j < col; j++) {
++			term.hist[i][j] = term.c.attr;
++			term.hist[i][j].u = ' ';
++		}
++	}
++
+ 	/* resize each row to new width, zero-pad if needed */
+ 	for (i = 0; i < minrow; i++) {
+ 		term.line[i] = xrealloc(term.line[i], col * sizeof(Glyph));
+@@ -2658,13 +3406,17 @@ drawregion(int x1, int y1, int x2, int y2)
+ {
+ 	int y;
+ 
++	xstartimagedraw(term.dirty, term.row);
++
+ 	for (y = y1; y < y2; y++) {
+ 		if (!term.dirty[y])
+ 			continue;
+ 
+ 		term.dirty[y] = 0;
+-		xdrawline(term.line[y], x1, y, x2);
++		xdrawline(TLINE(y), x1, y, x2);
+ 	}
++
++	xfinishimagedraw();
+ }
+ 
+ void
+@@ -2683,9 +3435,14 @@ draw(void)
+ 	if (term.line[term.c.y][cx].mode & ATTR_WDUMMY)
+ 		cx--;
+ 
++	/* the old cursor is removed by repainting its whole row: with bidi
++	 * a cell is not drawn at its logical column, so a single-cell erase
++	 * would clobber shaped RTL text */
++	term.dirty[term.ocy] = 1;
+ 	drawregion(0, 0, term.col, term.row);
+-	xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
+-			term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
++	if (term.scr == 0)
++		xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
++				term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
+ 	term.ocx = cx;
+ 	term.ocy = term.c.y;
+ 	xfinishdraw();
+@@ -2699,3 +3456,9 @@ redraw(void)
+ 	tfulldirt();
+ 	draw();
+ }
++
++Glyph
++getglyphat(int col, int row)
++{
++	return term.line[row][col];
++}
+diff --git a/st.h b/st.h
+index fd3b0d8..5a0867a 100644
+--- a/st.h
++++ b/st.h
+@@ -12,7 +12,7 @@
+ #define DEFAULT(a, b)		(a) = (a) ? (a) : (b)
+ #define LIMIT(x, a, b)		(x) = (x) < (a) ? (a) : (x) > (b) ? (b) : (x)
+ #define ATTRCMP(a, b)		((a).mode != (b).mode || (a).fg != (b).fg || \
+-				(a).bg != (b).bg)
++				(a).bg != (b).bg || (a).decor != (b).decor)
+ #define TIMEDIFF(t1, t2)	((t1.tv_sec-t2.tv_sec)*1000 + \
+ 				(t1.tv_nsec-t2.tv_nsec)/1E6)
+ #define MODBIT(x, set, bit)	((set) ? ((x) |= (bit)) : ((x) &= ~(bit)))
+@@ -20,6 +20,10 @@
+ #define TRUECOLOR(r,g,b)	(1 << 24 | (r) << 16 | (g) << 8 | (b))
+ #define IS_TRUECOL(x)		(1 << 24 & (x))
+ 
++// This decor color indicates that the fg color should be used. Note that it's
++// not a 24-bit color because the 25-th bit is not set.
++#define DECOR_DEFAULT_COLOR	0x0ffffff
++
+ enum glyph_attribute {
+ 	ATTR_NULL       = 0,
+ 	ATTR_BOLD       = 1 << 0,
+@@ -33,7 +37,9 @@ enum glyph_attribute {
+ 	ATTR_WRAP       = 1 << 8,
+ 	ATTR_WIDE       = 1 << 9,
+ 	ATTR_WDUMMY     = 1 << 10,
++	ATTR_BOXDRAW    = 1 << 11,
+ 	ATTR_BOLD_FAINT = ATTR_BOLD | ATTR_FAINT,
++	ATTR_IMAGE      = 1 << 14,
+ };
+ 
+ enum selection_mode {
+@@ -52,6 +58,14 @@ enum selection_snap {
+ 	SNAP_LINE = 2
+ };
+ 
++enum underline_style {
++	UNDERLINE_STRAIGHT = 1,
++	UNDERLINE_DOUBLE = 2,
++	UNDERLINE_CURLY = 3,
++	UNDERLINE_DOTTED = 4,
++	UNDERLINE_DASHED = 5,
++};
++
+ typedef unsigned char uchar;
+ typedef unsigned int uint;
+ typedef unsigned long ulong;
+@@ -63,8 +77,11 @@ typedef uint_least32_t Rune;
+ typedef struct {
+ 	Rune u;           /* character code */
+ 	ushort mode;      /* attribute flags */
++	ushort comb;      /* up to 2 combining marks, 8-bit codes (combdec);
++	                   * lives in what was struct padding: no size cost */
+ 	uint32_t fg;      /* foreground  */
+ 	uint32_t bg;      /* background  */
++	uint32_t decor;   /* decoration (like underline) */
+ } Glyph;
+ 
+ typedef Glyph *Line;
+@@ -81,6 +98,14 @@ void die(const char *, ...);
+ void redraw(void);
+ void draw(void);
+ 
++void kscrolldown(const Arg *);
++void kscrollup(const Arg *);
++void wheelscrollup(const Arg *);
++void wheelscrolldown(const Arg *);
++void newterm(const Arg *);
++void externalpipe(const Arg *);
++void scrollbackpipe(const Arg *);
++void openurl(int, int);
+ void printscreen(const Arg *);
+ void printsel(const Arg *);
+ void sendbreak(const Arg *);
+@@ -105,7 +130,18 @@ void selextend(int, int, int, int);
+ int selected(int, int);
+ char *getsel(void);
+ 
++Glyph getglyphat(int, int);
++
++int isboxdraw(Rune);
++ushort boxdrawindex(const Glyph *);
++#ifdef XFT_VERSION
++/* only exposed to x.c, otherwise we'll need Xft.h for the types */
++void boxdraw_xinit(Display *, Colormap, XftDraw *, Visual *);
++void drawboxes(int, int, int, int, XftColor *, XftColor *, const XftGlyphFontSpec *, int);
++#endif
++
+ size_t utf8encode(Rune, char *);
++int combmarks(const Glyph *, Rune *);
+ 
+ void *xmalloc(size_t);
+ void *xrealloc(void *, size_t);
+@@ -124,3 +160,73 @@ extern unsigned int tabspaces;
+ extern unsigned int defaultfg;
+ extern unsigned int defaultbg;
+ extern unsigned int defaultcs;
++extern const int boxdraw, boxdraw_bold, boxdraw_braille;
++extern char *urlhandler;
++extern char urlchars[];
++extern char *urlprefixes[];
++
++// Accessors to decoration properties stored in `decor`.
++// The 25-th bit is used to indicate if it's a 24-bit color.
++static inline uint32_t tgetdecorcolor(Glyph *g) { return g->decor & 0x1ffffff; }
++static inline uint32_t tgetdecorstyle(Glyph *g) { return (g->decor >> 25) & 0x7; }
++static inline void tsetdecorcolor(Glyph *g, uint32_t color) {
++	g->decor = (g->decor & ~0x1ffffff) | (color & 0x1ffffff);
++}
++static inline void tsetdecorstyle(Glyph *g, uint32_t style) {
++	g->decor = (g->decor & ~(0x7 << 25)) | ((style & 0x7) << 25);
++}
++
++
++// Some accessors to image placeholder properties stored in `u`:
++// - row (1-base) - 9 bits
++// - column (1-base) - 9 bits
++// - most significant byte of the image id plus 1 - 9 bits (0 means unspecified,
++//   don't forget to subtract 1).
++// - the original number of diacritics (0, 1, 2, or 3) - 2 bits
++// - whether this is a classic (1) or Unicode (0) placeholder - 1 bit
++static inline uint32_t tgetimgrow(Glyph *g) { return g->u & 0x1ff; }
++static inline uint32_t tgetimgcol(Glyph *g) { return (g->u >> 9) & 0x1ff; }
++static inline uint32_t tgetimgid4thbyteplus1(Glyph *g) { return (g->u >> 18) & 0x1ff; }
++static inline uint32_t tgetimgdiacriticcount(Glyph *g) { return (g->u >> 27) & 0x3; }
++static inline uint32_t tgetisclassicplaceholder(Glyph *g) { return (g->u >> 29) & 0x1; }
++static inline void tsetimgrow(Glyph *g, uint32_t row) {
++	g->u = (g->u & ~0x1ff) | (row & 0x1ff);
++}
++static inline void tsetimgcol(Glyph *g, uint32_t col) {
++	g->u = (g->u & ~(0x1ff << 9)) | ((col & 0x1ff) << 9);
++}
++static inline void tsetimg4thbyteplus1(Glyph *g, uint32_t byteplus1) {
++	g->u = (g->u & ~(0x1ff << 18)) | ((byteplus1 & 0x1ff) << 18);
++}
++static inline void tsetimgdiacriticcount(Glyph *g, uint32_t count) {
++	g->u = (g->u & ~(0x3 << 27)) | ((count & 0x3) << 27);
++}
++static inline void tsetisclassicplaceholder(Glyph *g, uint32_t isclassic) {
++	g->u = (g->u & ~(0x1 << 29)) | ((isclassic & 0x1) << 29);
++}
++
++/// Returns the full image id. This is a naive implementation, if the most
++/// significant byte is not specified, it's assumed to be 0 instead of inferring
++/// it from the cells to the left.
++static inline uint32_t tgetimgid(Glyph *g) {
++	uint32_t msb = tgetimgid4thbyteplus1(g);
++	if (msb != 0)
++		--msb;
++	return (msb << 24) | (g->fg & 0xFFFFFF);
++}
++
++/// Sets the full image id.
++static inline void tsetimgid(Glyph *g, uint32_t id) {
++	g->fg = (id & 0xFFFFFF) | (1 << 24);
++	tsetimg4thbyteplus1(g, ((id >> 24) & 0xFF) + 1);
++}
++
++static inline uint32_t tgetimgplacementid(Glyph *g) {
++	if (tgetdecorcolor(g) == DECOR_DEFAULT_COLOR)
++		return 0;
++	return g->decor & 0xFFFFFF;
++}
++
++static inline void tsetimgplacementid(Glyph *g, uint32_t id) {
++	g->decor = (id & 0xFFFFFF) | (1 << 24);
++}
+diff --git a/st.info b/st.info
+index efab2cf..bdc983e 100644
+--- a/st.info
++++ b/st.info
+@@ -195,6 +195,8 @@ st-mono| simpleterm monocolor,
+ 	Ms=\E]52;%p1%s;%p2%s\007,
+ 	Se=\E[2 q,
+ 	Ss=\E[%p1%d q,
++	Sync=\EP=%p1%ds\E\\,
++	Smulx=\E[4:%p1%dm,
+ 
+ st| simpleterm,
+ 	use=st-mono,
+@@ -215,6 +217,11 @@ st-256color| simpleterm with 256 colors,
+ 	initc=\E]4;%p1%d;rgb\:%p2%{255}%*%{1000}%/%2.2X/%p3%{255}%*%{1000}%/%2.2X/%p4%{255}%*%{1000}%/%2.2X\E\\,
+ 	setab=\E[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m,
+ 	setaf=\E[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m,
++# Underline colors
++	Su,
++	Setulc=\E[58:2:%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%d%;m,
++	Setulc1=\E[58:5:%p1%dm,
++	ol=\E[59m,
+ 
+ st-meta| simpleterm with meta key,
+ 	use=st,
+diff --git a/win.h b/win.h
+index 6de960d..31b3fff 100644
+--- a/win.h
++++ b/win.h
+@@ -39,3 +39,6 @@ void xsetpointermotion(int);
+ void xsetsel(char *);
+ int xstartdraw(void);
+ void xximspot(int, int);
++
++void xstartimagedraw(int *dirty, int rows);
++void xfinishimagedraw();
+diff --git a/x.c b/x.c
+index d73152b..d91dc7e 100644
+--- a/x.c
++++ b/x.c
+@@ -4,6 +4,9 @@
+ #include <limits.h>
+ #include <locale.h>
+ #include <signal.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
+ #include <sys/select.h>
+ #include <time.h>
+ #include <unistd.h>
+@@ -14,11 +17,15 @@
+ #include <X11/keysym.h>
+ #include <X11/Xft/Xft.h>
+ #include <X11/XKBlib.h>
++#include <fribidi/fribidi.h>
++#include <harfbuzz/hb.h>
++#include <harfbuzz/hb-ft.h>
+ 
+ char *argv0;
+ #include "arg.h"
+ #include "st.h"
+ #include "win.h"
++#include "graphics.h"
+ 
+ /* types used in config.h */
+ typedef struct {
+@@ -59,6 +66,13 @@ static void zoom(const Arg *);
+ static void zoomabs(const Arg *);
+ static void zoomreset(const Arg *);
+ static void ttysend(const Arg *);
++static void previewimage(const Arg *);
++static void clickurl(const Arg *);
++static void showimageinfo(const Arg *);
++static void togglegrdebug(const Arg *);
++static void dumpgrstate(const Arg *);
++static void unloadimages(const Arg *);
++static void toggleimages(const Arg *);
+ 
+ /* config.h for applying patches and the configuration. */
+ #include "config.h"
+@@ -81,6 +95,7 @@ typedef XftGlyphFontSpec GlyphFontSpec;
+ typedef struct {
+ 	int tw, th; /* tty width and height */
+ 	int w, h; /* window width and height */
++	int hborderpx, vborderpx;
+ 	int ch; /* char height */
+ 	int cw; /* char width  */
+ 	int mode; /* window state/mode flags */
+@@ -103,8 +118,14 @@ typedef struct {
+ 	Draw draw;
+ 	Visual *vis;
+ 	XSetWindowAttributes attrs;
++	/* Here, we use the term *pointer* to differentiate the cursor
++	 * one sees when hovering the mouse over the terminal from, e.g.,
++	 * a green rectangle where text would be entered. */
++	Cursor vpointer, bpointer; /* visible and hidden pointers */
++	int pointerisvisible;
+ 	int scr;
+ 	int isfixed; /* is fixed geometry? */
++	int depth; /* bit depth */
+ 	int l, t; /* left and top offset */
+ 	int gm; /* geometry mask */
+ } XWindow;
+@@ -141,9 +162,14 @@ typedef struct {
+ } DC;
+ 
+ static inline ushort sixd_to_16bit(int);
+-static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int, int);
+-static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Glyph, int, int, int);
++static XftFont *xgetfont(Font *, Rune, int);
++static void xbidiorder(const Glyph *, int, int *, FriBidiLevel *);
++static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int, int,
++		const int *, const FriBidiLevel *, int *, int *);
++static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Glyph, int, int, int, int);
+ static void xdrawglyph(Glyph, int, int);
++static void xdrawimages(Glyph, Line, int x1, int y1, int x2);
++static void xdrawoneimagecell(Glyph, int x, int y);
+ static void xclear(int, int, int, int);
+ static int xgeommasktogravity(int);
+ static int ximopen(Display *);
+@@ -157,6 +183,8 @@ static void xhints(void);
+ static int xloadcolor(int, const char *, Color *);
+ static int xloadfont(Font *, FcPattern *);
+ static void xloadfonts(const char *, double);
++static int xloadsparefont(FcPattern *, int);
++static void xloadsparefonts(void);
+ static void xunloadfont(Font *);
+ static void xunloadfonts(void);
+ static void xsetenv(void);
+@@ -220,6 +248,7 @@ static DC dc;
+ static XWindow xw;
+ static XSelection xsel;
+ static TermWindow win;
++static unsigned int mouse_col = 0, mouse_row = 0;
+ 
+ /* Font Ring Cache */
+ enum {
+@@ -306,6 +335,7 @@ zoomabs(const Arg *arg)
+ {
+ 	xunloadfonts();
+ 	xloadfonts(usedfont, arg->f);
++	xloadsparefonts();
+ 	cresize(0, 0);
+ 	redraw();
+ 	xhints();
+@@ -328,6 +358,75 @@ ttysend(const Arg *arg)
+ 	ttywrite(arg->s, strlen(arg->s), 1);
+ }
+ 
++/* Ctrl+click on a URL opens it (position set by mouseaction) */
++void
++clickurl(const Arg *arg)
++{
++	openurl(mouse_col, mouse_row);
++}
++
++void
++previewimage(const Arg *arg)
++{
++	Glyph g = getglyphat(mouse_col, mouse_row);
++	if (g.mode & ATTR_IMAGE) {
++		uint32_t image_id = tgetimgid(&g);
++		fprintf(stderr, "Clicked on placeholder %u/%u, x=%d, y=%d\n",
++			image_id, tgetimgplacementid(&g), tgetimgcol(&g),
++			tgetimgrow(&g));
++		gr_preview_image(image_id, arg->s);
++	}
++}
++
++void
++showimageinfo(const Arg *arg)
++{
++	Glyph g = getglyphat(mouse_col, mouse_row);
++	if (g.mode & ATTR_IMAGE) {
++		uint32_t image_id = tgetimgid(&g);
++		fprintf(stderr, "Clicked on placeholder %u/%u, x=%d, y=%d\n",
++			image_id, tgetimgplacementid(&g), tgetimgcol(&g),
++			tgetimgrow(&g));
++		char stcommand[256] = {0};
++		size_t len = snprintf(stcommand, sizeof(stcommand), "%s -e less", argv0);
++		if (len > sizeof(stcommand) - 1) {
++			fprintf(stderr, "Executable name too long: %s\n",
++				argv0);
++			return;
++		}
++		gr_show_image_info(image_id, tgetimgplacementid(&g),
++				   tgetimgcol(&g), tgetimgrow(&g),
++				   tgetisclassicplaceholder(&g),
++				   tgetimgdiacriticcount(&g), argv0);
++	}
++}
++
++void
++togglegrdebug(const Arg *arg)
++{
++	graphics_debug_mode = (graphics_debug_mode + 1) % 3;
++	redraw();
++}
++
++void
++dumpgrstate(const Arg *arg)
++{
++	gr_dump_state();
++}
++
++void
++unloadimages(const Arg *arg)
++{
++	gr_unload_images_to_reduce_ram();
++}
++
++void
++toggleimages(const Arg *arg)
++{
++	graphics_display_images = !graphics_display_images;
++	redraw();
++}
++
+ int
+ evcol(XEvent *e)
+ {
+@@ -452,6 +551,9 @@ mouseaction(XEvent *e, uint release)
+ 	/* ignore Button<N>mask for Button<N> - it's set on release */
+ 	uint state = e->xbutton.state & ~buttonmask(e->xbutton.button);
+ 
++	mouse_col = evcol(e);
++	mouse_row = evrow(e);
++
+ 	for (ms = mshortcuts; ms < mshortcuts + LEN(mshortcuts); ms++) {
+ 		if (ms->release == release &&
+ 		    ms->button == e->xbutton.button &&
+@@ -716,6 +818,13 @@ brelease(XEvent *e)
+ void
+ bmotion(XEvent *e)
+ {
++	if (!xw.pointerisvisible) {
++		XDefineCursor(xw.dpy, xw.win, xw.vpointer);
++		xw.pointerisvisible = 1;
++		if (!IS_SET(MODE_MOUSEMANY))
++			xsetpointermotion(0);
++	}
++
+ 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
+ 		mousereport(e);
+ 		return;
+@@ -739,6 +848,12 @@ cresize(int width, int height)
+ 	col = MAX(1, col);
+ 	row = MAX(1, row);
+ 
++	/* anysize offsets. Pinned to 0 via anysize_halign/valign (config.h),
++	 * so all cell<->pixel mapping uses borderpx exactly like vanilla st;
++	 * see the note at the anysize_halign definition. */
++	win.hborderpx = (win.w - col * win.cw) * anysize_halign / 100;
++	win.vborderpx = (win.h - row * win.ch) * anysize_valign / 100;
++
+ 	tresize(col, row);
+ 	xresize(col, row);
+ 	ttyresize(win.tw, win.th);
+@@ -752,12 +867,12 @@ xresize(int col, int row)
+ 
+ 	XFreePixmap(xw.dpy, xw.buf);
+ 	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
+-			DefaultDepth(xw.dpy, xw.scr));
++			xw.depth);
+ 	XftDrawChange(xw.draw, xw.buf);
+ 	xclear(0, 0, win.w, win.h);
+ 
+-	/* resize to new width */
+-	xw.specbuf = xrealloc(xw.specbuf, col * sizeof(GlyphFontSpec));
++	/* resize to new width; 8x for shaped runs (base+marks+kashida) */
++	xw.specbuf = xrealloc(xw.specbuf, 8 * col * sizeof(GlyphFontSpec));
+ }
+ 
+ ushort
+@@ -812,6 +927,10 @@ xloadcols(void)
+ 			else
+ 				die("could not allocate color %d\n", i);
+ 		}
++
++	dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * alpha);
++	dc.col[defaultbg].pixel &= 0x00FFFFFF;
++	dc.col[defaultbg].pixel |= (unsigned char)(0xff * alpha) << 24;
+ 	loaded = 1;
+ }
+ 
+@@ -842,6 +961,12 @@ xsetcolorname(int x, const char *name)
+ 	XftColorFree(xw.dpy, xw.vis, xw.cmap, &dc.col[x]);
+ 	dc.col[x] = ncolor;
+ 
++	if (x == defaultbg) {
++		dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * alpha);
++		dc.col[defaultbg].pixel &= 0x00FFFFFF;
++		dc.col[defaultbg].pixel |= (unsigned char)(0xff * alpha) << 24;
++	}
++
+ 	return 0;
+ }
+ 
+@@ -869,8 +994,8 @@ xhints(void)
+ 	sizeh->flags = PSize | PResizeInc | PBaseSize | PMinSize;
+ 	sizeh->height = win.h;
+ 	sizeh->width = win.w;
+-	sizeh->height_inc = win.ch;
+-	sizeh->width_inc = win.cw;
++	sizeh->height_inc = 1;
++	sizeh->width_inc = 1;
+ 	sizeh->base_height = 2 * borderpx;
+ 	sizeh->base_width = 2 * borderpx;
+ 	sizeh->min_height = win.ch + 2 * borderpx;
+@@ -1014,7 +1139,8 @@ xloadfonts(const char *fontstr, double fontsize)
+ 			FcPatternAddDouble(pattern, FC_PIXEL_SIZE, 12);
+ 			usedfontsize = 12;
+ 		}
+-		defaultfontsize = usedfontsize;
++		if (defaultfontsize <= 0)
++			defaultfontsize = usedfontsize;
+ 	}
+ 
+ 	if (xloadfont(&dc.font, pattern))
+@@ -1024,7 +1150,7 @@ xloadfonts(const char *fontstr, double fontsize)
+ 		FcPatternGetDouble(dc.font.match->pattern,
+ 		                   FC_PIXEL_SIZE, 0, &fontval);
+ 		usedfontsize = fontval;
+-		if (fontsize == 0)
++		if (defaultfontsize <= 0 && fontsize == 0)
+ 			defaultfontsize = fontval;
+ 	}
+ 
+@@ -1050,6 +1176,115 @@ xloadfonts(const char *fontstr, double fontsize)
+ 	FcPatternDestroy(pattern);
+ }
+ 
++int
++xloadsparefont(FcPattern *pattern, int flags)
++{
++	FcPattern *match;
++	FcResult result;
++
++	match = FcFontMatch(NULL, pattern, &result);
++	if (!match) {
++		return 1;
++	}
++
++	if (!(frc[frclen].font = XftFontOpenPattern(xw.dpy, match))) {
++		FcPatternDestroy(match);
++		return 1;
++	}
++
++	frc[frclen].flags = flags;
++	/* Believe U+0000 glyph will present in each default font */
++	frc[frclen].unicodep = 0;
++	frclen++;
++
++	return 0;
++}
++
++void
++xloadsparefonts(void)
++{
++	FcPattern *pattern;
++	double sizeshift, fontval;
++	int fc;
++	char **fp;
++
++	if (frclen != 0)
++		die("can't embed spare fonts. cache isn't empty");
++
++	/* Calculate count of spare fonts */
++	fc = sizeof(font2) / sizeof(*font2);
++	if (fc == 0)
++		return;
++
++	/* Allocate memory for cache entries. */
++	if (frccap < 4 * fc) {
++		frccap += 4 * fc - frccap;
++		frc = xrealloc(frc, frccap * sizeof(Fontcache));
++	}
++
++	for (fp = font2; fp - font2 < fc; ++fp) {
++
++		if (**fp == '-')
++			pattern = XftXlfdParse(*fp, False, False);
++		else
++			pattern = FcNameParse((FcChar8 *)*fp);
++
++		if (!pattern)
++			die("can't open spare font %s\n", *fp);
++
++		if (defaultfontsize > 0) {
++			sizeshift = usedfontsize - defaultfontsize;
++			if (sizeshift != 0 &&
++					FcPatternGetDouble(pattern, FC_PIXEL_SIZE, 0, &fontval) ==
++					FcResultMatch) {
++				fontval += sizeshift;
++				FcPatternDel(pattern, FC_PIXEL_SIZE);
++				FcPatternDel(pattern, FC_SIZE);
++				FcPatternAddDouble(pattern, FC_PIXEL_SIZE, fontval);
++			} else if (sizeshift != 0 &&
++					FcPatternGetDouble(pattern, FC_SIZE, 0, &fontval) ==
++					FcResultMatch) {
++				/* size= entries are points: shift by the pixel delta
++				 * converted at screen DPI so spares (Arabic, symbols,
++				 * emoji) track primary-font zoom instead of freezing. */
++				double dpi = 96.0;
++				if (DisplayHeightMM(xw.dpy, xw.scr) > 0)
++					dpi = DisplayHeight(xw.dpy, xw.scr) * 25.4 /
++					    DisplayHeightMM(xw.dpy, xw.scr);
++				fontval += sizeshift * 72.0 / dpi;
++				FcPatternDel(pattern, FC_PIXEL_SIZE);
++				FcPatternDel(pattern, FC_SIZE);
++				FcPatternAddDouble(pattern, FC_SIZE, fontval);
++			}
++		}
++
++		FcPatternAddBool(pattern, FC_SCALABLE, 1);
++
++		FcConfigSubstitute(NULL, pattern, FcMatchPattern);
++		XftDefaultSubstitute(xw.dpy, xw.scr, pattern);
++
++		if (xloadsparefont(pattern, FRC_NORMAL))
++			die("can't open spare font %s\n", *fp);
++
++		FcPatternDel(pattern, FC_SLANT);
++		FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
++		if (xloadsparefont(pattern, FRC_ITALIC))
++			die("can't open spare font %s\n", *fp);
++
++		FcPatternDel(pattern, FC_WEIGHT);
++		FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_BOLD);
++		if (xloadsparefont(pattern, FRC_ITALICBOLD))
++			die("can't open spare font %s\n", *fp);
++
++		FcPatternDel(pattern, FC_SLANT);
++		FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
++		if (xloadsparefont(pattern, FRC_BOLD))
++			die("can't open spare font %s\n", *fp);
++
++		FcPatternDestroy(pattern);
++	}
++}
++
+ void
+ xunloadfont(Font *f)
+ {
+@@ -1130,15 +1365,29 @@ void
+ xinit(int cols, int rows)
+ {
+ 	XGCValues gcvalues;
+-	Cursor cursor;
+ 	Window parent, root;
++	Pixmap blankpm;
+ 	pid_t thispid = getpid();
+ 	XColor xmousefg, xmousebg;
++	XWindowAttributes attr;
++	XVisualInfo vis;
+ 
+ 	if (!(xw.dpy = XOpenDisplay(NULL)))
+ 		die("can't open display\n");
+ 	xw.scr = XDefaultScreen(xw.dpy);
+-	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
++
++	root = XRootWindow(xw.dpy, xw.scr);
++	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
++		parent = root;
++
++	if (XMatchVisualInfo(xw.dpy, xw.scr, 32, TrueColor, &vis) != 0) {
++		xw.vis = vis.visual;
++		xw.depth = vis.depth;
++	} else {
++		XGetWindowAttributes(xw.dpy, parent, &attr);
++		xw.vis = attr.visual;
++		xw.depth = attr.depth;
++	}
+ 
+ 	/* font */
+ 	if (!FcInit())
+@@ -1147,13 +1396,16 @@ xinit(int cols, int rows)
+ 	usedfont = (opt_font == NULL)? font : opt_font;
+ 	xloadfonts(usedfont, 0);
+ 
++	/* spare fonts */
++	xloadsparefonts();
++
+ 	/* colors */
+-	xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
++	xw.cmap = XCreateColormap(xw.dpy, parent, xw.vis, None);
+ 	xloadcols();
+ 
+ 	/* adjust fixed window geometry */
+-	win.w = 2 * borderpx + cols * win.cw;
+-	win.h = 2 * borderpx + rows * win.ch;
++	win.w = 2 * win.hborderpx + 2 * borderpx + cols * win.cw;
++	win.h = 2 * win.vborderpx + 2 * borderpx + rows * win.ch;
+ 	if (xw.gm & XNegative)
+ 		xw.l += DisplayWidth(xw.dpy, xw.scr) - win.w - 2;
+ 	if (xw.gm & YNegative)
+@@ -1168,11 +1420,8 @@ xinit(int cols, int rows)
+ 		| ButtonMotionMask | ButtonPressMask | ButtonReleaseMask;
+ 	xw.attrs.colormap = xw.cmap;
+ 
+-	root = XRootWindow(xw.dpy, xw.scr);
+-	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
+-		parent = root;
+-	xw.win = XCreateWindow(xw.dpy, root, xw.l, xw.t,
+-			win.w, win.h, 0, XDefaultDepth(xw.dpy, xw.scr), InputOutput,
++	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
++			win.w, win.h, 0, xw.depth, InputOutput,
+ 			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
+ 			| CWEventMask | CWColormap, &xw.attrs);
+ 	if (parent != root)
+@@ -1183,12 +1432,12 @@ xinit(int cols, int rows)
+ 	dc.gc = XCreateGC(xw.dpy, xw.win, GCGraphicsExposures,
+ 			&gcvalues);
+ 	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
+-			DefaultDepth(xw.dpy, xw.scr));
++			xw.depth);
+ 	XSetForeground(xw.dpy, dc.gc, dc.col[defaultbg].pixel);
+ 	XFillRectangle(xw.dpy, xw.buf, dc.gc, 0, 0, win.w, win.h);
+ 
+-	/* font spec buffer */
+-	xw.specbuf = xmalloc(cols * sizeof(GlyphFontSpec));
++	/* font spec buffer; 8x width: shaped cells emit base+mark+kashida specs */
++	xw.specbuf = xmalloc(8 * cols * sizeof(GlyphFontSpec));
+ 
+ 	/* Xft rendering context */
+ 	xw.draw = XftDrawCreate(xw.dpy, xw.buf, xw.vis, xw.cmap);
+@@ -1200,8 +1449,9 @@ xinit(int cols, int rows)
+ 	}
+ 
+ 	/* white cursor, black outline */
+-	cursor = XCreateFontCursor(xw.dpy, mouseshape);
+-	XDefineCursor(xw.dpy, xw.win, cursor);
++	xw.pointerisvisible = 1;
++	xw.vpointer = XCreateFontCursor(xw.dpy, mouseshape);
++	XDefineCursor(xw.dpy, xw.win, xw.vpointer);
+ 
+ 	if (XParseColor(xw.dpy, xw.cmap, colorname[mousefg], &xmousefg) == 0) {
+ 		xmousefg.red   = 0xffff;
+@@ -1215,7 +1465,10 @@ xinit(int cols, int rows)
+ 		xmousebg.blue  = 0x0000;
+ 	}
+ 
+-	XRecolorCursor(xw.dpy, cursor, &xmousefg, &xmousebg);
++	XRecolorCursor(xw.dpy, xw.vpointer, &xmousefg, &xmousebg);
++	blankpm = XCreateBitmapFromData(xw.dpy, xw.win, &(char){0}, 1, 1);
++	xw.bpointer = XCreatePixmapCursor(xw.dpy, blankpm, blankpm,
++					  &xmousefg, &xmousebg, 0, 0);
+ 
+ 	xw.xembed = XInternAtom(xw.dpy, "_XEMBED", False);
+ 	xw.wmdeletewin = XInternAtom(xw.dpy, "WM_DELETE_WINDOW", False);
+@@ -1240,10 +1493,571 @@ xinit(int cols, int rows)
+ 	xsel.xtarget = XInternAtom(xw.dpy, "UTF8_STRING", 0);
+ 	if (xsel.xtarget == None)
+ 		xsel.xtarget = XA_STRING;
++
++	// Initialize the graphics (image display) module.
++	gr_init(xw.dpy, xw.vis, xw.cmap);
++
++	boxdraw_xinit(xw.dpy, xw.cmap, xw.draw, xw.vis);
++}
++
++/*
++ * Bidi + Arabic shaping, display-only.
++ *
++ * The grid buffer stays in logical order (tputc, selection, clipboard and
++ * the cursor are untouched). Each row is reordered to visual order with
++ * FriBidi and Arabic runs are shaped with HarfBuzz at draw time.
++ *
++ * Limitations, stated honestly:
++ * - shaping splits at attribute boundaries (same caveat as the upstream
++ *   ligatures patch): joins break across colors, so zsh syntax-highlighted
++ *   input lines may look fragmented while command output (one color) is
++ *   fully joined. Nothing to fix in st: the shell writes those colors.
++ * - one row == one paragraph; logical lines wrapped over several rows
++ *   (ATTR_WRAP) reorder per row, not per paragraph.
++ * - RTL runs render with shaped (proportional) advances for correct joins
++ *   and natural spaces, then the pen snaps back to the grid at the run
++ *   end. Backgrounds, cursor and selection stay on whole cells.
++ * - harakat ride on their base via shaped offsets (zero grid advance).
++ * - fullscreen apps (vim/tmux) usually want bidi_enabled = 0.
++ */
++
++static int
++xiscomb(Rune u)
++{
++	return (u >= 0x0300 && u <= 0x036f) || (u >= 0x064b && u <= 0x0655) ||
++	    u == 0x0670 || (u >= 0x20d0 && u <= 0x20ff) ||
++	    (u >= 0xfe00 && u <= 0xfe0f) || (u >= 0xfe20 && u <= 0xfe2f);
++}
++
++/* plausible RTL codepoint: gates the (costly) FriBidi path */
++static int
++xisrtl(Rune u)
++{
++	return (u >= 0x0590 && u <= 0x08ff) || (u >= 0xfb1d && u <= 0xfdff) ||
++	    (u >= 0xfe70 && u <= 0xfefc) || u == 0x200e || u == 0x200f;
++}
++
++static FriBidiParType
++xparbase(void)
++{
++	if (bidi_base && bidi_base[0] == 'l')
++		return FRIBIDI_PAR_LTR;
++	if (bidi_base && bidi_base[0] == 'r')
++		return FRIBIDI_PAR_RTL;
++	return FRIBIDI_PAR_ON; /* "auto" */
++}
++
++/* visual -> logical map + embedding levels; identity on LTR-only lines */
++static void
++xbidiorder(const Glyph *glyphs, int len, int *v2l, FriBidiLevel *levels)
++{
++	int i;
++	FriBidiChar *log;
++	FriBidiParType base;
++
++	for (i = 0; i < len; i++) {
++		v2l[i] = i;
++		levels[i] = 0;
++	}
++	if (!bidi_enabled || len <= 0)
++		return;
++	for (i = 0; i < len; i++)
++		if (glyphs[i].mode != ATTR_WDUMMY && xisrtl(glyphs[i].u))
++			break;
++	if (i >= len)
++		return;
++	log = xmalloc(len * sizeof(*log));
++	for (i = 0; i < len; i++)
++		log[i] = (glyphs[i].mode == ATTR_WDUMMY) ? 0x20 : glyphs[i].u;
++	base = xparbase();
++	if (!fribidi_log2vis(log, len, &base, NULL, NULL, v2l, levels)) {
++		for (i = 0; i < len; i++) {
++			v2l[i] = i;
++			levels[i] = 0;
++		}
++	}
++	free(log);
++}
++
++/* mirror brackets etc. when the cell sits at an odd embedding level */
++static Rune
++xmirror(Rune u, FriBidiLevel lvl)
++{
++	FriBidiChar m;
++
++	if ((lvl & 1) && fribidi_get_mirror_char(u, &m))
++		return m;
++	return u;
++}
++
++/* font lookup with spare-font cache + fontconfig fallback (as before) */
++static XftFont *
++xgetfont(Font *font, Rune rune, int frcflags)
++{
++	FT_UInt glyphidx;
++	FcResult fcres;
++	FcPattern *fcpattern, *fontpattern;
++	FcFontSet *fcsets[] = { NULL };
++	FcCharSet *fccharset;
++	int f;
++
++	glyphidx = XftCharIndex(xw.dpy, font->match, rune);
++	if (glyphidx)
++		return font->match;
++
++	for (f = 0; f < frclen; f++) {
++		glyphidx = XftCharIndex(xw.dpy, frc[f].font, rune);
++		if (glyphidx && frc[f].flags == frcflags)
++			return frc[f].font;
++		if (!glyphidx && frc[f].flags == frcflags &&
++		    frc[f].unicodep == rune)
++			return frc[f].font;
++	}
++
++	if (!font->set)
++		font->set = FcFontSort(0, font->pattern, 1, 0, &fcres);
++	fcsets[0] = font->set;
++
++	/*
++	 * Nothing was found in the cache. Now use
++	 * some dozen of Fontconfig calls to get the
++	 * font for one single character.
++	 *
++	 * Xft and fontconfig are design failures.
++	 */
++	fcpattern = FcPatternDuplicate(font->pattern);
++	fccharset = FcCharSetCreate();
++
++	FcCharSetAddChar(fccharset, rune);
++	FcPatternAddCharSet(fcpattern, FC_CHARSET,
++			fccharset);
++	FcPatternAddBool(fcpattern, FC_SCALABLE, 1);
++
++	FcConfigSubstitute(0, fcpattern,
++			FcMatchPattern);
++	FcDefaultSubstitute(fcpattern);
++
++	fontpattern = FcFontSetMatch(0, fcsets, 1,
++			fcpattern, &fcres);
++
++	if (frclen >= frccap) {
++		frccap += 16;
++		frc = xrealloc(frc, frccap * sizeof(Fontcache));
++	}
++
++	frc[frclen].font = XftFontOpenPattern(xw.dpy,
++			fontpattern);
++	if (!frc[frclen].font)
++		die("XftFontOpenPattern failed seeking fallback font: %s\n",
++			strerror(errno));
++	frc[frclen].flags = frcflags;
++	frc[frclen].unicodep = rune;
++
++	f = frclen++;
++
++	FcPatternDestroy(fcpattern);
++	FcCharSetDestroy(fccharset);
++
++	return frc[f].font;
++}
++
++/*
++ * Shape one HarfBuzz run (logical order). Returns malloc'd glyph infos in
++ * visual order (free with free()), *nglyphs set, *outpos gets the malloc'd
++ * positions (26.6 pixels, free with free()), NULL on failure so the
++ * caller can fall back to unshaped cells. hb objects live per call, so
++ * zoom font reloads need no cache invalidation.
++ */
++static hb_glyph_info_t *
++xshaperun(XftFont *xfont, const FriBidiChar *run, const ushort *comb,
++	int runlen, int rtl, int *nglyphs, hb_glyph_position_t **outpos)
++{
++	FT_Face face;
++	hb_font_t *hbfont;
++	hb_buffer_t *buf;
++	const hb_glyph_info_t *infos;
++	const hb_glyph_position_t *pos;
++	hb_glyph_info_t *out = NULL;
++	unsigned int n = 0;
++	int i, arabic = 0, hebrew = 0;
++
++	*nglyphs = 0;
++	*outpos = NULL;
++	for (i = 0; i < runlen; i++) {
++		if ((run[i] >= 0x0600 && run[i] <= 0x08ff) ||
++		    (run[i] >= 0xfb50 && run[i] <= 0xfeff))
++			arabic = 1;
++		else if (run[i] >= 0x0590 && run[i] <= 0x05ff)
++			hebrew = 1;
++	}
++
++	face = XftLockFace(xfont);
++	if (!face)
++		return NULL;
++	hbfont = hb_ft_font_create(face, NULL);
++	buf = hb_buffer_create();
++	/* one cluster per cell: its base, then its stored combining marks,
++	 * so HarfBuzz attaches the marks (GPOS) and keeps them in that cell */
++	hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
++	for (i = 0; i < runlen; i++) {
++		Glyph g = { .comb = comb ? comb[i] : 0 };
++		Rune m[2];
++		int k, nm = combmarks(&g, m);
++		hb_buffer_add(buf, run[i], i);
++		for (k = 0; k < nm; k++)
++			hb_buffer_add(buf, m[k], i);
++	}
++	hb_buffer_set_direction(buf, rtl ? HB_DIRECTION_RTL : HB_DIRECTION_LTR);
++	if (arabic || hebrew)
++		hb_buffer_set_script(buf, arabic ? HB_SCRIPT_ARABIC : HB_SCRIPT_HEBREW);
++	if (arabic)
++		hb_buffer_set_language(buf, hb_language_from_string("ar", -1));
++	hb_buffer_guess_segment_properties(buf);
++	hb_shape(hbfont, buf, NULL, 0);
++	infos = hb_buffer_get_glyph_infos(buf, &n);
++	pos = hb_buffer_get_glyph_positions(buf, &n);
++	if (n > 0) {
++		out = xmalloc(n * sizeof(*out));
++		memcpy(out, infos, n * sizeof(*out));
++		*outpos = xmalloc(n * sizeof(**outpos));
++		memcpy(*outpos, pos, n * sizeof(**outpos));
++		*nglyphs = n;
++	}
++	hb_buffer_destroy(buf);
++	hb_font_destroy(hbfont);
++	XftUnlockFace(xfont);
++	return out;
++}
++
++/* max shaped glyphs kept per cell (base + marks); extras are dropped */
++#define XSHAPE_MAXG 4
++
++/* a (logically first) joins b (next) and the join may be stretched
++ * with kashida. Never inside lam-alef (fonts such as IBM Plex draw it
++ * as two contextual glyphs, a tatweel between them breaks it) or the
++ * lam-lam(-heh) of Allah; p is the letter before a, or 0. */
++static int
++xkashidaok(Rune p, Rune a, Rune b)
++{
++	if (a == 0x0644) {
++		switch (b) {
++		case 0x0622: case 0x0623: case 0x0625: case 0x0627:
++		case 0x0671: case 0x0672: case 0x0673: case 0x0675:
++		case 0x0644:
++			return 0;
++		case 0x0647:
++			if (p == 0x0644)
++				return 0;
++		}
++	}
++	return FRIBIDI_JOINS_LEFT(fribidi_get_joining_type(a)) &&
++	       FRIBIDI_JOINS_RIGHT(fribidi_get_joining_type(b));
++}
++
++/*
++ * Draw one maximal visual RTL run starting at visual cell v0 (same mode,
++ * odd levels, logically contiguous). Fills specs/cnt/wdt, advances *pxp.
++ * Returns visual cells consumed. cnt[v] = specs emitted for cell v,
++ * wdt[v] = grid columns consumed (marks: 0, ligature partners: blank 1).
++ */
++static int
++xshapertl(XftGlyphFontSpec *specs, int *pnum, float *pxp, float yp,
++	Font *font, int frcflags, float runewidth,
++	const Glyph *glyphs, int len, const int *v2l, const FriBidiLevel *levels,
++	int v0, int *cnt, int *wdt)
++{
++	int j, k, t, nvc, l0, nglyphs;
++	ushort mode0;
++	FriBidiChar *linp;
++	ushort *lcomb;
++	XftFont **lfont, **vfont, *xf;
++	FT_UInt *cellgid;
++	XftFont **cellgfont;
++	unsigned char *celln, *merged;
++	hb_glyph_info_t *infos;
++	hb_glyph_position_t *pos;
++	int *celladv, *celloffx, *celloffy; /* 26.6 px from HarfBuzz */
++	int wide;
++
++	l0 = v2l[v0];
++	mode0 = glyphs[l0].mode;
++	for (nvc = 0; v0 + nvc < len; nvc++) {
++		int l = v2l[v0 + nvc];
++		if (glyphs[l].mode == ATTR_WDUMMY ||
++		    glyphs[l].mode != mode0 || !(levels[l] & 1) ||
++		    l != l0 - nvc)
++			break;
++	}
++	wide = (mode0 & ATTR_WIDE) ? 2 : 1;
++
++	linp = xmalloc(nvc * sizeof(*linp));
++	lcomb = xmalloc(nvc * sizeof(*lcomb));
++	lfont = xmalloc(nvc * sizeof(*lfont));
++	vfont = xmalloc(nvc * sizeof(*vfont));
++	cellgid = xmalloc(nvc * XSHAPE_MAXG * sizeof(*cellgid));
++	cellgfont = xmalloc(nvc * XSHAPE_MAXG * sizeof(*cellgfont));
++	celln = xmalloc(nvc * sizeof(*celln));
++	merged = xmalloc(nvc * sizeof(*merged));
++	celladv = xmalloc(nvc * XSHAPE_MAXG * sizeof(*celladv));
++	celloffx = xmalloc(nvc * XSHAPE_MAXG * sizeof(*celloffx));
++	celloffy = xmalloc(nvc * XSHAPE_MAXG * sizeof(*celloffy));
++
++	/* logical ascending input (mirrored) + per-cell fonts */
++	for (k = 0; k < nvc; k++) {
++		int l = l0 - nvc + 1 + k;
++		linp[k] = xmirror(glyphs[l].u, levels[l]);
++		lcomb[k] = glyphs[l].comb;
++		lfont[k] = xgetfont(font, linp[k], frcflags);
++	}
++	/* spaces inside RTL runs take the neighboring Arabic font: Meslo's
++	 * space is a full cell (0.60em), the Arabic font's is print-natural
++	 * (~0.24em). Without this, words drift apart. Grid is unaffected:
++	 * the pen still snaps back at the run end. */
++	for (k = 0; k < nvc; k++) {
++		int d;
++		XftFont *nf;
++		if (linp[k] != 0x20)
++			continue;
++		nf = NULL;
++		for (d = 1; d < nvc && !nf; d++) {
++			if (k - d >= 0 && linp[k - d] != 0x20)
++				nf = lfont[k - d];
++			else if (k + d < nvc && linp[k + d] != 0x20)
++				nf = lfont[k + d];
++		}
++		if (nf)
++			lfont[k] = nf;
++	}
++	for (j = 0; j < nvc; j++) {
++		celln[j] = 0;
++		merged[j] = 0;
++		vfont[j] = lfont[nvc - 1 - j];
++	}
++
++	/* shape same-font visual groups (== logical groups, reversed) */
++	for (j = 0; j < nvc;) {
++		int a = j, b, ka;
++		while (j < nvc && vfont[j] == vfont[a])
++			j++;
++		b = j;
++		ka = nvc - b; /* logical start of group */
++		xf = vfont[a];
++		infos = xshaperun(xf, &linp[ka], &lcomb[ka], b - a, 1, &nglyphs, &pos);
++		if (infos) {
++			for (t = 0; t < nglyphs; t++) {
++				int cc = (int)infos[t].cluster;
++				int jj;
++				if (cc < 0 || cc >= b - a)
++					continue;
++				jj = nvc - 1 - (ka + cc);
++				if (infos[t].codepoint == 0)
++					continue; /* no .notdef boxes from shaping */
++				if (celln[jj] < XSHAPE_MAXG) {
++					int si = jj * XSHAPE_MAXG + celln[jj];
++					cellgid[si] = infos[t].codepoint;
++					cellgfont[si] = xf;
++					celladv[si] = pos[t].x_advance;
++					celloffx[si] = pos[t].x_offset;
++					celloffy[si] = pos[t].y_offset;
++					celln[jj]++;
++				}
++			}
++			free(infos);
++			free(pos);
++		} else {
++			/* HarfBuzz failed: unshaped cells, text never lost.
++			 * Grid advance as fallback so columns stay aligned. */
++			for (t = a; t < b; t++) {
++				int l = v2l[v0 + t];
++				Rune r = xmirror(glyphs[l].u, levels[l]);
++				int si = t * XSHAPE_MAXG + celln[t];
++				cellgid[si] = XftCharIndex(xw.dpy, xf, r);
++				cellgfont[si] = xf;
++				celladv[si] = (int)(runewidth * 64);
++				celloffx[si] = 0;
++				celloffy[si] = 0;
++				celln[t]++;
++			}
++		}
++	}
++
++	/* harakat: combining-only cells merge into previous visual cell,
++	 * carrying their shaped offsets so marks ride on the base. */
++	for (j = 1; j < nvc; j++) {
++		int l = v2l[v0 + j];
++		if (!xiscomb(glyphs[l].u))
++			continue;
++		for (t = 0; t < celln[j] && celln[j-1] < XSHAPE_MAXG; t++) {
++			int dst = (j-1) * XSHAPE_MAXG + celln[j-1];
++			int src = j * XSHAPE_MAXG + t;
++			cellgid[dst] = cellgid[src];
++			cellgfont[dst] = cellgfont[src];
++			celladv[dst] = celladv[src];
++			celloffx[dst] = celloffx[src];
++			celloffy[dst] = celloffy[src];
++			celln[j-1]++;
++		}
++		celln[j] = 0;
++		merged[j] = 1;
++	}
++
++	/* Emit in visual order with the shaped pen: each glyph is placed at
++	 * pen + offset and pen advances by the shaped advance, so cursive
++	 * joins meet and spaces take their natural width. The grid itself
++	 * is untouched: backgrounds/cursor/selection still use whole cells,
++	 * and the pen snaps back to run_start + nvc cells at the run end. */
++	/* Justify the run to its nvc cells. Arabic in its own font is
++	 * narrower than the grid (joined forms, the lam-alef ligature), and
++	 * the slack used to pile up at the run end ('السلام عليكم   ').
++	 * Spread it the Arabic way: kashida (tatweel U+0640 strokes) at the
++	 * cursive joins, then wider word spaces, then centre the rest.
++	 * Extra per join is capped (4 tatweels, 2 cells), so specbuf (8
++	 * per cell) holds base + 3 marks + tatweels. */
++	{
++	float pen = *pxp, run_start = *pxp, natural = 0, slack, per, lead = 0;
++	float *extra = xmalloc(nvc * sizeof(*extra));
++	unsigned char *isjoin = xmalloc(nvc);
++	int npts = 0, nsp = 0;
++
++	for (j = 0; j < nvc; j++) {
++		extra[j] = 0;
++		isjoin[j] = 0;
++		if (merged[j])
++			continue;
++		for (t = 0; t < celln[j]; t++)
++			natural += celladv[j * XSHAPE_MAXG + t] / 64.0f;
++	}
++	slack = nvc * runewidth - natural;
++	if (slack >= 1) {
++		/* visual j (logical l0-j) joins its right neighbour j2 (the
++		 * logically preceding letter); ligature partners have no
++		 * glyphs of their own and are skipped */
++		for (j = 0; j < nvc; j++) {
++			int j2;
++			if (merged[j] || !celln[j])
++				continue;
++			if (glyphs[v2l[v0 + j]].u == ' ')
++				nsp++;
++			for (j2 = j + 1; j2 < nvc && merged[j2]; j2++)
++				;
++			if (j2 == nvc || !celln[j2] ||
++			    cellgfont[j * XSHAPE_MAXG] != cellgfont[j2 * XSHAPE_MAXG])
++				continue;
++			/* a = visual j2 (logically first), p = the cell right of a */
++			{
++				int j3;
++				for (j3 = j2 + 1; j3 < nvc && merged[j3]; j3++)
++					;
++				if (!xkashidaok(j3 < nvc ? glyphs[v2l[v0 + j3]].u : 0,
++				    glyphs[v2l[v0 + j2]].u, glyphs[v2l[v0 + j]].u))
++					continue;
++			}
++			isjoin[j] = 1;
++			npts++;
++		}
++		per = npts ? slack / npts : 0;
++		for (j = 0; j < nvc && npts; j++) {
++			FT_UInt tg;
++			XGlyphInfo ext;
++			if (!isjoin[j])
++				continue;
++			xf = cellgfont[j * XSHAPE_MAXG];
++			tg = XftCharIndex(xw.dpy, xf, 0x0640);
++			if (!tg) {
++				isjoin[j] = 0;
++				continue;
++			}
++			XftGlyphExtents(xw.dpy, xf, &tg, 1, &ext);
++			if (ext.xOff <= 0) {
++				isjoin[j] = 0;
++				continue;
++			}
++			extra[j] = MIN(per, MIN(4.0f * ext.xOff, 2 * runewidth));
++			slack -= extra[j];
++		}
++		if (slack >= 1 && nsp) {
++			per = slack / nsp;
++			for (j = 0; j < nvc; j++) {
++				if (!merged[j] && celln[j] &&
++				    glyphs[v2l[v0 + j]].u == ' ') {
++					extra[j] += per;
++					slack -= per;
++				}
++			}
++		}
++		if (slack >= 1)
++			lead = slack / 2;
++	}
++	pen += lead;
++
++	for (j = 0; j < nvc; j++) {
++		int l = v2l[v0 + j];
++		if (merged[j]) {
++			cnt[v0 + j] = 0;
++			wdt[v0 + j] = 0;
++			continue;
++		}
++		for (t = 0; t < celln[j]; t++) {
++			int si = j * XSHAPE_MAXG + t;
++			specs[*pnum].font = cellgfont[si];
++			specs[*pnum].glyph = cellgid[si];
++			specs[*pnum].x = (short)(pen + celloffx[si] / 64.0f);
++			specs[*pnum].y = (short)(yp - celloffy[si] / 64.0f);
++			(*pnum)++;
++			pen += celladv[si] / 64.0f;
++		}
++		cnt[v0 + j] = celln[j];
++		if (isjoin[j] && extra[j] >= 1) {
++			/* bridge the stretched join with overlapping tatweels */
++			FT_UInt tg;
++			XGlyphInfo ext;
++			int n, i;
++			float step;
++			xf = cellgfont[j * XSHAPE_MAXG];
++			tg = XftCharIndex(xw.dpy, xf, 0x0640);
++			XftGlyphExtents(xw.dpy, xf, &tg, 1, &ext);
++			n = MIN(4, (int)ceilf(extra[j] / ext.xOff));
++			step = n > 1 ? (extra[j] - ext.xOff) / (n - 1) : 0;
++			for (i = 0; i < n; i++) {
++				float x = n > 1 ? pen + i * step
++				                : pen + (extra[j] - ext.xOff) / 2;
++				specs[*pnum].font = xf;
++				specs[*pnum].glyph = tg;
++				specs[*pnum].x = (short)x;
++				specs[*pnum].y = (short)yp;
++				(*pnum)++;
++			}
++			cnt[v0 + j] += n;
++		}
++		pen += extra[j];
++		if (xiscomb(glyphs[l].u)) {
++			wdt[v0 + j] = 0; /* stray mark: overlay, no grid advance */
++		} else {
++			wdt[v0 + j] = wide;
++		}
++	}
++	*pxp = run_start + nvc * runewidth;
++	free(extra);
++	free(isjoin);
++	}
++
++	free(linp);
++	free(lcomb);
++	free(lfont);
++	free(vfont);
++	free(cellgid);
++	free(cellgfont);
++	free(celln);
++	free(merged);
++	free(celladv);
++	free(celloffx);
++	free(celloffy);
++	return nvc;
+ }
+ 
+ int
+-xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x, int y)
++xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x, int y,
++	const int *v2l, const FriBidiLevel *levels, int *cnt, int *wdt)
+ {
+ 	float winx = borderpx + x * win.cw, winy = borderpx + y * win.ch, xp, yp;
+ 	ushort mode, prevmode = USHRT_MAX;
+@@ -1252,20 +2066,34 @@ xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x
+ 	float runewidth = win.cw;
+ 	Rune rune;
+ 	FT_UInt glyphidx;
+-	FcResult fcres;
+-	FcPattern *fcpattern, *fontpattern;
+-	FcFontSet *fcsets[] = { NULL };
+-	FcCharSet *fccharset;
+-	int i, f, numspecs = 0;
++	XftFont *xf;
++	int v, l, numspecs = 0;
++
++	for (v = 0; v < len; v++) {
++		cnt[v] = 0;
++		wdt[v] = 0;
++	}
+ 
+-	for (i = 0, xp = winx, yp = winy + font->ascent; i < len; ++i) {
++	xp = winx;
++	yp = winy + font->ascent;
++
++	/* iterate in visual order; l maps back to the logical cell */
++	for (v = 0; v < len;) {
++		l = v2l[v];
+ 		/* Fetch rune and mode for current glyph. */
+-		rune = glyphs[i].u;
+-		mode = glyphs[i].mode;
++		rune = glyphs[l].u;
++		mode = glyphs[l].mode;
+ 
+ 		/* Skip dummy wide-character spacing. */
+-		if (mode == ATTR_WDUMMY)
++		if (mode == ATTR_WDUMMY) {
++			v++;
+ 			continue;
++		}
++
++		/* Draw spaces for image placeholders (images will be drawn
++		 * separately). */
++		if (mode & ATTR_IMAGE)
++			rune = ' ';
+ 
+ 		/* Determine font for glyph if different from previous glyph. */
+ 		if (prevmode != mode) {
+@@ -1286,100 +2114,127 @@ xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x
+ 			yp = winy + font->ascent;
+ 		}
+ 
+-		/* Lookup character index with default font. */
+-		glyphidx = XftCharIndex(xw.dpy, font->match, rune);
+-		if (glyphidx) {
++		/* box/braille: glyph carries the shape, drawn by drawboxes() */
++		if (mode & ATTR_BOXDRAW) {
+ 			specs[numspecs].font = font->match;
+-			specs[numspecs].glyph = glyphidx;
++			specs[numspecs].glyph = boxdrawindex(&glyphs[l]);
+ 			specs[numspecs].x = (short)xp;
+ 			specs[numspecs].y = (short)yp;
+-			xp += runewidth;
+ 			numspecs++;
++			cnt[v] = 1;
++			wdt[v] = 1;
++			xp += win.cw;
++			v++;
+ 			continue;
+ 		}
+ 
+-		/* Fallback on font cache, search the font cache for match. */
+-		for (f = 0; f < frclen; f++) {
+-			glyphidx = XftCharIndex(xw.dpy, frc[f].font, rune);
+-			/* Everything correct. */
+-			if (glyphidx && frc[f].flags == frcflags)
+-				break;
+-			/* We got a default font for a not found glyph. */
+-			if (!glyphidx && frc[f].flags == frcflags
+-					&& frc[f].unicodep == rune) {
+-				break;
+-			}
++		/* shaped RTL run (joining, ligatures, harakat) */
++		if (arabicshaping && (levels[l] & 1)) {
++			v += xshapertl(specs, &numspecs, &xp, yp, font, frcflags,
++				runewidth, glyphs, len, v2l, levels, v, cnt, wdt);
++			continue;
+ 		}
+ 
+-		/* Nothing was found. Use fontconfig to find matching font. */
+-		if (f >= frclen) {
+-			if (!font->set)
+-				font->set = FcFontSort(0, font->pattern,
+-				                       1, 0, &fcres);
+-			fcsets[0] = font->set;
+-
+-			/*
+-			 * Nothing was found in the cache. Now use
+-			 * some dozen of Fontconfig calls to get the
+-			 * font for one single character.
+-			 *
+-			 * Xft and fontconfig are design failures.
+-			 */
+-			fcpattern = FcPatternDuplicate(font->pattern);
+-			fccharset = FcCharSetCreate();
+-
+-			FcCharSetAddChar(fccharset, rune);
+-			FcPatternAddCharSet(fcpattern, FC_CHARSET,
+-					fccharset);
+-			FcPatternAddBool(fcpattern, FC_SCALABLE, 1);
+-
+-			FcConfigSubstitute(0, fcpattern,
+-					FcMatchPattern);
+-			FcDefaultSubstitute(fcpattern);
+-
+-			fontpattern = FcFontSetMatch(0, fcsets, 1,
+-					fcpattern, &fcres);
+-
+-			/* Allocate memory for the new cache entry. */
+-			if (frclen >= frccap) {
+-				frccap += 16;
+-				frc = xrealloc(frc, frccap * sizeof(Fontcache));
++		/* single cell, mirrored as needed */
++		rune = xmirror(rune, levels[l]);
++		xf = xgetfont(font, rune, frcflags);
++		cnt[v] = 0;
++		if (glyphs[l].comb && !(mode & ATTR_IMAGE)) {
++			/* base + stored marks, positioned by HarfBuzz */
++			FriBidiChar r = rune;
++			ushort c = glyphs[l].comb;
++			hb_glyph_position_t *pos;
++			hb_glyph_info_t *infos;
++			int t, ng;
++			float pen = xp;
++
++			infos = xshaperun(xf, &r, &c, 1, 0, &ng, &pos);
++			for (t = 0; infos && t < ng && t < 4; t++) {
++				if (!infos[t].codepoint)
++					continue;
++				specs[numspecs].font = xf;
++				specs[numspecs].glyph = infos[t].codepoint;
++				specs[numspecs].x = (short)(pen + pos[t].x_offset / 64.0f);
++				specs[numspecs].y = (short)(yp - pos[t].y_offset / 64.0f);
++				numspecs++;
++				cnt[v]++;
++				pen += pos[t].x_advance / 64.0f;
+ 			}
+-
+-			frc[frclen].font = XftFontOpenPattern(xw.dpy,
+-					fontpattern);
+-			if (!frc[frclen].font)
+-				die("XftFontOpenPattern failed seeking fallback font: %s\n",
+-					strerror(errno));
+-			frc[frclen].flags = frcflags;
+-			frc[frclen].unicodep = rune;
+-
+-			glyphidx = XftCharIndex(xw.dpy, frc[frclen].font, rune);
+-
+-			f = frclen;
+-			frclen++;
+-
+-			FcPatternDestroy(fcpattern);
+-			FcCharSetDestroy(fccharset);
++			free(infos);
++			free(pos);
++		}
++		if (!cnt[v]) {
++			glyphidx = XftCharIndex(xw.dpy, xf, rune);
++			specs[numspecs].font = xf;
++			specs[numspecs].glyph = glyphidx;
++			specs[numspecs].x = (short)xp;
++			specs[numspecs].y = (short)yp;
++			numspecs++;
++			cnt[v] = 1;
+ 		}
+-
+-		specs[numspecs].font = frc[f].font;
+-		specs[numspecs].glyph = glyphidx;
+-		specs[numspecs].x = (short)xp;
+-		specs[numspecs].y = (short)yp;
+ 		xp += runewidth;
+-		numspecs++;
++		wdt[v] = (mode & ATTR_WIDE) ? 2 : 1;
++		v++;
+ 	}
+ 
+ 	return numspecs;
+ }
+ 
++/* Draws a horizontal dashed line of length `w` starting at `(x, y)`. `wavelen`
++ * is the length of the dash plus the length of the gap. `fraction` is the
++ * fraction of the dash length compared to `wavelen`. */
++static void
++xdrawunderdashed(Draw draw, Color *color, int x, int y, int w,
++		 int wavelen, float fraction, int thick)
++{
++	int dashw = MAX(1, fraction * wavelen);
++	for (int i = x - x % wavelen; i < x + w; i += wavelen) {
++		int startx = MAX(i, x);
++		int endx = MIN(i + dashw, x + w);
++		if (startx < endx)
++			XftDrawRect(xw.draw, color, startx, y, endx - startx,
++				    thick);
++	}
++}
++
++/* Draws an undercurl. `h` is the total height, including line thickness. */
++static void
++xdrawundercurl(Draw draw, Color *color, int x, int y, int w, int h, int thick)
++{
++	XGCValues gcvals = {.foreground = color->pixel,
++			    .line_width = thick,
++			    .line_style = LineSolid,
++			    .cap_style = CapRound};
++	GC gc = XCreateGC(xw.dpy, XftDrawDrawable(xw.draw),
++			  GCForeground | GCLineWidth | GCLineStyle | GCCapStyle,
++			  &gcvals);
++
++	XRectangle clip = {.x = x, .y = y, .width = w, .height = h};
++	XSetClipRectangles(xw.dpy, gc, 0, 0, &clip, 1, Unsorted);
++
++	int yoffset = thick / 2;
++	int segh = MAX(1, h - thick);
++	/* Make sure every segment is at a 45 degree angle, otherwise it doesn't
++	 * look good without antialiasing. */
++	int segw = segh;
++	int wavelen = MAX(1, segw * 2);
++
++	for (int i = x - (x % wavelen); i < x + w; i += wavelen) {
++		XPoint points[3] = {{.x = i, .y = y + yoffset},
++				    {.x = i + segw, .y = y + yoffset + segh},
++				    {.x = i + wavelen, .y = y + yoffset}};
++		XDrawLines(xw.dpy, XftDrawDrawable(xw.draw), gc, points, 3,
++			   CoordModeOrigin);
++	}
++
++	XFreeGC(xw.dpy, gc);
++}
++
+ void
+-xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, int y)
++xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, int y, int ncols)
+ {
+-	int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
+ 	int winx = borderpx + x * win.cw, winy = borderpx + y * win.ch,
+-	    width = charlen * win.cw;
++	    width = ncols * win.cw;
+ 	Color *fg, *bg, *temp, revfg, revbg, truefg, truebg;
+ 	XRenderColor colfg, colbg;
+ 	XRectangle r;
+@@ -1491,18 +2346,71 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
+ 	r.width = width;
+ 	XftDrawSetClipRectangles(xw.draw, winx, winy, &r, 1);
+ 
+-	/* Render the glyphs. */
+-	XftDrawGlyphFontSpec(xw.draw, fg, specs, len);
+-
+-	/* Render underline and strikethrough. */
++	/* Decoration color. */
++	Color decor;
++	uint32_t decorcolor = tgetdecorcolor(&base);
++	if (decorcolor == DECOR_DEFAULT_COLOR) {
++		decor = *fg;
++	} else if (IS_TRUECOL(decorcolor)) {
++		colfg.alpha = 0xffff;
++		colfg.red = TRUERED(decorcolor);
++		colfg.green = TRUEGREEN(decorcolor);
++		colfg.blue = TRUEBLUE(decorcolor);
++		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colfg, &decor);
++	} else {
++		decor = dc.col[decorcolor];
++	}
++	decor.color.alpha = 0xffff;
++	decor.pixel |= 0xff << 24;
++
++	/* Float thickness, used as a base to compute other values. */
++	float fthick = dc.font.height / 18.0;
++	/* Integer thickness in pixels. Must not be 0. */
++	int thick = MAX(1, roundf(fthick));
++	/* The default gap between the baseline and a single underline. */
++	int gap = roundf(fthick * 2);
++	/* The total thickness of a double underline. */
++	int doubleh = thick * 2 + ceilf(fthick * 0.5);
++	/* The total thickness of an undercurl. */
++	int curlh = thick * 2 + roundf(fthick * 0.75);
++
++	/* Render the underline before the glyphs. */
+ 	if (base.mode & ATTR_UNDERLINE) {
+-		XftDrawRect(xw.draw, fg, winx, winy + dc.font.ascent * chscale + 1,
+-				width, 1);
++		uint32_t style = tgetdecorstyle(&base);
++		int liney = winy + dc.font.ascent + gap;
++		/* Adjust liney to guarantee that a single underline fits. */
++		liney -= MAX(0, liney + thick - (winy + win.ch));
++		if (style == UNDERLINE_DOUBLE) {
++			liney -= MAX(0, liney + doubleh - (winy + win.ch));
++			XftDrawRect(xw.draw, &decor, winx, liney, width, thick);
++			XftDrawRect(xw.draw, &decor, winx,
++				    liney + doubleh - thick, width, thick);
++		} else if (style == UNDERLINE_DOTTED) {
++			xdrawunderdashed(xw.draw, &decor, winx, liney, width,
++					 thick * 2, 0.5, thick);
++		} else if (style == UNDERLINE_DASHED) {
++			int wavelen = MAX(2, win.cw * 0.9);
++			xdrawunderdashed(xw.draw, &decor, winx, liney, width,
++					 wavelen, 0.65, thick);
++		} else if (style == UNDERLINE_CURLY) {
++			liney -= MAX(0, liney + curlh - (winy + win.ch));
++			xdrawundercurl(xw.draw, &decor, winx, liney, width,
++				       curlh, thick);
++		} else {
++			XftDrawRect(xw.draw, &decor, winx, liney, width, thick);
++		}
+ 	}
+ 
++	/* Render the glyphs. */
++	if (base.mode & ATTR_BOXDRAW)
++		drawboxes(winx, winy, win.cw, win.ch, fg, bg, specs, len);
++	else
++		XftDrawGlyphFontSpec(xw.draw, fg, specs, len);
++
++	/* Render strikethrough. Alway use the fg color. */
+ 	if (base.mode & ATTR_STRUCK) {
+-		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent * chscale / 3,
+-				width, 1);
++		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent / 3,
++			    width, thick);
+ 	}
+ 
+ 	/* Reset clip to none. */
+@@ -1512,11 +2420,20 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
+ void
+ xdrawglyph(Glyph g, int x, int y)
+ {
+-	int numspecs;
+-	XftGlyphFontSpec spec;
+-
+-	numspecs = xmakeglyphfontspecs(&spec, &g, 1, x, y);
+-	xdrawglyphfontspecs(&spec, g, numspecs, x, y);
++	int numspecs, v2l[1] = { 0 }, cnt[1], wdt[1];
++	FriBidiLevel levels[1] = { 0 };
++	XftGlyphFontSpec specs[8]; /* 1 cell: isolated form + stray marks */
++
++	numspecs = xmakeglyphfontspecs(specs, &g, 1, x, y, v2l, levels, cnt, wdt);
++	if (numspecs > 8)
++		numspecs = 8;
++	xdrawglyphfontspecs(specs, g, numspecs, x, y,
++		(g.mode & ATTR_WIDE) ? 2 : 1);
++	if (g.mode & ATTR_IMAGE) {
++		gr_start_drawing(xw.buf, win.cw, win.ch);
++		xdrawoneimagecell(g, x, y);
++		gr_finish_drawing(xw.buf);
++	}
+ }
+ 
+ void
+@@ -1524,18 +2441,19 @@ xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
+ {
+ 	Color drawcol;
+ 
+-	/* remove the old cursor */
+-	if (selected(ox, oy))
+-		og.mode ^= ATTR_REVERSE;
+-	xdrawglyph(og, ox, oy);
++	/* the old cursor's row was repainted by draw() */
+ 
+ 	if (IS_SET(MODE_HIDE))
+ 		return;
+ 
++	// If it's an image, just draw a ballot box for simplicity.
++	if (g.mode & ATTR_IMAGE)
++		g.u = 0x2610;
++
+ 	/*
+ 	 * Select the right color for the right mode.
+ 	 */
+-	g.mode &= ATTR_BOLD|ATTR_ITALIC|ATTR_UNDERLINE|ATTR_STRUCK|ATTR_WIDE;
++	g.mode &= ATTR_BOLD|ATTR_ITALIC|ATTR_UNDERLINE|ATTR_STRUCK|ATTR_WIDE|ATTR_BOXDRAW;
+ 
+ 	if (IS_SET(MODE_REVERSE)) {
+ 		g.mode |= ATTR_REVERSE;
+@@ -1605,6 +2523,134 @@ xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
+ 	}
+ }
+ 
++/* Draw (or queue for drawing) image cells between columns x1 and x2 assuming
++ * that they have the same attributes (and thus the same lower 24 bits of the
++ * image ID and the same placement ID). */
++void
++xdrawimages(Glyph base, Line line, int x1, int y1, int x2) {
++	int y_pix = borderpx + y1 * win.ch;
++	uint32_t image_id_24bits = base.fg & 0xFFFFFF;
++	uint32_t placement_id = tgetimgplacementid(&base);
++	// Columns and rows are 1-based, 0 means unspecified.
++	int last_col = 0;
++	int last_row = 0;
++	int last_start_col = 0;
++	int last_start_x = x1;
++	// The most significant byte is also 1-base, subtract 1 before use.
++	uint32_t last_id_4thbyteplus1 = 0;
++	// We may need to inherit row/column/4th byte from the previous cell.
++	Glyph *prev = &line[x1 - 1];
++	if (x1 > 0 && (prev->mode & ATTR_IMAGE) &&
++	    (prev->fg & 0xFFFFFF) == image_id_24bits &&
++	    prev->decor == base.decor) {
++		last_row = tgetimgrow(prev);
++		last_col = tgetimgcol(prev);
++		last_id_4thbyteplus1 = tgetimgid4thbyteplus1(prev);
++		last_start_col = last_col + 1;
++	}
++	for (int x = x1; x < x2; ++x) {
++		Glyph *g = &line[x];
++		uint32_t cur_row = tgetimgrow(g);
++		uint32_t cur_col = tgetimgcol(g);
++		uint32_t cur_id_4thbyteplus1 = tgetimgid4thbyteplus1(g);
++		uint32_t num_diacritics = tgetimgdiacriticcount(g);
++		// If the row is not specified, assume it's the same as the row
++		// of the previous cell. Note that `cur_row` may contain a
++		// value imputed earlier, which will be preserved if `last_row`
++		// is zero (i.e. we don't know the row of the previous cell).
++		if (last_row && (num_diacritics == 0 || !cur_row))
++			cur_row = last_row;
++		// If the column is not specified and the row is the same as the
++		// row of the previous cell, then assume that the column is the
++		// next one.
++		if (last_col && (num_diacritics <= 1 || !cur_col) &&
++		    cur_row == last_row)
++			cur_col = last_col + 1;
++		// If the additional id byte is not specified and the
++		// coordinates are consecutive, assume the byte is also the
++		// same.
++		if (last_id_4thbyteplus1 &&
++		    (num_diacritics <= 2 || !cur_id_4thbyteplus1) &&
++		    cur_row == last_row && cur_col == last_col + 1)
++			cur_id_4thbyteplus1 = last_id_4thbyteplus1;
++		// If we couldn't infer row and column, start from the top left
++		// corner.
++		if (cur_row == 0)
++			cur_row = 1;
++		if (cur_col == 0)
++			cur_col = 1;
++		// If this cell breaks a contiguous stripe of image cells, draw
++		// that line and start a new one.
++		if (cur_col != last_col + 1 || cur_row != last_row ||
++		    cur_id_4thbyteplus1 != last_id_4thbyteplus1) {
++			uint32_t image_id = image_id_24bits;
++			if (last_id_4thbyteplus1)
++				image_id |= (last_id_4thbyteplus1 - 1) << 24;
++			if (last_row != 0) {
++				int x_pix =
++					borderpx + last_start_x * win.cw;
++				gr_append_imagerect(
++					xw.buf, image_id, placement_id,
++					last_start_col - 1, last_col,
++					last_row - 1, last_row, last_start_x,
++					y1, x_pix, y_pix, win.cw, win.ch,
++					base.mode & ATTR_REVERSE);
++			}
++			last_start_col = cur_col;
++			last_start_x = x;
++		}
++		last_row = cur_row;
++		last_col = cur_col;
++		last_id_4thbyteplus1 = cur_id_4thbyteplus1;
++		// Populate the missing glyph data to enable inheritance between
++		// runs and support the naive implementation of tgetimgid.
++		if (!tgetimgrow(g))
++			tsetimgrow(g, cur_row);
++		// We cannot save this information if there are > 511 cols.
++		if (!tgetimgcol(g) && (cur_col & ~0x1ff) == 0)
++			tsetimgcol(g, cur_col);
++		if (!tgetimgid4thbyteplus1(g))
++			tsetimg4thbyteplus1(g, cur_id_4thbyteplus1);
++	}
++	uint32_t image_id = image_id_24bits;
++	if (last_id_4thbyteplus1)
++		image_id |= (last_id_4thbyteplus1 - 1) << 24;
++	// Draw the last contiguous stripe.
++	if (last_row != 0) {
++		int x_pix = borderpx + last_start_x * win.cw;
++		gr_append_imagerect(xw.buf, image_id, placement_id,
++				    last_start_col - 1, last_col, last_row - 1,
++				    last_row, last_start_x, y1, x_pix, y_pix,
++				    win.cw, win.ch, base.mode & ATTR_REVERSE);
++	}
++}
++
++/* Draw just one image cell without inheriting attributes from the left. */
++void xdrawoneimagecell(Glyph g, int x, int y) {
++	if (!(g.mode & ATTR_IMAGE))
++		return;
++	int x_pix = borderpx + x * win.cw;
++	int y_pix = borderpx + y * win.ch;
++	uint32_t row = tgetimgrow(&g) - 1;
++	uint32_t col = tgetimgcol(&g) - 1;
++	uint32_t placement_id = tgetimgplacementid(&g);
++	uint32_t image_id = tgetimgid(&g);
++	gr_append_imagerect(xw.buf, image_id, placement_id, col, col + 1, row,
++			    row + 1, x, y, x_pix, y_pix, win.cw, win.ch,
++			    g.mode & ATTR_REVERSE);
++}
++
++/* Prepare for image drawing. */
++void xstartimagedraw(int *dirty, int rows) {
++	gr_start_drawing(xw.buf, win.cw, win.ch);
++	gr_mark_dirty_animations(dirty, rows);
++}
++
++/* Draw all queued image cells. */
++void xfinishimagedraw() {
++	gr_finish_drawing(xw.buf);
++}
++
+ void
+ xsetenv(void)
+ {
+@@ -1657,32 +2703,125 @@ xstartdraw(void)
+ void
+ xdrawline(Line line, int x1, int y1, int x2)
+ {
+-	int i, x, ox, numspecs;
++	int v, l, si, nspec, ncols, ox, vcol, lmin, lmax, nb, vb0, j, xx, open;
++	int len = x2 - x1;
++	int clen = len;
++	/* per-row scratch, grown on demand and reused across calls */
++	static int *v2l, *cnt, *wdt, cap;
++	static FriBidiLevel *levels;
+ 	Glyph base, new;
+ 	XftGlyphFontSpec *specs = xw.specbuf;
+ 
+-	numspecs = xmakeglyphfontspecs(specs, &line[x1], x2 - x1, x1, y1);
+-	i = ox = 0;
+-	for (x = x1; x < x2 && i < numspecs; x++) {
+-		new = line[x];
++	if (len <= 0)
++		return;
++
++	/* Trailing blank cells are not content: keep them out of the bidi
++	 * reorder, or an RTL row gets right-aligned by its own empty tail
++	 * (phantom leading gap). Same rule as tlinelen in st.c: wrapped
++	 * rows keep full width. Latin-only rows are unaffected (they take
++	 * the identity path in xbidiorder either way). */
++	if (!(line[x2 - 1].mode & ATTR_WRAP)) {
++		while (clen > 0) {
++			Glyph g = line[x1 + clen - 1];
++			if (g.mode != ATTR_NULL || (g.u != ' ' && g.u != 0))
++				break;
++			clen--;
++		}
++	}
++
++	if (len > cap) {
++		cap = len;
++		v2l = xrealloc(v2l, cap * sizeof(*v2l));
++		levels = xrealloc(levels, cap * sizeof(*levels));
++		cnt = xrealloc(cnt, cap * sizeof(*cnt));
++		wdt = xrealloc(wdt, cap * sizeof(*wdt));
++	}
++
++	/* display-only reorder of the content only; the blank tail stays
++	 * identity so backgrounds, cursor and selection keep grid cells */
++	xbidiorder(&line[x1], clen, v2l, levels);
++	for (v = clen; v < len; v++) {
++		v2l[v] = v;
++		levels[v] = 0;
++	}
++	xmakeglyphfontspecs(specs, &line[x1], len, x1, y1, v2l, levels, cnt, wdt);
++
++	/* batch in visual order; selected()/ATTRCMP use the logical cell.
++	 * Image batches additionally need their logical span for
++	 * xdrawimages (it walks logical cells). Pure image rows are LTR
++	 * (U+10EEEE placeholders), so the span is contiguous there; if
++	 * bidi ever scatters one, fall back to per-cell drawing. */
++	si = nspec = ncols = open = 0;
++	ox = x1;
++	vcol = 0;
++	lmin = lmax = -1;
++	nb = 0;
++	vb0 = 0;
++	for (v = 0; v < len; v++) {
++		l = x1 + v2l[v];
++		new = line[l];
+ 		if (new.mode == ATTR_WDUMMY)
+ 			continue;
+-		if (selected(x, y1))
++		if (selected(l, y1))
+ 			new.mode ^= ATTR_REVERSE;
+-		if (i > 0 && ATTRCMP(base, new)) {
+-			xdrawglyphfontspecs(specs, base, i, ox, y1);
+-			specs += i;
+-			numspecs -= i;
+-			i = 0;
++		if (open && ATTRCMP(base, new)) {
++			xdrawglyphfontspecs(specs + si, base, nspec, ox, y1, ncols);
++			if (base.mode & ATTR_IMAGE) {
++				if (lmax - lmin + 1 == nb)
++					xdrawimages(base, line, lmin, y1, lmax + 1);
++				else {
++					xx = ox;
++					for (j = vb0; j < v; j++) {
++						int ll = x1 + v2l[j];
++						if (line[ll].mode == ATTR_WDUMMY)
++							continue;
++						xdrawoneimagecell(line[ll], xx, y1);
++						xx++;
++					}
++				}
++			}
++			si += nspec;
++			nspec = 0;
++			ncols = 0;
++			open = 0;
+ 		}
+-		if (i == 0) {
+-			ox = x;
++		/* open on the first cell, even one without glyphs: a shaped
++		 * ligature can move a cell's glyph onto its neighbour, and
++		 * starting later would skip its background and clip it */
++		if (!open) {
++			open = 1;
++			ox = x1 + vcol;
+ 			base = new;
++			lmin = lmax = l;
++			nb = 0;
++			vb0 = v;
++		}
++		nspec += cnt[v];
++		ncols += wdt[v];
++		vcol += wdt[v];
++		if (l < lmin)
++			lmin = l;
++		if (l > lmax)
++			lmax = l;
++		nb++;
++	}
++	if (open) {
++		xdrawglyphfontspecs(specs + si, base, nspec, ox, y1, ncols);
++		if (base.mode & ATTR_IMAGE) {
++			if (lmax - lmin + 1 == nb)
++				xdrawimages(base, line, lmin, y1, lmax + 1);
++			else {
++				xx = ox;
++				for (j = vb0; j < len; j++) {
++					int ll = x1 + v2l[j];
++					if (line[ll].mode == ATTR_WDUMMY)
++						continue;
++					xdrawoneimagecell(line[ll], xx, y1);
++					xx++;
++				}
++			}
+ 		}
+-		i++;
+ 	}
+-	if (i > 0)
+-		xdrawglyphfontspecs(specs, base, i, ox, y1);
+ }
+ 
+ void
+@@ -1730,6 +2869,8 @@ unmap(XEvent *ev)
+ void
+ xsetpointermotion(int set)
+ {
++	if (!set && !xw.pointerisvisible)
++		return;
+ 	MODBIT(xw.attrs.event_mask, set, PointerMotionMask);
+ 	XChangeWindowAttributes(xw.dpy, xw.win, CWEventMask, &xw.attrs);
+ }
+@@ -1849,6 +2990,12 @@ kpress(XEvent *ev)
+ 	Status status;
+ 	Shortcut *bp;
+ 
++	if (xw.pointerisvisible) {
++		XDefineCursor(xw.dpy, xw.win, xw.bpointer);
++		xsetpointermotion(1);
++		xw.pointerisvisible = 0;
++	}
++
+ 	if (IS_SET(MODE_KBDLOCK))
+ 		return;
+ 
+@@ -1907,6 +3054,7 @@ cmessage(XEvent *e)
+ 		}
+ 	} else if (e->xclient.data.l[0] == xw.wmdeletewin) {
+ 		ttyhangup();
++		gr_deinit();
+ 		exit(0);
+ 	}
+ }
+@@ -1920,13 +3068,16 @@ resize(XEvent *e)
+ 	cresize(e->xconfigure.width, e->xconfigure.height);
+ }
+ 
++int tinsync(uint);
++int ttyread_pending(void);
++
+ void
+ run(void)
+ {
+ 	XEvent ev;
+ 	int w = win.w, h = win.h;
+ 	fd_set rfd;
+-	int xfd = XConnectionNumber(xw.dpy), ttyfd, xev, drawing;
++	int xfd = XConnectionNumber(xw.dpy), ttyfd, ttyin, xev, drawing;
+ 	struct timespec seltv, *tv, now, lastblink, trigger;
+ 	double timeout;
+ 
+@@ -1954,9 +3105,16 @@ run(void)
+ 		FD_SET(ttyfd, &rfd);
+ 		FD_SET(xfd, &rfd);
+ 
+-		if (XPending(xw.dpy))
++		if (XPending(xw.dpy) || ttyread_pending())
+ 			timeout = 0;  /* existing events might not set xfd */
+ 
++		/* Decrease the timeout if there are active animations. */
++		if (graphics_next_redraw_delay != INT_MAX &&
++		    IS_SET(MODE_VISIBLE))
++			timeout = timeout < 0 ? graphics_next_redraw_delay
++					      : MIN(timeout,
++						    graphics_next_redraw_delay);
++
+ 		seltv.tv_sec = timeout / 1E3;
+ 		seltv.tv_nsec = 1E6 * (timeout - 1E3 * seltv.tv_sec);
+ 		tv = timeout >= 0 ? &seltv : NULL;
+@@ -1968,7 +3126,8 @@ run(void)
+ 		}
+ 		clock_gettime(CLOCK_MONOTONIC, &now);
+ 
+-		if (FD_ISSET(ttyfd, &rfd))
++		ttyin = FD_ISSET(ttyfd, &rfd) || ttyread_pending();
++		if (ttyin)
+ 			ttyread();
+ 
+ 		xev = 0;
+@@ -1992,7 +3151,7 @@ run(void)
+ 		 * maximum latency intervals during `cat huge.txt`, and perfect
+ 		 * sync with periodic updates from animations/key-repeats/etc.
+ 		 */
+-		if (FD_ISSET(ttyfd, &rfd) || xev) {
++		if (ttyin || xev) {
+ 			if (!drawing) {
+ 				trigger = now;
+ 				drawing = 1;
+@@ -2003,6 +3162,18 @@ run(void)
+ 				continue;  /* we have time, try to find idle */
+ 		}
+ 
++		if (tinsync(su_timeout)) {
++			/*
++			 * on synchronized-update draw-suspension: don't reset
++			 * drawing so that we draw ASAP once we can (just after
++			 * ESU). it won't be too soon because we already can
++			 * draw now but we skip. we set timeout > 0 to draw on
++			 * SU-timeout even without new content.
++			 */
++			timeout = minlatency;
++			continue;
++		}
++
+ 		/* idle detected or maxlatency exhausted -> draw */
+ 		timeout = -1;
+ 		if (blinktimeout && tattrset(ATTR_BLINK)) {
+@@ -2047,6 +3218,10 @@ main(int argc, char *argv[])
+ 	case 'a':
+ 		allowaltscreen = 0;
+ 		break;
++	case 'A':
++		alpha = strtof(EARGF(usage()), NULL);
++		LIMIT(alpha, 0.0, 1.0);
++		break;
+ 	case 'c':
+ 		opt_class = EARGF(usage());
+ 		break;

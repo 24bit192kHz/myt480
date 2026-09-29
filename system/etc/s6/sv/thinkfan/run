@@ -1,0 +1,3 @@
+#!/bin/sh
+rm -f /var/run/thinkfan.pid
+exec thinkfan -n -c /etc/thinkfan.yaml

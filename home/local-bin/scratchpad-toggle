@@ -1,0 +1,45 @@
+#!/bin/sh
+# scratchpad-toggle: ABOVE overlay (Hyprland special-workspace equiv).
+# Show: stash windows get ABOVE + move to current tag (spawn ONE terminal only if stash empty).
+# Hide: ABOVE removed, parked back on tag 9.
+set -eu
+export DISPLAY=":0"
+export XAUTHORITY="/home/btw/.Xauthority"
+STATE="/home/btw/.local/state/scratchpad-visible"
+CUR=$(xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | grep -o "[0-9]*$")
+stash_has_windows() {
+  for W in $(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o "0x[0-9a-f]*"); do
+    D=$(xprop -id "$W" _NET_WM_DESKTOP 2>/dev/null | grep -o "[0-9]*$" || echo skip)
+    [ "$D" = "8" ] && return 0
+  done
+  return 1
+}
+above() { xdotool windowstate --add ABOVE "$1" >/dev/null 2>&1 || true; xdotool windowactivate "$1" >/dev/null 2>&1 || true; }
+park() { xdotool windowstate --remove ABOVE "$1" >/dev/null 2>&1 || true; xdotool set_desktop_for_window "$1" 8 >/dev/null 2>&1 || true; }
+if [ -f "$STATE" ]; then
+  for W in $(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o "0x[0-9a-f]*"); do
+    S=$(xprop -id "$W" _NET_WM_STATE 2>/dev/null || echo "")
+    echo "$S" | grep -q ABOVE || continue
+    N=$(xprop -id "$W" WM_NAME 2>/dev/null || echo "")
+    echo "$N" | grep -qi "^dwm" && continue
+    park "$W"
+  done
+  rm -f "$STATE"
+else
+  echo "$CUR" > "$STATE"
+  if stash_has_windows; then
+    for W in $(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o "0x[0-9a-f]*"); do
+      D=$(xprop -id "$W" _NET_WM_DESKTOP 2>/dev/null | grep -o "[0-9]*$" || echo skip)
+      [ "$D" = "8" ] || continue
+      xdotool set_desktop_for_window "$W" "$CUR" >/dev/null 2>&1 || true
+      above "$W"
+    done
+  else
+    nohup alacritty --class scratchpad,scratchpad --title scratchpad >/dev/null 2>&1 &
+    sleep 1
+    for W in $(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o "0x[0-9a-f]*"); do
+      xprop -id "$W" WM_NAME 2>/dev/null | grep -q scratchpad || continue
+      above "$W"
+    done
+  fi
+fi

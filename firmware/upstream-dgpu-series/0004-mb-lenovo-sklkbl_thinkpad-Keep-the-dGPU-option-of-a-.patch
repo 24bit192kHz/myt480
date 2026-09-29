@@ -1,0 +1,89 @@
+From 070b86c1ef109668d90443edfcb9f0c6b0344e28 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 20:19:39 +0300
+Subject: [PATCH 4/4] mb/lenovo/sklkbl_thinkpad: Keep the dGPU option of a
+ disabled dGPU
+
+The setup menu hides the option "dgpu_enable" if the device of the
+dGPU is disabled, and dgpu_detect() disables that device when the
+option is off. So the option hides itself once it is turned off.
+
+Hide it only if the board has no dGPU.
+
+Build tested only.
+
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/cfr.c     | 8 ++------
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c    | 7 ++++++-
+ src/mainboard/lenovo/sklkbl_thinkpad/variant.h | 3 +++
+ 3 files changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c b/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
+index 5585d1567b..103cc5dc42 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
+@@ -4,17 +4,13 @@
+ #include <drivers/option/cfr_frontend.h>
+ #include <intelblocks/cfr.h>
+ #include <soc/cfr.h>
+-#include <static.h>
+-
+-WEAK_DEV_PTR(dgpu);
++#include "variant.h"
+ 
+ /* Hide the dGPU CFR entry if dGPU not present */
+ static void update_dgpu(struct sm_object *new)
+ {
+-	struct device *dgpu = DEV_PTR(dgpu);
+-	if (!dgpu || !dgpu->enabled) {
++	if (!CONFIG(VARIANT_HAS_DGPU) || !dgpu_present())
+ 		new->sm_bool.flags = CFR_OPTFLAG_SUPPRESS;
+-	}
+ }
+ 
+ /* dGPU */
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+index 3f9d18dc9c..20f892e7d6 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+@@ -57,6 +57,11 @@ void dgpu_fill_ssdt(const struct device *dev)
+ 	acpigen_write_scope_end();
+ }
+ 
++bool dgpu_present(void)
++{
++	return gpio_get(GPIO_DISCRETE_PRESENCE) == 0;	/* active low */
++}
++
+ /* The GPU was powered in the bootblock, see dgpu_early.c */
+ void dgpu_detect(void)
+ {
+@@ -65,7 +70,7 @@ void dgpu_detect(void)
+ 	const struct device *rp = dgpu->upstream ? dgpu->upstream->dev : NULL;
+ 	int dgfx_vram_id;
+ 
+-	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0) { // active low
++	if (!dgpu_present()) {
+ 		printk(BIOS_DEBUG, "Discrete GPU not present\n");
+ 		dgpu->enabled = 0;
+ 		return;
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index 7abe5ff06c..49c018af1e 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -7,9 +7,12 @@ void variant_config_gpios(void);
+ 
+ uint8_t variant_memory_sku(void);
+ 
++#include <types.h>
++
+ struct device;
+ 
+ void dgpu_power_on(void);
++bool dgpu_present(void);
+ void dgpu_detect(void);
+ void dgpu_fill_ssdt(const struct device *dev);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,2 @@
+# on-demand services (not started at boot), see /usr/local/bin/docker
+btw ALL=(root) NOPASSWD: /usr/bin/s6 live start docker-srv

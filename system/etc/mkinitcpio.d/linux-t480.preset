@@ -1,0 +1,18 @@
+# mkinitcpio preset file for the 'linux-t480' package
+
+#ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux-t480"
+#ALL_kerneldest="/boot/vmlinuz-linux-t480"
+
+PRESETS=('default')
+#PRESETS=('default' 'fallback')
+
+#default_config="/etc/mkinitcpio.conf"
+default_image="/boot/initramfs-linux-t480.img"
+#default_uki="/efi/EFI/Linux/arch-linux-t480.efi"
+#default_options="--splash /usr/share/systemd/bootctl/splash-arch.bmp"
+
+#fallback_config="/etc/mkinitcpio.conf"
+#fallback_image="/boot/initramfs-linux-t480-fallback.img"
+#fallback_uki="/efi/EFI/Linux/arch-linux-t480-fallback.efi"
+#fallback_options="-S autodetect"

@@ -1,0 +1,511 @@
+From 9364586fdc1f0b4c4ec51ebf0cec74e4e4511572 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 22:06:52 +0300
+Subject: [PATCH 13/13] [local] mb/lenovo/sklkbl_thinkpad: dGPU support as
+ flashed in C32
+
+Power the dGPU in the bootblock, full reset when root port 1 is disabled,
+power off before sleep, ACPI power resource from the SSDT. The same code as
+the upstream series, but the switch is CMOS 0x6f == 0xd6 (`dgpu on`) because
+this build has no option backend, and a power-button override clears it.
+---
+ .../lenovo/sklkbl_thinkpad/Makefile.mk        |   3 +
+ .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      |  70 +++++++++++
+ .../lenovo/sklkbl_thinkpad/bootblock.c        |   7 ++
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 110 ++++++++++++++----
+ .../lenovo/sklkbl_thinkpad/dgpu_early.c       |  72 ++++++++++++
+ src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl |   4 +
+ .../lenovo/sklkbl_thinkpad/ramstage.c         |   4 +-
+ .../lenovo/sklkbl_thinkpad/smihandler.c       |  16 +++
+ .../lenovo/sklkbl_thinkpad/variant.h          |   6 +
+ .../sklkbl_thinkpad/variants/t480/gpio.c      |   3 +-
+ .../variants/t480/include/variant/dgpu.h      |   1 +
+ .../sklkbl_thinkpad/variants/t480s/gpio.c     |   3 +-
+ .../variants/t480s/include/variant/dgpu.h     |   1 +
+ .../sklkbl_thinkpad/variants/t580/gpio.c      |   3 +-
+ .../variants/t580/include/variant/dgpu.h      |   1 +
+ 15 files changed, 274 insertions(+), 30 deletions(-)
+ create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+ create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+ create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/smihandler.c
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+index 0804d41399..9d0351feff 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+@@ -1,6 +1,7 @@
+ ## SPDX-License-Identifier: GPL-2.0-only
+ 
+ bootblock-y += bootblock.c
++bootblock-$(CONFIG_VARIANT_HAS_DGPU) += dgpu_early.c
+ 
+ romstage-y += variants/$(VARIANT_DIR)/memory_init_params.c
+ 
+@@ -11,6 +12,8 @@ ramstage-y += variants/$(VARIANT_DIR)/hda_verb.c
+ ramstage-y += ramstage.c
+ ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += variants/$(VARIANT_DIR)/gma-mainboard.ads
+ 
++smm-$(CONFIG_VARIANT_HAS_DGPU) += smihandler.c
++
+ subdirs-y += variants/$(VARIANT_DIR)
+ 
+ ifeq ($(CONFIG_HAVE_SPD_IN_CBFS),y)
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+new file mode 100644
+index 0000000000..067a17a450
+--- /dev/null
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+@@ -0,0 +1,70 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <variant/dgpu.h>
++
++/*
++ * Power sequencing of the discrete GPU behind root port 1, for the power
++ * resource that dgpu.c adds to the SSDT when the GPU is enabled. The
++ * sequence follows the vendor firmware: the link is disabled before the
++ * GPU loses power, and enabled again once the GPU is out of reset.
++ */
++Scope (\_SB.PCI0.RP01)
++{
++	OperationRegion (DGPC, PCI_Config, 0x50, 4)
++	Field (DGPC, AnyAcc, NoLock, Preserve)
++	{
++		    , 4,
++		LNKD, 1,	/* Link Control: Link Disable */
++		    , 24,
++		DLLA, 1,	/* Link Status: Data Link Layer Link Active */
++	}
++
++	/* Wait up to 200 ms for the link to reach the state in Arg0 */
++	Method (DGLW, 1, Serialized)
++	{
++		Local0 = 0
++		While (DLLA != Arg0 && Local0 < 200) {
++			Sleep (10)
++			Local0 += 10
++		}
++	}
++
++	Method (DGST, 0, NotSerialized)
++	{
++		Return (\_SB.PCI0.GTXS (GPIO_1R8VIDEO_AON_ON))
++	}
++
++	Method (DGON, 0, Serialized)
++	{
++		If (\_SB.PCI0.GTXS (GPIO_1R8VIDEO_AON_ON)) {
++			Return
++		}
++
++		\_SB.PCI0.STXS (GPIO_1R8VIDEO_AON_ON)
++
++		Local0 = 0
++		While (!\_SB.PCI0.GRXS (GPIO_DGFX_PWRGD) && Local0 < 100) {
++			Sleep (1)
++			Local0++
++		}
++		Sleep (10)
++
++		\_SB.PCI0.STXS (GPIO_GPU_RST)
++		LNKD = 0
++		DGLW (1)
++	}
++
++	Method (DGOF, 0, Serialized)
++	{
++		If (!\_SB.PCI0.GTXS (GPIO_1R8VIDEO_AON_ON)) {
++			Return
++		}
++
++		LNKD = 1
++		DGLW (0)
++
++		\_SB.PCI0.CTXS (GPIO_GPU_RST)
++		\_SB.PCI0.CTXS (GPIO_1R8VIDEO_AON_ON)
++		Sleep (100)
++	}
++}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c b/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
+index e1fdf18add..37e831edc9 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
+@@ -2,8 +2,15 @@
+ 
+ #include <bootblock_common.h>
+ #include <ec/lenovo/mec1653/mec1653.h>
++#include "variant.h"
+ 
+ void bootblock_mainboard_early_init(void)
+ {
+ 	bootblock_ec_init();
+ }
++
++void bootblock_mainboard_init(void)
++{
++	if (CONFIG(VARIANT_HAS_DGPU))
++		dgpu_power_on();
++}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+index c4b978fdd0..3f9d18dc9c 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+@@ -1,43 +1,107 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
++#include <acpi/acpi.h>
+ #include <acpi/acpigen.h>
++#include <cf9_reset.h>
+ #include <console/console.h>
+ #include <device/device.h>
+-#include <device/pci_rom.h>
+-#include <option.h>
++#include <gpio.h>
++#include <intelblocks/pmclib.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
+-#include <soc/ramstage.h>
++#include <soc/pm.h>
++#include <soc/pmc.h>
+ #include <static.h>
+ #include <variant/dgpu.h>
+ 
++static void dgpu_power_off(void)
++{
++	gpio_set(GPIO_GPU_RST, 0);
++	gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
++}
++
++/*
++ * Runtime power management (D3cold) for the GPU: a power resource on its
++ * root port, which calls the methods in acpi/dgpu.asl. Without the GPU, the
++ * PCH may have another root port at the device and function of root port 1,
++ * so only add it for a GPU that is there.
++ */
++void dgpu_fill_ssdt(const struct device *dev)
++{
++	static const char * const power_states[] = { "_PR0", "_PR3" };
++	const struct device *dgpu = DEV_PTR(dgpu);
++	const char *scope;
++
++	if (!is_dev_enabled(dgpu) || !dgpu->upstream)
++		return;
++
++	scope = acpi_device_path(dgpu->upstream->dev);
++	if (!scope)
++		return;
++
++	acpigen_write_scope(scope);
++	acpigen_write_power_res("PGPU", 0, 0, power_states, ARRAY_SIZE(power_states));
++
++	acpigen_write_method("_STA", 0);
++	acpigen_write_return_namestr("DGST");
++	acpigen_write_method_end();
++
++	acpigen_write_method_serialized("_ON", 0);
++	acpigen_emit_namestring("DGON");
++	acpigen_write_method_end();
++
++	acpigen_write_method_serialized("_OFF", 0);
++	acpigen_emit_namestring("DGOF");
++	acpigen_write_method_end();
++
++	acpigen_write_power_res_end();
++	acpigen_write_scope_end();
++}
++
++/* The GPU was powered in the bootblock, see dgpu_early.c */
+ void dgpu_detect(void)
+ {
+ 	static const char * const dgfx_vram_id_str[] = { "1GB", "2GB", "4GB", "N/A" };
+ 	struct device *dgpu = DEV_PTR(dgpu);
+-
++	const struct device *rp = dgpu->upstream ? dgpu->upstream->dev : NULL;
+ 	int dgfx_vram_id;
+ 
+-	// Detect and enable dGPU
+-	if (gpio_get(GPIO_DISCRETE_PRESENCE) == 0) { // active low
+-		dgfx_vram_id = gpio_get(GPIO_DGFX_VRAM_ID0) | gpio_get(GPIO_DGFX_VRAM_ID1) << 1;
+-		printk(BIOS_DEBUG, "Discrete GPU present with %s VRAM\n", dgfx_vram_id_str[dgfx_vram_id]);
+-
+-		// NOTE: i pulled this GPU enable sequence from thin air
+-		// it sometimes works but is buggy and the GPU disappears in some cases so disabling it by default.
+-		// also unrelated to this enable sequence the nouveau driver only works on 6.8-6.9 kernels
+-		if (get_uint_option("dgpu_enable", 0)) {
+-			printk(BIOS_DEBUG, "Enabling discrete GPU\n");
+-			gpio_set(GPIO_1R8VIDEO_AON_ON, 1);	// Enable GPU power rail
+-			while (!gpio_get(GPIO_DGFX_PWRGD))	// Wait for power good signal from GPU
+-				;
+-			gpio_set(GPIO_GPU_RST, 1);		// Release GPU from reset
+-		} else {
+-			printk(BIOS_DEBUG, "Discrete GPU will remain disabled\n");
+-			dgpu->enabled = 0;
++	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0) { // active low
++		printk(BIOS_DEBUG, "Discrete GPU not present\n");
++		dgpu->enabled = 0;
++		return;
++	}
++
++	dgfx_vram_id = gpio_get(GPIO_DGFX_VRAM_ID0) | gpio_get(GPIO_DGFX_VRAM_ID1) << 1;
++	printk(BIOS_DEBUG, "Discrete GPU present with %s VRAM\n", dgfx_vram_id_str[dgfx_vram_id]);
++
++	if (!gpio_tx_get(GPIO_1R8VIDEO_AON_ON)) {
++		printk(BIOS_DEBUG, "Discrete GPU will remain disabled\n");
++		dgpu->enabled = 0;
++		return;
++	}
++
++	/*
++	 * FSP-S disables a root port without a link, and a disabled port stays
++	 * disabled until the next power cycle: FSP-S does not find the GPU on
++	 * the first boot after it was enabled. A full reset cycles the power.
++	 * MEM_SR is only set after a reset without power cycle, so this
++	 * happens once.
++	 */
++	if ((!rp || !rp->enabled) && !acpi_is_wakeup_s3()) {
++		const struct chipset_power_state *ps = pmc_get_power_state();
++
++		if (ps && (ps->gen_pmcon_a & MEM_SR)) {
++			printk(BIOS_INFO, "Discrete GPU: root port is disabled, full reset\n");
++			full_reset();
+ 		}
++	}
+ 
+-	} else {
+-		printk(BIOS_DEBUG, "Discrete GPU not present\n");
++	if (!rp || !rp->enabled) {
++		printk(BIOS_ERR, "Discrete GPU has no PCIe link, powering it off\n");
++		dgpu_power_off();
+ 		dgpu->enabled = 0;
++		return;
+ 	}
++
++	printk(BIOS_INFO, "Discrete GPU enabled\n");
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+new file mode 100644
+index 0000000000..d5e2b16993
+--- /dev/null
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+@@ -0,0 +1,72 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <arch/io.h>
++#include <console/console.h>
++#include <delay.h>
++#include <gpio.h>
++#include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
++#include <pc80/mc146818rtc.h>
++#include <soc/iomap.h>
++#include <soc/pm.h>
++#include <timer.h>
++#include <variant/dgpu.h>
++
++#define DGPU_PWRGD_TIMEOUT_MS	100
++#define DGPU_RESET_DELAY_MS	10
++
++/*
++ * The dGPU sits behind PCIe root port 1. FSP-S disables root ports that have
++ * no link, so the GPU has to be powered and out of reset well before
++ * FspSiliconInit; the ramstage is too late for that. Do it in the bootblock.
++ *
++ * Root port 1 uses CLKREQ0#, and the PCH only drives the reference clock
++ * while that pad is in its native function, so set it up here as well.
++ *
++ * The power and reset pads are in the RSMRST well and keep their state
++ * across resets and sleep states. Configure them on every boot and resume.
++ */
++void dgpu_power_on(void)
++{
++	static const struct pad_config pads[] = {
++		PAD_CFG_GPI_TRIG_OWN(GPIO_DISCRETE_PRESENCE, UP_20K, DEEP, OFF, ACPI),
++		PAD_CFG_GPI_TRIG_OWN(GPIO_DGFX_PWRGD, NONE, DEEP, OFF, ACPI),
++		PAD_CFG_NF(GPIO_DGFX_CLKREQ, NONE, DEEP, NF1),
++		PAD_CFG_TERM_GPO(GPIO_GPU_RST, 0, UP_20K, RSMRST),
++	};
++	static const struct pad_config power_off[] = {
++		PAD_CFG_TERM_GPO(GPIO_1R8VIDEO_AON_ON, 0, UP_20K, RSMRST),
++	};
++	static const struct pad_config power_on[] = {
++		PAD_CFG_TERM_GPO(GPIO_1R8VIDEO_AON_ON, 1, UP_20K, RSMRST),
++	};
++	struct stopwatch sw;
++
++	gpio_configure_pads(pads, ARRAY_SIZE(pads));
++
++	/* Power held for 4 s is how a hung boot is turned off: drop the request */
++	if (inw(ACPI_BASE_ADDRESS + PM1_STS) & PRBTNOR_STS)
++		cmos_write(0, CMOS_DGPU);
++
++	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0 ||	/* active low */
++	    cmos_read(CMOS_DGPU) != DGPU_REQUEST) {
++		gpio_configure_pads(power_off, ARRAY_SIZE(power_off));
++		return;
++	}
++
++	gpio_configure_pads(power_on, ARRAY_SIZE(power_on));
++
++	stopwatch_init_msecs_expire(&sw, DGPU_PWRGD_TIMEOUT_MS);
++	while (!gpio_get(GPIO_DGFX_PWRGD)) {
++		if (stopwatch_expired(&sw)) {
++			printk(BIOS_ERR, "dGPU: no power good after %d ms, powering off\n",
++			       DGPU_PWRGD_TIMEOUT_MS);
++			gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
++			return;
++		}
++	}
++	printk(BIOS_DEBUG, "dGPU: power good after %lld us\n",
++	       stopwatch_duration_usecs(&sw));
++
++	mdelay(DGPU_RESET_DELAY_MS);
++	gpio_set(GPIO_GPU_RST, 1);
++}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl b/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl
+index 801e0cb0d1..a356370a0f 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl
+@@ -22,5 +22,9 @@ DefinitionBlock(
+ 		#include <drivers/intel/gma/acpi/default_brightness_levels.asl>
+ 	}
+ 
++#if CONFIG(VARIANT_HAS_DGPU)
++	#include "acpi/dgpu.asl"
++#endif
++
+ 	#include <southbridge/intel/common/acpi/sleepstates.asl>
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index 2c819ea875..c41844f9dc 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -45,8 +45,10 @@ static void mainboard_enable(struct device *dev)
+ {
+ 	boot_menu_request();
+ 
+-	if (CONFIG(VARIANT_HAS_DGPU))
++	if (CONFIG(VARIANT_HAS_DGPU)) {
+ 		dgpu_detect();
++		dev->ops->acpi_fill_ssdt = dgpu_fill_ssdt;
++	}
+ }
+ 
+ struct chip_operations mainboard_ops = {
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/smihandler.c b/src/mainboard/lenovo/sklkbl_thinkpad/smihandler.c
+new file mode 100644
+index 0000000000..6a4d036bfc
+--- /dev/null
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/smihandler.c
+@@ -0,0 +1,16 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <cpu/x86/smm.h>
++#include <gpio.h>
++#include <variant/dgpu.h>
++
++void mainboard_smi_sleep(u8 slp_typ)
++{
++	/*
++	 * The dGPU power and reset pads keep their state in S3 to S5.
++	 * Hold the GPU in reset and cut its power; the bootblock powers
++	 * it again on resume and on the next boot.
++	 */
++	gpio_set(GPIO_GPU_RST, 0);
++	gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
++}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index 4e811ddc71..f503894faa 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -7,6 +7,12 @@ void variant_config_gpios(void);
+ 
+ uint8_t variant_memory_sku(void);
+ 
++/* CMOS byte 0x6f: 0xd6 powers the dGPU from the next boot on (`dgpu on` in Linux) */
++#define CMOS_DGPU		0x6f
++#define  DGPU_REQUEST		0xd6
++
++void dgpu_power_on(void);
+ void dgpu_detect(void);
++void dgpu_fill_ssdt(const struct device *dev);
+ 
+ #endif
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
+index ffd2841e49..9c72703caa 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
+@@ -139,8 +139,7 @@ static const struct pad_config gpio_table[] = {
+ 	PAD_NC(GPP_E19, NONE),
+ 	PAD_CFG_NF(GPP_E20, NONE, DEEP, NF1),				/* DDIP2_CTRLCLK */
+ 	PAD_CFG_NF(GPP_E21, NONE, DEEP, NF1),				/* DDIP2_CTRLDATA */
+-	PAD_CFG_TERM_GPO(GPP_E22, 0, UP_20K, RSMRST),			/* -GPU_RST */
+-	PAD_CFG_TERM_GPO(GPP_E23, 0, UP_20K, RSMRST),			/* 1R8VIDEO_AON_ON */
++	/* GPP_E22 -GPU_RST and GPP_E23 1R8VIDEO_AON_ON are set up in dgpu_early.c */
+ 
+ 	/* ------- GPIO Community 2 ------- */
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
+index deb0cf4c1e..763236e462 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+ #define GPIO_DGFX_VRAM_ID0		GPP_D11
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/gpio.c b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/gpio.c
+index c24c1abb07..721acc7655 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/gpio.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/gpio.c
+@@ -135,8 +135,7 @@ static const struct pad_config gpio_table[] = {
+ 	PAD_CFG_GPO(GPP_E19, 0, DEEP),
+ 	PAD_CFG_NF(GPP_E20, NONE, DEEP, NF1),				/* DDIP2_CTRLCLK */
+ 	PAD_CFG_NF(GPP_E21, NONE, DEEP, NF1),				/* DDIP2_CTRLDATA */
+-	PAD_CFG_TERM_GPO(GPP_E22, 0, UP_20K, RSMRST),			/* -GPU_RST */
+-	PAD_CFG_TERM_GPO(GPP_E23, 0, UP_20K, RSMRST),			/* 1R8VIDEO_AON_ON */
++	/* GPP_E22 -GPU_RST and GPP_E23 1R8VIDEO_AON_ON are set up in dgpu_early.c */
+ 
+ 	/* ------- GPIO Community 2 ------- */
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
+index deb0cf4c1e..763236e462 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480s/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+ #define GPIO_DGFX_VRAM_ID0		GPP_D11
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/gpio.c b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/gpio.c
+index 04c04cf1e0..fe3005daff 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/gpio.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/gpio.c
+@@ -139,8 +139,7 @@ static const struct pad_config gpio_table[] = {
+ 	PAD_NC(GPP_E19, NONE),
+ 	PAD_CFG_NF(GPP_E20, NONE, DEEP, NF1),				/* DDIP2_CTRLCLK */
+ 	PAD_CFG_NF(GPP_E21, NONE, DEEP, NF1),				/* DDIP2_CTRLDATA */
+-	PAD_CFG_TERM_GPO(GPP_E22, 0, UP_20K, RSMRST),			/* -GPU_RST */
+-	PAD_CFG_TERM_GPO(GPP_E23, 0, UP_20K, RSMRST),			/* 1R8VIDEO_AON_ON */
++	/* GPP_E22 -GPU_RST and GPP_E23 1R8VIDEO_AON_ON are set up in dgpu_early.c */
+ 
+ 	/* ------- GPIO Community 2 ------- */
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
+index deb0cf4c1e..763236e462 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t580/include/variant/dgpu.h
+@@ -7,6 +7,7 @@
+ #define GPIO_1R8VIDEO_AON_ON		GPP_E23
+ 
+ #define GPIO_DGFX_PWRGD			GPP_F3
++#define GPIO_DGFX_CLKREQ		GPP_B5	// -CLKREQ_PCIE0
+ 
+ #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
+ #define GPIO_DGFX_VRAM_ID0		GPP_D11
+-- 
+2.55.0
+

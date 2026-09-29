@@ -1,0 +1,352 @@
+#!/usr/bin/env bash
+# syswork — lightweight whole-root worktrees on ext4 via overlayfs + git versioning.
+# Stays on ext4 (no btrfs migration). Mount cost ~ms, disk cost = changed files only.
+# Running daemons keep reading LIVE paths; the merged view is a staging area.
+# Single-file live tests use `shadow` (bind-mount one merged file over live).
+#
+# Revert ladder: drop (ms) -> git checkout (s, targeted) -> timeshift (min, nuclear).
+set -euo pipefail
+
+SYSWORK_ROOT="${SYSWORK_ROOT:-/var/lib/syswork}"
+MERGED_ROOT="${MERGED_ROOT:-/srv/work}"
+AUDIT_LOG="${AUDIT_LOG:-/var/log/syswork.log}"
+VERSION="0.1.0"
+
+# Repos that get auto-committed on apply (only if .git exists; see init-repos).
+REPO_ROOTS=(/etc /usr/local /home/btw/.config /home/btw/bin)
+# Live paths that need --allow-sensitive to apply (footguns / secrets-adjacent).
+SENSITIVE_RE='^boot/(vmlinuz|initramfs|intel-ucode|grub)|^etc/(shadow|gshadow|sudoers|sudoers\.d/|ssh/ssh_host_)|^root/\.ssh/'
+# Text-in-git, binaries-in-manifest: never blob these into git.
+BINARY_RE='\.(rom|bin|img|iso|fw)$|^(boot/vmlinuz|boot/initramfs|boot/intel-ucode)'
+
+die()  { echo "syswork: error: $*" >&2; exit 1; }
+info() { echo "syswork: $*"; }
+need_root() { [[ ${EUID:-$(id -u)} -eq 0 ]] || die "must run as root (sudo -n syswork $1 ... or ssh root@localhost)"; }
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]] || die "bad worktree name '$1' (use [a-z0-9_-], max 32)"; }
+upper_of()  { echo "$SYSWORK_ROOT/$1/upper"; }
+work_of()   { echo "$SYSWORK_ROOT/$1/work"; }
+merged_of() { echo "$MERGED_ROOT/$1"; }
+audit() {
+  local msg="$*"
+  printf '%s user=%s %s\n' "$(date -u +%FT%TZ)" "${SUDO_USER:-$(whoami)}" "$msg" >>"$AUDIT_LOG" 2>/dev/null || true
+}
+
+cmd_help() {
+  cat <<'EOF'
+syswork 0.1.0 — whole-root overlay worktrees (ext4, no snapshots needed)
+
+  syswork new <name>          create + mount overlay at /srv/work/<name> (~ms)
+  syswork list                show worktrees (mounted? size, changed files)
+  syswork status <name>       mount state + change stats
+  syswork diff <name> [--full]  changeset: file list (default) or unified diffs
+  syswork apply <name> --yes [--allow-sensitive] [--drop]
+                              rsync upper -> / + git commits + audit log
+  syswork drop <name> [--yes] unmount + delete upper = instant revert
+  syswork mount <name>        remount after reboot (uppers persist)
+  syswork mount-all           remount every worktree with a stored upper
+  syswork shadow <name> <live-path>   bind merged file over live (test 1 file)
+  syswork unshadow <live-path>        revert a shadow bind
+  syswork shadows             list active shadow binds
+  syswork init-repos          git-init /etc + /usr/local w/ binary excludes
+  syswork help                this text
+
+Typical flow:
+  sudo syswork new wifi-test
+  # edit /srv/work/wifi-test/etc/...  (live system untouched)
+  syswork diff wifi-test
+  sudo syswork shadow wifi-test /etc/thinkfan.yaml   # live-test one file
+  s6-svc -r /run/service/thinkfan 2>/dev/null || true
+  sudo syswork unshadow /etc/thinkfan.yaml            # instant revert
+  sudo syswork apply wifi-test --yes                  # commit to live + git
+EOF
+}
+
+cmd_new() {
+  need_root "new"; valid_name "${1:?usage: syswork new <name>}"
+  local n="$1" U W M; U=$(upper_of "$n"); W=$(work_of "$n"); M=$(merged_of "$n")
+  [[ -e "$M" ]] && mountpoint -q "$M" && die "'$n' already mounted at $M"
+  mkdir -p "$U" "$W" "$M"
+  mount -t overlay overlay -o "lowerdir=/,upperdir=$U,workdir=$W,index=off" "$M"
+  audit "new $n merged=$M"
+  info "mounted $M (lower=/) — edit under $M, live system untouched."
+  info "pseudo-fs (/proc /sys /dev /run) inside $M are UNDERLYING empty dirs — read live paths for sensors."
+}
+
+cmd_list() {
+  local d n M U count size mnt
+  [[ -d "$SYSWORK_ROOT" ]] || { echo "(no worktrees)"; return 0; }
+  printf '%-20s %-8s %-8s %s\n' NAME MOUNTED FILES UPPER
+  for d in "$SYSWORK_ROOT"/*/; do
+    [[ -d "$d" ]] || continue
+    n=$(basename "$d"); M=$(merged_of "$n"); U=$(upper_of "$n")
+    mnt="no"; mountpoint -q "$M" 2>/dev/null && mnt="yes"
+    count=$(find "$U" -mindepth 1 2>/dev/null | wc -l)
+    size=$(du -sh "$U" 2>/dev/null | cut -f1)
+    printf '%-20s %-8s %-8s %s\n' "$n" "$mnt" "$count" "$size"
+  done
+}
+
+cmd_status() {
+  local n="${1:?usage: syswork status <name>}"; valid_name "$n"
+  local M U; M=$(merged_of "$n"); U=$(upper_of "$n")
+  [[ -d "$U" ]] || die "unknown worktree '$n'"
+  mountpoint -q "$M" && echo "mounted: yes ($M)" || echo "mounted: no (run: syswork mount $n)"
+  echo "upper size: $(du -sh "$U" | cut -f1)"
+  echo "changed paths: $(find "$U" -mindepth 1 | wc -l)"
+  find "$U" -mindepth 1 -printf '%P\n' 2>/dev/null | sort | head -30
+}
+
+# List changed relative paths (excludes noise + git internals).
+changed_paths() {
+  local n="$1" U; U=$(upper_of "$n")
+  find "$U" -mindepth 1 -printf '%P\n' 2>/dev/null | sort | grep -vE \
+    '^(\.git|proc|sys|dev|run|tmp|mnt|media|swapfile)(/|$)|^var/lib/syswork/|^srv/work/|\.git(/|$)' || true
+}
+
+cmd_diff() {
+  local n="${1:?usage: syswork diff <name>}"; valid_name "$n"
+  local full=0; [[ "${2:-}" == "--full" ]] && full=1
+  local M; M=$(merged_of "$n")
+  mountpoint -q "$M" 2>/dev/null || die "'$n' not mounted"
+  local f; local count=0
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    count=$((count + 1))
+    if [[ $full -eq 1 && -f "$M/$f" && -f "/$f" ]]; then
+      diff -u --label "live/$f" --label "work/$f" "/$f" "$M/$f" || true
+    else
+      echo "$f"
+    fi
+  done < <(changed_paths "$n")
+  echo "--- $count changed path(s)"
+}
+
+cmd_mount() {
+  need_root "mount"; valid_name "${1:?usage: syswork mount <name>}"
+  local n="$1" U W M; U=$(upper_of "$n"); W=$(work_of "$n"); M=$(merged_of "$n")
+  [[ -d "$U" ]] || die "unknown worktree '$n'"
+  mkdir -p "$M"
+  mountpoint -q "$M" && { info "'$n' already mounted"; return 0; }
+  mount -t overlay overlay -o "lowerdir=/,upperdir=$U,workdir=$W,index=off" "$M"
+  audit "mount $n"; info "mounted $M"
+}
+
+cmd_mount_all() {
+  need_root "mount-all"
+  local d n
+  for d in "$SYSWORK_ROOT"/*/; do
+    [[ -d "$d" ]] || continue
+    n=$(basename "$d")
+    [[ -d "$(upper_of "$n")" ]] || continue
+    mkdir -p "$(merged_of "$n")"
+    if ! mountpoint -q "$(merged_of "$n")" 2>/dev/null; then
+      mount -t overlay overlay -o "lowerdir=/,upperdir=$(upper_of "$n"),workdir=$(work_of "$n"),index=off" "$(merged_of "$n")" \
+        && info "mounted $n"
+    fi
+  done
+  audit "mount-all"
+}
+
+cmd_shadow() {
+  need_root "shadow"
+  local n="${1:?usage: syswork shadow <name> <live-path>}"; valid_name "$n"
+  shift
+  local live="${1:?usage: syswork shadow <name> <live-path>}"
+  shift
+  local allow_sensitive=0 a
+  for a in "$@"; do
+    case "$a" in --allow-sensitive) allow_sensitive=1;; *) die "unknown flag $a";; esac
+  done
+  [[ "$live" = /* ]] || die "live-path must be absolute"
+  local rel="${live#/}"
+  if [[ "$rel" =~ $SENSITIVE_RE && $allow_sensitive -eq 0 ]]; then
+    die "sensitive path — re-run with --allow-sensitive: $live"
+  fi
+  local M; M=$(merged_of "$n")
+  mountpoint -q "$M" 2>/dev/null || die "'$n' not mounted"
+  [[ -e "$M/$rel" ]] || die "no such file in worktree: $M/$rel"
+  [[ -e "$live" ]] || die "no such live file: $live"
+  mount --bind "$M/$rel" "$live"
+  mkdir -p "$SYSWORK_ROOT/$n"
+  echo "$live" >>"$SYSWORK_ROOT/$n/shadows"
+  sort -u "$SYSWORK_ROOT/$n/shadows" -o "$SYSWORK_ROOT/$n/shadows"
+  audit "shadow $n $live"; info "shadowed $live (from $n) — unshadow to revert"
+}
+
+cmd_unshadow() {
+  need_root "unshadow"
+  local live="${1:?usage: syswork unshadow <live-path>}"
+  mountpoint -q "$live" 2>/dev/null || die "$live is not a shadow bind"
+  umount "$live"
+  # remove from any worktree's shadow list
+  local f
+  for f in "$SYSWORK_ROOT"/*/shadows; do
+    [[ -f "$f" ]] || continue
+    grep -vxF "$live" "$f" >"$f.tmp" || true
+    mv "$f.tmp" "$f"
+  done
+  audit "unshadow $live"; info "reverted $live"
+}
+
+cmd_shadows() {
+  local f n found=0
+  for f in "$SYSWORK_ROOT"/*/shadows; do
+    [[ -f "$f" ]] || continue
+    n=$(basename "$(dirname "$f")")
+    while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
+      mountpoint -q "$line" 2>/dev/null && { echo "$line (from $n)"; found=1; }
+    done <"$f"
+  done
+  [[ $found -eq 0 ]] && echo "(no active shadows)"
+  return 0
+}
+
+git_commit_repo() {
+  # $1 = repo root (absolute), $2.. = changed paths RELATIVE to / (e.g. etc/foo)
+  local repo="$1"; shift
+  [[ -d "$repo/.git" ]] || return 0
+  local rrel="${repo#/}" # repo without leading slash, e.g. etc
+  local rel f added=0 count=0
+  for f in "$@"; do
+    [[ "$f" == "$rrel" || "$f" == "$rrel/"* ]] || continue
+    rel="${f#$rrel}"; rel="${rel#/}"
+    [[ -n "$rel" ]] || continue # the repo dir itself, not a file
+    count=$((count + 1))
+    if [[ "$rel" =~ $BINARY_RE ]]; then
+      echo "  binary (manifest-only): $f sha=$(sha256sum "/$f" 2>/dev/null | cut -c1-12)"
+      continue
+    fi
+    if [[ -e "/$f" ]]; then git -C "$repo" add -A "$rel" 2>/dev/null && added=1
+    else git -C "$repo" rm -q "$rel" 2>/dev/null && added=1; fi
+  done
+  if [[ $added -eq 1 ]]; then
+    if ! git -C "$repo" diff --cached --quiet; then
+      git -C "$repo" -c user.name="${SUDO_USER:-syswork}" -c user.email="${SUDO_USER:-syswork}@t480" \
+        commit -qm "syswork apply $WT_NAME: $count file(s)" 2>/dev/null \
+        && echo "  committed in $repo" || echo "  (commit skipped in $repo)"
+    fi
+  fi
+}
+
+cmd_apply() {
+  need_root "apply"
+  local n="${1:?usage: syswork apply <name> --yes}"; valid_name "$n"
+  shift
+  local yes=0 allow_sensitive=0 drop_after=0 a
+  for a in "$@"; do
+    case "$a" in --yes) yes=1;; --allow-sensitive) allow_sensitive=1;; --drop) drop_after=1;; *)
+      die "unknown flag $a";; esac
+  done
+  [[ $yes -eq 1 ]] || die "refusing without --yes (review with: syswork diff $n --full)"
+  local M U; M=$(merged_of "$n"); U=$(upper_of "$n")
+  mountpoint -q "$M" 2>/dev/null || die "'$n' not mounted"
+  mapfile -t CHANGED < <(changed_paths "$n")
+  [[ ${#CHANGED[@]} -gt 0 ]] || die "nothing to apply (upper empty)"
+  # sensitive gate
+  local f bad=()
+  for f in "${CHANGED[@]}"; do
+    [[ "$f" =~ $SENSITIVE_RE ]] && bad+=("$f")
+  done
+  if [[ ${#bad[@]} -gt 0 && $allow_sensitive -eq 0 ]]; then
+    printf 'sensitive paths need --allow-sensitive:\n'; printf '  %s\n' "${bad[@]}"; die "aborted"
+  fi
+  # thermal single-writer guard (from system graph: thermald-t480 owns fan+MSR)
+  if printf '%s\n' "${CHANGED[@]}" | grep -qE 'thinkfan\.yaml|throttled\.conf'; then
+    if pgrep -x thermald-t480 >/dev/null 2>&1; then
+      echo "WARNING: thermald-t480 is running and owns fan+MSR — parked thinkfan/throttled configs won't take effect until you switch the single writer." >&2
+    fi
+  fi
+  # rsync upper -> / (no --delete: deletions need explicit handling).
+  # Keep modes from upper (-p via -a): overlayfs copy-up records the lower's
+  # modes, and explicit chmod in the merged view is intent. Do NOT take
+  # ownership from upper (merged edits may be user-owned; live files keep
+  # their owners; new files are created root-owned since rsync runs as root).
+  rsync -aAXH --no-owner --no-group \
+    --exclude='/proc/***' --exclude='/sys/***' --exclude='/dev/***' --exclude='/run/***' \
+    --exclude='/tmp/***' --exclude='/mnt/***' --exclude='/media/***' \
+    --exclude='/var/lib/syswork/***' --exclude='/srv/work/***' --exclude='/swapfile' \
+    --exclude='.git/***' \
+    "$U/" /
+  # git commits per repo
+  WT_NAME="$n" # exported for git_commit_repo message
+  export WT_NAME
+  local repo paths=() r
+  for repo in "${REPO_ROOTS[@]}"; do
+    paths=()
+    for f in "${CHANGED[@]}"; do
+      [[ "$f" == "${repo#/}/"* || "$f" == "${repo#/}" ]] && paths+=("$f")
+    done
+    [[ ${#paths[@]} -gt 0 ]] && git_commit_repo "$repo" "${paths[@]}"
+  done
+  audit "apply $n files=${#CHANGED[@]} sensitive=$allow_sensitive"
+  info "applied ${#CHANGED[@]} path(s) from $n to live."
+  if [[ $drop_after -eq 1 ]]; then cmd_drop "$n" --yes; fi
+}
+
+cmd_drop() {
+  need_root "drop"
+  local n="${1:?usage: syswork drop <name>}"; valid_name "$n"
+  shift
+  local yes=0; [[ "${1:-}" == "--yes" ]] && yes=1
+  local M; M=$(merged_of "$n")
+  if mountpoint -q "$M" 2>/dev/null; then
+    [[ $yes -eq 1 ]] || { echo "mounted at $M — re-run with --yes to unmount+delete:"; changed_paths "$n" | head -20; die "aborted"; }
+    umount "$M" || umount -l "$M"
+  fi
+  rm -rf "$SYSWORK_ROOT/$n" "$M"
+  rmdir "$MERGED_ROOT" 2>/dev/null || true
+  audit "drop $n"; info "dropped '$n' (instant revert)"
+}
+
+cmd_init_repos() {
+  need_root "init-repos"
+  local repo
+  for repo in /etc /usr/local; do
+    if [[ ! -d "$repo/.git" ]]; then
+      git -C "$repo" init -q
+      cat >"$repo/.gitignore" <<'EOF'
+# syswork: text in git, binaries in manifest (see audit log hashes)
+*.rom
+*.bin
+*.img
+*.iso
+*.fw
+vmlinuz*
+initramfs*
+intel-ucode*
+System.map*
+*.o
+*.ko
+EOF
+      git -C "$repo" config user.name "syswork"
+      git -C "$repo" config user.email "syswork@t480"
+      # Opportunistic ssh-signing with existing root key (best-effort)
+      if [[ -f /root/.ssh/id_ed25519.pub ]]; then
+        git -C "$repo" config gpg.format ssh
+        git -C "$repo" config user.signingkey /root/.ssh/id_ed25519.pub
+        git -C "$repo" config commit.gpgsign true
+      fi
+      git -C "$repo" add -A 2>/dev/null || true
+      git -C "$repo" commit -qm "syswork init-repos baseline" 2>/dev/null || true
+      info "git init $repo"
+    else
+      info "$repo already a repo — skipping"
+    fi
+  done
+  audit "init-repos"
+}
+
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    new) cmd_new "$@";; list|ls) cmd_list "$@";; status|st) cmd_status "$@";;
+    diff) cmd_diff "$@";; apply) cmd_apply "$@";; drop|rm) cmd_drop "$@";;
+    mount) cmd_mount "$@";; mount-all) cmd_mount_all "$@";;
+    shadow) cmd_shadow "$@";; unshadow) cmd_unshadow "$@";; shadows) cmd_shadows "$@";;
+    init-repos) cmd_init_repos "$@";; help|-h|--help|"") cmd_help;;
+    version|--version) echo "syswork $VERSION";;
+    *) die "unknown command '$cmd' (try: syswork help)";;
+  esac
+}
+main "$@"

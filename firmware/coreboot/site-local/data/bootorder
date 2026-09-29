@@ -1,0 +1,6 @@
+/rom@floppyimg/kolibri.img
+/rom@floppyimg/michalos.img
+/rom@floppyimg/floppybird.img
+/usb@*/disk@*
+/usb@*/cdrom@*
+HALT

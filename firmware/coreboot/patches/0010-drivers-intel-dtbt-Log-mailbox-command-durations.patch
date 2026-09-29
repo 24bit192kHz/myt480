@@ -1,0 +1,59 @@
+From 7f81f21f7448d0a293a4d80487f2da0da2e37fde Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:54:47 +0300
+Subject: [PATCH 10/13] drivers/intel/dtbt: Log mailbox command durations
+
+On a cold boot the T480 spends ~350 ms in the dTBT mailbox handshake.
+Log how long each command takes and when the controller was found so
+the slow step can be identified.
+---
+ src/drivers/intel/dtbt/dtbt.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/drivers/intel/dtbt/dtbt.c b/src/drivers/intel/dtbt/dtbt.c
+index 7f9433dfc2..b6c39b2fb8 100644
+--- a/src/drivers/intel/dtbt/dtbt.c
++++ b/src/drivers/intel/dtbt/dtbt.c
+@@ -8,6 +8,7 @@
+ #include <device/pciexp.h>
+ #include <device/pci_ids.h>
+ #include <timer.h>
++#include <timestamp.h>
+ #include "chip.h"
+ #include "dtbt.h"
+ 
+@@ -17,10 +18,12 @@ static struct device_operations dtbt_device_ops;
+ static bool dtbt_cmd(struct device *dev, u8 command, u32 data, u32 timeout)
+ {
+ 	u32 reg = (data << 8) | (command << 1) | PCIE2TBT_VALID;
++	struct stopwatch sw;
+ 	u32 status;
+ 	u8 error;
+ 
+ 	printk(BIOS_SPEW, "dTBT send command 0x%x\n", command);
++	stopwatch_init(&sw);
+ 	/* Send command */
+ 	pci_write_config32(dev, PCIE2TBT, reg);
+ 	/* Wait for Done bit */
+@@ -44,6 +47,8 @@ static bool dtbt_cmd(struct device *dev, u8 command, u32 data, u32 timeout)
+ 		       command, status);
+ 		return false;
+ 	}
++	printk(BIOS_DEBUG, "dTBT command 0x%x done in %lld ms\n", command,
++	       stopwatch_duration_msecs(&sw));
+ 	return true;
+ }
+ 
+@@ -194,7 +199,8 @@ static void dtbt_enable(struct device *dev)
+ 	    dev->upstream->dev->ops == &dtbt_device_ops)
+ 		return;
+ 
+-	printk(BIOS_INFO, "dTBT controller found at %s\n", dev_path(dev));
++	printk(BIOS_INFO, "dTBT controller found at %s, %llu ms after reset\n", dev_path(dev),
++	       timestamp_get() / timestamp_tick_freq_mhz() / 1000);
+ 
+ 	/* Set security level (Table 37/428); failure aborts enable */
+ 	// XXX: Recommendation is to set SL1 ("User Authorization")
+-- 
+2.55.0
+

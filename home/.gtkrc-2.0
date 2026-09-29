@@ -1,0 +1,35 @@
+include "/usr/share/themes/Artix-dark/gtk-2.0/gtkrc"
+style "user-font"
+{
+	font_name="Roboto"
+}
+widget_class "*" style "user-font"
+
+gtk-font-name="Roboto 11"
+gtk-theme-name="Adwaita-dark"
+gtk-icon-theme-name="matefaenzadark"
+gtk-toolbar-style=GTK_TOOLBAR_ICONS
+gtk-toolbar-icon-size=GTK_ICON_SIZE_BUTTON
+gtk-primary-button-warps-slider=0
+gtk-application-prefer-dark-theme=true
+gtk-button-images=1
+gtk-menu-images=1
+gtk-cursor-theme-name="Capitaine-Cursors-White"
+gtk-cursor-theme-size=32
+gtk-enable-event-sounds=1
+gtk-enable-input-feedback-sounds=1
+gtk-primary-button-warps-slider=0
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintfull
+gtk-xft-rgba=rgb
+
+# theme-sync MANAGED START — from theme/palette.conf, do not hand-edit
+gtk-color-scheme = "base_color:#1a1a1a\\nfg_color:#e4e4e4\\ntooltip_fg_color:#e4e4e4\\nselected_bg_color:#2a2a2a\\nselected_fg_color:#f0f0f0\\ntext_color:#e4e4e4\\nbg_color:#101010\\ninsensitive_bg_color:#1e1e1e\\ntooltip_bg_color:#1e1e1e\\nlink_color:#cfcfcf"
+# theme-sync MANAGED END
+
+
+
+
+
+

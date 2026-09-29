@@ -1,0 +1,73 @@
+From 6ffd4b1ba4af5316cb6ae1ecffdea93cb4249a77 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:22:34 +0300
+Subject: [PATCH 14/14] at_keyboard coreboot: Trace controller init and raw
+ bytes (debug=atkeyb)
+
+---
+ grub-core/term/at_keyboard.c | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index e5a0e10bc..2d1cc5760 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -201,11 +201,16 @@ set_scancodes (void)
+ 
+   keyboard_controller_wait_until_ready ();
+   grub_outb (KEYBOARD_COMMAND_ENABLE, KEYBOARD_REG_DATA);
+-  write_mode (2);
++  {
++    int acked = write_mode (2);
++    grub_dprintf ("atkeyb", "write_mode(2) acked=%d\n", acked);
++  }
+ 
+ #if defined (GRUB_MACHINE_COREBOOT)
+   /* mode 2 with translation, so make grub treat as set 1 */
+   ps2_state.current_set = 1;
++  grub_dprintf ("atkeyb", "set_scancodes done t=%llu\n",
++		(unsigned long long) grub_get_time_ms ());
+ #else
+   /* if not coreboot, translation isn't set; test 2 and fall back to 1 */
+   ps2_state.current_set = query_mode ();
+@@ -283,9 +288,14 @@ grub_at_keyboard_getkey (struct grub_term_input *term __attribute__ ((unused)))
+     }
+ #endif
+ 
+-  if (! KEYBOARD_ISREADY (grub_inb (KEYBOARD_REG_STATUS)))
+-    return GRUB_TERM_NO_KEY;
+-  at_key = grub_inb (KEYBOARD_REG_DATA);
++  {
++    grub_uint8_t status = grub_inb (KEYBOARD_REG_STATUS);
++    if (! KEYBOARD_ISREADY (status))
++      return GRUB_TERM_NO_KEY;
++    at_key = grub_inb (KEYBOARD_REG_DATA);
++    grub_dprintf ("atkeyb", "t=%llu st=0x%02x byte=0x%02x\n",
++		  (unsigned long long) grub_get_time_ms (), status, at_key);
++  }
+   old_led = ps2_state.led_status;
+ 
+   ret = grub_ps2_process_incoming_byte (&ps2_state, at_key);
+@@ -302,7 +312,9 @@ grub_keyboard_controller_init (void)
+   unsigned int npending = 0, i;
+ #endif
+ 
+-  grub_dprintf ("atkeyb", "controller init\n");
++  grub_dprintf ("atkeyb", "controller init t=%llu st=0x%02x\n",
++		(unsigned long long) grub_get_time_ms (),
++		grub_inb (KEYBOARD_REG_STATUS));
+   ps2_state.at_keyboard_status = 0;
+   /* Drain input buffer. */
+   while (1)
+@@ -350,6 +362,8 @@ grub_keyboard_controller_init (void)
+       ps2_state.current_set = (ctl & KEYBOARD_AT_TRANSLATE) ? 1 : 2;
+       grub_dprintf ("atkeyb", "%u early byte(s), ctl 0x%x, set %d\n",
+ 		    npending, ctl, ps2_state.current_set);
++      for (i = 0; i < npending; i++)
++	grub_dprintf ("atkeyb", "early byte 0x%02x\n", pending[i]);
+       for (i = 0; i < npending; i++)
+ 	if (grub_ps2_process_incoming_byte (&ps2_state, pending[i])
+ 	    == GRUB_TERM_ESC)
+-- 
+2.55.0
+

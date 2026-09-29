@@ -1,0 +1,64 @@
+From 94c8f92b1c517a35e8cebd31de455af98fbab8ae Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 14:57:11 +0300
+Subject: [PATCH 2/3] gma skylake: Set DPLL0 link rate even when DPLL0 is
+ already on
+
+FSP enables DPLL0 for CDClk before libgfxinit runs, so the previous
+'only while disabled' guard never applied. Like i915, rewrite only the
+DPLL0 link-rate field; the VCO driving CDClk is unaffected and DDI A is
+not in use yet.
+---
+ .../skylake/hw-gfx-gma-power_and_clocks.adb   | 36 ++++++++-----------
+ 1 file changed, 14 insertions(+), 22 deletions(-)
+
+diff --git a/common/skylake/hw-gfx-gma-power_and_clocks.adb b/common/skylake/hw-gfx-gma-power_and_clocks.adb
+index d778ab3..97a8919 100644
+--- a/common/skylake/hw-gfx-gma-power_and_clocks.adb
++++ b/common/skylake/hw-gfx-gma-power_and_clocks.adb
+@@ -341,28 +341,20 @@ package body HW.GFX.GMA.Power_And_Clocks is
+       PD_On (PW1);
+       PD_On (MISC_IO);
+ 
+-      -- DPLL0 also clocks eDP (DDI A) and its rate can only be chosen while
+-      -- it is off. Its default (810MHz) forces eDP to RBR (1.62Gbps) even
+-      -- if the panel does HBR, while the Linux driver picks HBR (2.7Gbps).
+-      -- The mismatch makes i915 reject the inherited mode and do a full
+-      -- modeset with a panel power cycle at boot. Use 1350MHz (HBR); it is
+-      -- compatible with the 8100MHz CDClk VCO. Panels that are RBR-only
+-      -- get a configurable DPLL instead (see PLLs.Alloc).
+-      declare
+-         Enabled : Boolean;
+-      begin
+-         Registers.Is_Set_Mask
+-           (Register => Registers.LCPLL1_CTL,
+-            Mask     => LCPLL1_CTL_PLL_ENABLE,
+-            Result   => Enabled);
+-         if not Enabled then
+-            Registers.Unset_And_Set_Mask
+-              (Register    => Registers.DPLL_CTRL1,
+-               Mask_Unset  => DPLL_CTRL1_DPLL0_LINK_RATE_MASK,
+-               Mask_Set    => DPLL_CTRL1_DPLL0_LINK_RATE_1350MHZ or
+-                              DPLL_CTRL1_DPLL0_OVERRIDE);
+-         end if;
+-      end;
++      -- DPLL0 also clocks eDP (DDI A). Its default link rate (810MHz)
++      -- forces eDP to RBR (1.62Gbps) even on HBR panels, while the Linux
++      -- driver picks HBR (2.7Gbps); i915 then rejects the inherited mode
++      -- and does a full modeset with a panel power cycle at boot. Select
++      -- 1350MHz (HBR). Like i915 (skl_ddi_dpll0_enable) this only changes
++      -- the link-rate divider and is fine with DPLL0 already running (FSP
++      -- enables it for CDClk), as long as DDI A is not in use yet; the
++      -- 8100MHz VCO feeding CDClk is unaffected. RBR-only panels get a
++      -- configurable DPLL instead (see PLLs.Alloc).
++      Registers.Unset_And_Set_Mask
++        (Register    => Registers.DPLL_CTRL1,
++         Mask_Unset  => DPLL_CTRL1_DPLL0_LINK_RATE_MASK,
++         Mask_Set    => DPLL_CTRL1_DPLL0_LINK_RATE_1350MHZ or
++                        DPLL_CTRL1_DPLL0_OVERRIDE);
+       Registers.Set_Mask
+         (Register    => Registers.LCPLL1_CTL,
+          Mask        => LCPLL1_CTL_PLL_ENABLE);
+-- 
+2.55.0
+

@@ -1,0 +1,333 @@
+#!/usr/bin/env bash
+# earth-dwm-stack: live earth video wallpaper on dwm (X11), no Hyprland/systemd.
+# headless sway -> earth-native serve -> capture loop -> feh root pixmap.
+set -u
+
+REPO="/home/btw/test/earth-80k-native-renderer"
+BIN="$REPO/NativeRenderer/earth-native/target/release/earth-native"
+AC_BIN="$REPO/NativeRenderer/earth-native/target/release/earth-native.ac"
+BAT_BIN="$REPO/NativeRenderer/earth-native/target/release/earth-native.bat"
+STATE="$HOME/.local/state/earth-dwm"
+FRAME="$STATE/frame.jpg"
+FIFO="/tmp/earth-vid.fifo"
+MPV_SOCK="/tmp/earth-mpv.sock"
+SWAY_CONF="/tmp/earth-sway.conf"
+KICK_INTERVAL="${EARTH_DWM_KICK:-10}"
+MODE_FORCE="${EARTH_DWM_FORCE_MODE:-}"
+RT="${XDG_RUNTIME_DIR:-/run/user/1000}"
+export XDG_RUNTIME_DIR="$RT"
+export DISPLAY=":0"
+export XAUTHORITY="$HOME/.Xauthority"
+export WAYLAND_DISPLAY="wayland-1"
+alive() { [[ -f "$1" ]] && kill -0 "$(cat "$1")" 2>/dev/null; }
+kicker_alive() {
+    local old oldcmd
+    old="$(cat "$STATE/kicker.pid" 2>/dev/null || echo none)"
+    [[ "$old" == "none" ]] && return 1
+    oldcmd="$(tr '\0' ' ' </proc/$old/cmdline 2>/dev/null || echo none)"
+    [[ "$oldcmd" == *"earth-dwm-stack kick"* ]]
+}
+watcher_alive() {
+    local old oldcmd
+    old="$(cat "$STATE/watcher.pid" 2>/dev/null || echo none)"
+    [[ "$old" == "none" ]] && return 1
+    oldcmd="$(tr '\0' ' ' </proc/$old/cmdline 2>/dev/null || echo none)"
+    [[ "$oldcmd" == *"earth-dwm-stack watch"* ]]
+}
+
+sway_sock() {
+    for s in "$RT"/sway-ipc.*.sock; do
+        [[ -S "$s" ]] && { printf '%s' "$s"; return 0; }
+    done
+    return 1
+}
+
+sway_up() {
+    [[ -S "$RT/wayland-1" ]] || return 1
+    local sock
+    sock="$(sway_sock)" || return 1
+    SWAYSOCK="$sock" swaymsg -t get_outputs >/dev/null 2>&1
+}
+
+wallpaper_covered() {
+    local disp=":0" auth="$HOME/.Xauthority" cur id type desk w h area total=0
+    cur=$(DISPLAY=$disp XAUTHORITY=$auth xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | grep -o '[0-9]*$')
+    [[ -z "$cur" ]] && return 1
+    for id in $(DISPLAY=$disp XAUTHORITY=$auth xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o '0x[0-9a-f]*'); do
+        type=$(DISPLAY=$disp XAUTHORITY=$auth xprop -id "$id" _NET_WM_WINDOW_TYPE 2>/dev/null)
+        case "$type" in *DOCK*|*DESKTOP*|*SPLASH*|*NOTIFICATION*) continue;; esac
+        desk=$(DISPLAY=$disp XAUTHORITY=$auth xprop -id "$id" _NET_WM_DESKTOP 2>/dev/null | grep -o '[0-9]*$')
+        [[ -z "$desk" ]] && continue
+        [[ "$desk" != "$cur" && "$desk" != "4294967295" ]] && continue
+        eval "$(DISPLAY=$disp XAUTHORITY=$auth xdotool getwindowgeometry --shell "$id" 2>/dev/null | grep -E '^(WIDTH|HEIGHT)=')"
+        w=${WIDTH:-0}; h=${HEIGHT:-0}; unset WIDTH HEIGHT
+        (( w >= 1910 && h >= 1070 )) && return 0
+        area=$(( w * h ))
+        total=$(( total + area ))
+        (( total >= 1970000 )) && return 0
+    done
+    return 1
+}
+
+serve_up() { "$BIN" status >/dev/null 2>&1; }
+
+
+start_sway() {
+    sway_up && return 0
+    printf 'output HEADLESS-1 resolution 1920x1080\nxwayland disable\n' > "$SWAY_CONF"
+    (cd /tmp && WLR_BACKENDS=headless setsid nohup sway -c "$SWAY_CONF" > /tmp/earth-sway.log 2>&1 < /dev/null &)
+    local i
+    for i in $(seq 1 30); do sway_up && return 0; sleep 0.5; done
+    return 1
+}
+
+want_flavor() {
+    [[ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" == "1" ]] && echo ac || echo bat
+}
+
+ensure_flavor() {
+    local want have
+    want="$(want_flavor)"
+    have="$(cat "$STATE/flavor" 2>/dev/null || echo none)"
+    [[ "$want" == "$have" ]] && return 0
+    [[ -f "$AC_BIN" && -f "$BAT_BIN" ]] || return 0
+    "$BIN" stop >/dev/null 2>&1 || true
+    sleep 2
+    if [[ "$want" == "ac" ]]; then cp -f "$AC_BIN" "$BIN"; else cp -f "$BAT_BIN" "$BIN"; fi
+    echo "$want" > "$STATE/flavor"
+    return 1
+}
+start_serve() {
+    serve_up || {
+        mkdir -p "$HOME/.local/state/earth-native"
+        (cd "$REPO" && WAYLAND_DISPLAY=wayland-1 \
+            EARTH_NATIVE_STAR_PANORAMA="$REPO/NativeRenderer/Generated/StarPanorama16K/earth-native-star-panorama.bc1" \
+            EARTH_NATIVE_NASA_DATA="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v" \
+            EARTH_NATIVE_DAY_COLOR_EAST="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/day-east.bgra" \
+            EARTH_NATIVE_DAY_COLOR_WEST="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/day-west.bgra" \
+            EARTH_NATIVE_NIGHT_EMISSION="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/night.bgra" \
+            EARTH_NATIVE_SURFACE_NORMAL_EAST="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/normal-east.bgra" \
+            EARTH_NATIVE_SURFACE_NORMAL_WEST="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/normal-west.bgra" \
+            EARTH_NATIVE_HEIGHT="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/height.bgra" \
+            EARTH_NATIVE_MOON="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/moon.bgra" \
+            EARTH_NATIVE_JUPITER="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/jupiter.bgra" \
+            EARTH_NATIVE_MERCURY="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/mercury.bgra" \
+            EARTH_NATIVE_MARS="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/mars.bgra" \
+            EARTH_NATIVE_SATURN="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/saturn.bgra" \
+            EARTH_NATIVE_SATURN_RING="$REPO/NativeRenderer/Generated/NASA/textures-8192-q5jzhe9v/saturn-ring.bgra" \
+            EARTH_NATIVE_CLOUDS_A="$REPO/NativeRenderer/Generated/CloudsAPreview/earth-native-preview-texture.bgra" \
+            EARTH_NATIVE_CLOUDS_BA="$REPO/NativeRenderer/Generated/CloudsBAPreview/earth-native-preview-texture.bgra" \
+            EARTH_NATIVE_CLOUD_HEIGHT="$REPO/NativeRenderer/Generated/HeightPreview/earth-native-preview-texture.bgra" \
+            EARTH_NATIVE_TILING_NOISE="$REPO/NativeRenderer/Generated/TilingNoisePreview/earth-native-preview-texture.bgra" \
+            EARTH_NATIVE_DESERT_CLOUD_MASK="$REPO/NativeRenderer/Generated/DesertCloudMaskPreview/earth-native-preview-texture.bgra" \
+            EARTH_NATIVE_WEATHER_MANIFEST="$REPO/NativeRenderer/Generated/NASA/weather/current.json" \
+            setsid nohup "$BIN" serve >> "$HOME/.local/state/earth-native/earth-native.log" 2>&1 < /dev/null &)
+        local i
+        for i in $(seq 1 40); do serve_up && break; sleep 0.5; done
+        serve_up || return 1
+        "$BIN" camera 19.46 65.80 5.5 >/dev/null 2>&1 || true
+        sleep 2
+        "$BIN" camera live >/dev/null 2>&1 || true
+    }
+    return 0
+}
+
+stream_up() {
+    alive "$STATE/mpv.pid" || return 1
+    python3 -c "
+import socket, json, sys
+s = socket.socket(socket.AF_UNIX); s.settimeout(3)
+s.connect('$MPV_SOCK')
+s.sendall(json.dumps({'command': ['get_property', 'playback-time']}).encode() + b'\n')
+t = json.loads(s.recv(4096)).get('data')
+sys.exit(0 if isinstance(t, (int, float)) and t > 0 else 1)" 2>/dev/null
+}
+
+start_stream() {
+    stream_up && return 0
+    stop_stream
+    mkdir -p "$STATE"
+    rm -f "$MPV_SOCK"
+    [[ -p "$FIFO" ]] || mkfifo "$FIFO"
+    exec 9<>"$FIFO"
+    (nohup wf-recorder -y -o HEADLESS-1 -r 10 -p rc_mode=CQP -p qp=18 -p g=30 \
+        -c h264_vaapi -d /dev/dri/renderD128 --muxer=mpegts -f "$FIFO" \
+        > /tmp/earth-wf.log 2>&1 < /dev/null & echo $! > "$STATE/wf.pid")
+    (nohup /home/btw/.local/bin/xwinwrap -ov -fs -ni -b -nf -- sh -c 'exec mpv --wid="$1" --no-audio --hwdec=no --vo=x11 --cache-secs=20 --framedrop=no --no-osc --no-osd-bar --no-terminal --input-ipc-server="$2" "$3"' sh WID "$MPV_SOCK" "$FIFO" \
+        > /tmp/earth-mpv.log 2>&1 < /dev/null & echo $! > "$STATE/mpv.pid")
+    local i
+    for i in $(seq 1 30); do stream_up && return 0; sleep 0.5; done
+    return 1
+}
+
+stop_stream() {
+    exec 9>&- 2>/dev/null || true
+    python3 -c "
+import socket, json
+s = socket.socket(socket.AF_UNIX); s.settimeout(3)
+s.connect('$MPV_SOCK')
+s.sendall(json.dumps({'command': ['quit']}).encode() + b'\n')" 2>/dev/null || true
+    sleep 1
+    alive "$STATE/wf.pid" && kill -9 "$(cat "$STATE/wf.pid")" 2>/dev/null || true
+    rm -f "$STATE/mpv.pid" "$STATE/wf.pid" "$MPV_SOCK"
+}
+mpv_pause() {
+    python3 -c "
+import socket, json, sys
+s = socket.socket(socket.AF_UNIX); s.settimeout(3)
+s.connect('"$MPV_SOCK"')
+s.sendall(json.dumps({'command': ['set_property', 'pause', sys.argv[1] == '1']}).encode() + b'\n')" "$1" 2>/dev/null
+}
+
+start_wf_only() {
+    alive "$STATE/wf.pid" && return 0
+    mkdir -p "$STATE"
+    [[ -p "$FIFO" ]] || { rm -f "$FIFO" "$MPV_SOCK"; mkfifo "$FIFO"; }
+    exec 9<>"$FIFO"
+    (nohup wf-recorder -y -o HEADLESS-1 -r 10 -p g=30 \
+        -c h264_vaapi -d /dev/dri/renderD128 --muxer=mpegts -f "$FIFO" \
+        > /tmp/earth-wf.log 2>&1 < /dev/null & echo $! > "$STATE/wf.pid")
+}
+
+freeze_video() {
+    mpv_pause 1
+    alive "$STATE/wf.pid" && kill -9 "$(cat "$STATE/wf.pid")" 2>/dev/null || true
+    echo 1 > "$STATE/covered"
+}
+
+resume_video() {
+    start_wf_only
+    mpv_pause 0
+    echo 0 > "$STATE/covered"
+}
+
+watch_loop() {
+    echo "$$" > "$STATE/watcher.pid"
+    local KP
+    while [[ -S /tmp/.X11-unix/X0 ]]; do
+        DISPLAY=:0 XAUTHORITY="$HOME/.Xauthority" \
+            xprop -root -spy _NET_CLIENT_LIST _NET_CURRENT_DESKTOP _NET_ACTIVE_WINDOW 2>>"$STATE/kick.log" | while IFS= read -r _; do
+                KP="$(cat "$STATE/kicker.pid" 2>/dev/null || echo none)"
+                [[ "$KP" != "none" ]] && kill -USR1 "$KP" 2>/dev/null || true
+            done
+        sleep 2
+    done
+}
+refresh_loop() {
+    exec {EARTH_LOCK_FD}>/tmp/earth-dwm.lock
+    flock -n "$EARTH_LOCK_FD" || exit 0
+    if kicker_alive && [[ "$(cat "$STATE/kicker.pid")" != "$$" ]]; then
+        exit 0
+    fi
+    echo "$(date +%T) kick start $$ mode=${MODE_FORCE:-$(want_flavor)}" >> "$STATE/kick.log"
+    trap 'echo "$(date +%T) kick exit $$ status=$?" >> "$STATE/kick.log"' EXIT
+    echo "$$" > "$STATE/kicker.pid"
+    trap ':' USR1
+    rm -f /tmp/earth-native-scene-capture-*.jpg
+    while [[ -S /tmp/.X11-unix/X0 ]]; do
+        ensure_flavor || start_serve >/dev/null 2>&1 || true
+        date +%s > "$STATE/kicker.hb"
+        mode="${MODE_FORCE:-$(want_flavor)}"
+        lastmode="$(cat "$STATE/mode_last" 2>/dev/null || echo none)"
+        if [[ "$lastmode" == "timelapse" && "$mode" != "timelapse" ]]; then
+            "$BIN" time live >/dev/null 2>&1 || true
+            "$BIN" camera live >/dev/null 2>&1 || true
+        fi
+        echo "$mode" > "$STATE/mode_last"
+        watcher_alive || setsid nohup "$0" watch >> "$STATE/kick.log" 2>&1 < /dev/null &
+        if wallpaper_covered; then
+            [[ "$(cat "$STATE/covered" 2>/dev/null)" != "1" ]] && echo "$(date +%T) wallpaper covered, freezing" >> "$STATE/kick.log"
+            freeze_video
+            sleep "$KICK_INTERVAL"
+            continue
+        fi
+        if [[ "$(cat "$STATE/covered" 2>/dev/null)" == "1" ]]; then
+            echo "$(date +%T) wallpaper visible, resuming" >> "$STATE/kick.log"
+            echo 0 > "$STATE/covered"
+        fi
+        if [[ "$mode" == "ac" ]]; then
+            resume_video
+            "$BIN" camera live >/dev/null 2>&1 || true
+        else
+            stop_stream
+            if [[ "$mode" == "timelapse" ]]; then
+                "$BIN" camera 154.93 18.72 4.9 >/dev/null 2>&1 || true
+                daynow="$(date +%F)"
+                midnight="$(date -d "$daynow" +%s)"
+                nowsec="$(date +%s)"
+                scene=$(( midnight + ( (nowsec - midnight) * ${TIMELAPSE_RATE:-60} % 86400 ) ))
+                "$BIN" time unix "$scene" >/dev/null 2>&1 || true
+                sleep 1
+            fi
+            if out="$("$BIN" capture_frame 2>/dev/null)"; then
+                img="$(printf '%s' "$out" | python3 -c 'import json,sys
+d = json.load(sys.stdin)
+imgs = d.get("images") or []
+print((imgs + [""])[0])')"
+                if [[ -f "${img:-}" ]]; then
+                    cp -f "$img" "$FRAME.tmp" && mv -f "$FRAME.tmp" "$FRAME" \
+                        && DISPLAY=:0 XAUTHORITY="$HOME/.Xauthority" \
+                            feh --no-fehbg --bg-fill "$FRAME" >/dev/null 2>&1
+                fi
+                printf '%s' "$out" | python3 -c 'import json,sys,os,glob
+d = json.load(sys.stdin)
+for p in (d.get("images") or []):
+    for q in (p, p + ".json"):
+        try: os.remove(q)
+        except OSError: pass
+for q in glob.glob("/tmp/earth-native-scene-capture-*.json"):
+    try: os.remove(q)
+    except OSError: pass'
+            fi
+        fi
+        if [[ "$mode" == "timelapse" ]]; then sleep "${TIMELAPSE_INTERVAL:-6}"; else sleep "$KICK_INTERVAL"; fi
+    done
+}
+cmd_start() {
+    mkdir -p "$STATE"
+    start_sway || { echo "earth-dwm-stack: headless sway failed" >&2; return 1; }
+    ensure_flavor || true
+    start_serve || { echo "earth-dwm-stack: serve failed" >&2; return 1; }
+    if ! kicker_alive; then
+        setsid nohup "$0" kick >> "$STATE/kick.log" 2>&1 < /dev/null &
+    fi
+    if ! watcher_alive; then
+        setsid nohup "$0" watch >> "$STATE/kick.log" 2>&1 < /dev/null &
+    fi
+    if [[ -f "$FRAME" ]]; then
+        DISPLAY=:0 XAUTHORITY="$HOME/.Xauthority" \
+            feh --no-fehbg --bg-fill "$FRAME" >/dev/null 2>&1 || true
+    fi
+    echo "earth-dwm-stack: started (live earth wallpaper)"
+}
+cmd_stop() {
+    alive "$STATE/kicker.pid" && kill "$(cat "$STATE/kicker.pid")" 2>/dev/null || true
+    alive "$STATE/watcher.pid" && kill "$(cat "$STATE/watcher.pid")" 2>/dev/null || true
+    stop_stream
+    rm -f "$STATE/kicker.pid" "$STATE/watcher.pid"
+    "$BIN" stop >/dev/null 2>&1 || true
+    local sock
+    if sock="$(sway_sock)"; then
+        SWAYSOCK="$sock" swaymsg exit >/dev/null 2>&1 || true
+    fi
+    echo "earth-dwm-stack: stopped"
+}
+
+cmd_status() {
+    echo "mode: $(want_flavor) (flavor $(cat "$STATE/flavor" 2>/dev/null || echo none))"
+    sway_up && echo "sway: up (HEADLESS-1 1920x1080)" || echo "sway: down"
+    if serve_up; then "$BIN" status 2>/dev/null | head -c 220; echo; else echo "serve: down"; fi
+    if stream_up; then echo "stream: up (xwinwrap video wallpaper)"; else echo "stream: down"; fi
+    if alive "$STATE/kicker.pid"; then echo "refresh: up (pid $(cat "$STATE/kicker.pid"), every ${KICK_INTERVAL}s)"; else echo "refresh: down"; fi
+    if watcher_alive; then echo "watcher: up (pid $(cat "$STATE/watcher.pid"))"; else echo "watcher: down"; fi
+    if [[ -f "$FRAME" ]]; then echo "frame: $FRAME ($(stat -c '%y %s' "$FRAME"))"; else echo "frame: none"; fi
+}
+
+case "${1:-status}" in
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    kick) refresh_loop ;;
+    watch) watch_loop ;;
+    *) echo "usage: earth-dwm-stack {start|stop|status}" >&2; exit 2 ;;
+esac

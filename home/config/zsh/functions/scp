@@ -1,0 +1,595 @@
+	local -a orig_args=("$@") args=() sources=() r_src=() l_src=() rs_opts=() user_o=() _ssh=() 
+	local port="" cipher="" ssh_config="" identity="" jump="" bw_kbit="" 
+	local program="" sftp_server="" 
+	local target="" pending="" a="" s="" norm="" 
+	local want_recurse=0 want_perms=0 quiet=0 batch=0 agent_fwd=0 
+	local use_ipv4=0 use_ipv6=0 verbose=0 compress_ssh=0 legacy=0 
+	local target_is_remote=0 n_remote_src=0 n_local_src=0 have_pending=0 
+	local rc=0 bw=0 i=0 k=0 m=0 is_dir_target=0 contents_only=0 
+	local ssh_cmd="" muxdir="" _rh="" _rp="" _rp_raw="" _ns="" _ct=0 _sq="" 
+	local dest="" base="" rp="" rp_t="" src="" h="" script="" out="" ty="" lk="" dmsg="" 
+	while [ $# -gt 0 ]
+	do
+		case "$1" in
+			(-3) shift ;;
+			(-4) use_ipv4=1 
+				shift ;;
+			(-6) use_ipv6=1 
+				shift ;;
+			(-A) agent_fwd=1 
+				shift ;;
+			(-B) batch=1 
+				shift ;;
+			(-C) compress_ssh=1 
+				shift ;;
+			(-O) legacy=1 
+				shift ;;
+			(-R) shift ;;
+			(-p) want_perms=1 
+				shift ;;
+			(-q) quiet=1 
+				shift ;;
+			(-r) want_recurse=1 
+				shift ;;
+			(-s) shift ;;
+			(-T) shift ;;
+			(-X) shift ;;
+			(-v) verbose=$(( verbose + 1 )) 
+				shift ;;
+			(-c|-F|-i|-J|-P|-S|-D|-l|-o) if [ $# -lt 2 ]
+				then
+					command scp "${orig_args[@]}"
+					return $?
+				fi
+				case "$1" in
+					(-c) cipher="$2"  ;;
+					(-F) ssh_config="$2"  ;;
+					(-i) identity="$2"  ;;
+					(-J) jump="$2"  ;;
+					(-P) port="$2"  ;;
+					(-S) program="$2"  ;;
+					(-D) sftp_server="$2"  ;;
+					(-l) case "$2" in
+							(*[!0-9]*|"") command scp "${orig_args[@]}"
+								return $? ;;
+						esac
+						bw_kbit="$2"  ;;
+					(-o) user_o+=(-o "$2")  ;;
+				esac
+				shift 2 ;;
+			(--) shift
+				break ;;
+			(-*) command scp "${orig_args[@]}"
+				return $? ;;
+			(*) args+=("$1") 
+				shift ;;
+		esac
+	done
+	[ $# -gt 0 ] && args+=("$@") 
+	if [ ${#args[@]} -lt 2 ]
+	then
+		command scp "${orig_args[@]}"
+		return $?
+	fi
+	if [ -n "$program" ] || [ -n "$sftp_server" ] || [ "$legacy" -eq 1 ] || [ "$compress_ssh" -eq 1 ]
+	then
+		command scp "${orig_args[@]}"
+		return $?
+	fi
+	command -v rsync > /dev/null 2>&1 || {
+		command scp "${orig_args[@]}"
+		return $?
+	}
+	_scp_remote () {
+		[[ "$1" == *:* && "${1%%:*}" != */* ]]
+	}
+	_scp_split () {
+		local spec="$1" 
+		if [[ "$spec" == *@\[*"]:"* || "$spec" == \[*"]:"* ]]
+		then
+			_rh="${spec%%\]*}" 
+			_rh="${_rh}]" 
+			_rp="${spec#*\]:}" 
+		else
+			_rh="${spec%%:*}" 
+			_rp="${spec#*:}" 
+		fi
+		_rp_raw="$_rp" 
+		[ -z "$_rp" ] && _rp="." 
+		case "$_rp" in
+			(\~) _rp="."  ;;
+			(\~/*) _rp="./${_rp#\~/}"  ;;
+			(\~*) return 1 ;;
+		esac
+		case "$_rp" in
+			(*[\*\?\[]*) return 1 ;;
+		esac
+		return 0
+	}
+	_scp_norm () {
+		local p="$1" 
+		_ct=0 
+		if [[ "$p" == */. ]]
+		then
+			p="${p%/.}" 
+			_ct=1 
+		fi
+		while [[ "$p" != "/" && "$p" == */ ]]
+		do
+			p="${p%/}" 
+		done
+		_ns="$p" 
+	}
+	_scp_norm () {
+		local p="$1" 
+		_ct=0 
+		if [[ "$p" == */. ]]
+		then
+			p="${p%/.}" 
+			_ct=1 
+		fi
+		while [[ "$p" != "/" && "$p" == */ ]]
+		do
+			p="${p%/}" 
+		done
+		_ns="$p" 
+	}
+	_scp_sq () {
+		_sq=$(printf '%s' "$1" | sed "s/'/'\\\\''/g; 1s/^/'/; \$s/\$/'/") 
+	}
+	local -a _ssho=("${user_o[@]}") 
+	[ "$use_ipv4" -eq 1 ] && _ssho+=(-4) 
+	[ "$use_ipv6" -eq 1 ] && _ssho+=(-6) 
+	[ "$agent_fwd" -eq 1 ] && _ssho+=(-A) 
+	[ "$batch" -eq 1 ] && _ssho+=(-o BatchMode=yes) 
+	if [ -n "$cipher" ]
+	then
+		_ssho+=(-c "$cipher") 
+	else
+		_ssho+=(-c "aes128-gcm@openssh.com,chacha20-poly1305@openssh.com") 
+	fi
+	[ -n "$ssh_config" ] && _ssho+=(-F "$ssh_config") 
+	[ -n "$identity" ] && _ssho+=(-i "$identity") 
+	[ -n "$jump" ] && _ssho+=(-J "$jump") 
+	[ -n "$port" ] && _ssho+=(-p "$port") 
+	i=0 
+	while [ "$i" -lt "$verbose" ]
+	do
+		_ssho+=(-v) 
+		i=$(( i + 1 )) 
+	done
+	[ "$quiet" -eq 1 ] && _ssho+=(-q) 
+	_ssho+=(-T -x -o Compression=no -o IPQoS=throughput -o ServerAliveInterval=15 -o ServerAliveCountMax=4) 
+	muxdir="${XDG_RUNTIME_DIR:-$HOME/.ssh/mux}" 
+	command mkdir -p -- "$muxdir" 2> /dev/null
+	if [ -d "$muxdir" ] && [ -w "$muxdir" ]
+	then
+		_ssho+=(-o ControlMaster=auto -o ControlPersist=60 -o ControlPath="$muxdir/%r@%h:%p") 
+	fi
+	_ssh=(ssh "${_ssho[@]}") 
+	ssh_cmd="ssh" 
+	local _q
+	for _q in "${_ssho[@]}"
+	do
+		ssh_cmd+=" $(printf '%q' "$_q")" 
+	done
+	rs_opts=(--whole-file --inplace -L) 
+	[ "$want_recurse" -eq 1 ] && rs_opts+=(-r) 
+	[ "$want_perms" -eq 1 ] && rs_opts+=(--times --perms) 
+	[ "$quiet" -eq 1 ] && rs_opts+=(-q) 
+	if [ -n "$bw_kbit" ]
+	then
+		bw=$(( bw_kbit / 8 )) 
+		[ "$bw" -lt 1 ] && bw=1 
+		rs_opts+=("--bwlimit=$bw") 
+	fi
+	rs_opts+=(-e "$ssh_cmd") 
+	if [ "$quiet" -eq 0 ]
+	then
+		if [ -t 1 ] || [ -t 2 ]
+		then
+			rs_opts+=(--info=progress2) 
+		fi
+	fi
+	for a in "${args[@]}"
+	do
+		if [ "$have_pending" -eq 1 ]
+		then
+			sources+=("$pending") 
+		fi
+		pending="$a" 
+		have_pending=1 
+	done
+	target="$pending" 
+	for s in "${sources[@]}"
+	do
+		if _scp_remote "$s"
+		then
+			r_src+=("$s") 
+		else
+			l_src+=("$s") 
+		fi
+	done
+	n_remote_src=${#r_src[@]} 
+	n_local_src=${#l_src[@]} 
+	if _scp_remote "$target"
+	then
+		target_is_remote=1 
+	fi
+	if [ "$target_is_remote" -eq 1 ] && [ "$n_remote_src" -eq 0 ]
+	then
+		_scp_split "$target" || {
+			command scp "${orig_args[@]}"
+			return $?
+		}
+		local rhost="$_rh" rdest="$_rp" rdest_raw="$_rp_raw" 
+		while [[ "$rdest" != "/" && "$rdest" == */ ]]
+		do
+			rdest="${rdest%/}" 
+		done
+		local slash_typed=0 single=0 errs=0 
+		[[ "$rdest_raw" == */ ]] && slash_typed=1 
+		[ "${#l_src[@]}" -eq 1 ] && single=1 
+		local -a batch=() 
+		for s in "${l_src[@]}"
+		do
+			local ss="$s" 
+			while [[ "$ss" != "/" && "$ss" == */ ]]
+			do
+				ss="${ss%/}" 
+			done
+			if [ ! -e "$ss" ]
+			then
+				if [ "${#batch[@]}" -gt 0 ]
+				then
+					rsync "${rs_opts[@]}" "${batch[@]}" "$rhost:$rdest" >&2
+					rc=$? 
+					case "$rc" in
+						(0)  ;;
+						(12|14) command scp "${orig_args[@]}"
+							return $? ;;
+						(*) return 1 ;;
+					esac
+					batch=() 
+				fi
+				print -u2 "scp: stat local \"$s\": No such file or directory"
+				return 255
+			fi
+			if [ -d "$ss" ] && [ "$want_recurse" -eq 0 ]
+			then
+				print -u2 "scp: local \"$s\" is not a regular file"
+				print -u2 "scp: failed to upload file $s to $rdest_raw"
+				errs=1 
+				continue
+			fi
+			_scp_norm "$s"
+			if [ "$_ct" -eq 1 ]
+			then
+				batch+=("$_ns/") 
+			else
+				batch+=("$_ns") 
+			fi
+		done
+		if [ "${#batch[@]}" -eq 0 ]
+		then
+			return $errs
+		fi
+		local s1s="${l_src[1]}" 
+		while [[ "$s1s" != "/" && "$s1s" == */ ]]
+		do
+			s1s="${s1s%/}" 
+		done
+		local dest_kind="?" parent_kind="?" 
+		_scp_sq "$rdest"
+		local _rsq="$_sq" _psq="" 
+		local pd="${rdest%/*}" 
+		[ "$pd" = "$rdest" ] && pd="." 
+		[ -z "$pd" ] && pd="/" 
+		_scp_sq "$pd"
+		_psq="$_sq" 
+		script="{ test -d $_rsq && echo DIR || { test -e $_rsq && echo OTHER || echo MISSING; }; }; { test -e $_psq && echo EXISTS || echo MISSING; }" 
+		if out=$("${_ssh[@]}" "$rhost" "$script" 2>/dev/null) 
+		then
+			lines=("${(@f)out}") 
+			if [ "${#lines[@]}" -eq 2 ] && [ -n "${lines[1]}" ] && [ -n "${lines[2]}" ]
+			then
+				case "${lines[1]}" in
+					(MISSING) dest_kind="missing"  ;;
+					(DIR) dest_kind="dir"  ;;
+					(OTHER) dest_kind="other"  ;;
+					(*) dest_kind="?"  ;;
+				esac
+				case "${lines[2]}" in
+					(MISSING) parent_kind="missing"  ;;
+					(*) parent_kind="exists"  ;;
+				esac
+			fi
+		fi
+		if [ "$dest_kind" = "other" ]
+		then
+			if [ "$single" -eq 1 ] && [ ! -d "$s1s" ]
+			then
+				if [ "$slash_typed" -eq 1 ]
+				then
+					print -u2 "scp: dest open \"$rdest_raw\": Failure"
+					print -u2 "scp: failed to upload file ${l_src[1]} to $rdest_raw"
+					return 1
+				fi
+				:
+			elif [ "$single" -eq 1 ]
+			then
+				command scp "${orig_args[@]}"
+				return $?
+			else
+				print -u2 "scp: remote mkdir \"$rdest_raw\": Failure"
+				return 255
+			fi
+		elif [ "$dest_kind" = "missing" ] && [ "$parent_kind" = "missing" ]
+		then
+			if [ "$single" -eq 1 ] && [ ! -d "$s1s" ]
+			then
+				print -u2 "scp: dest open \"$rdest_raw\": No such file or directory"
+				print -u2 "scp: failed to upload file ${l_src[1]} to $rdest_raw"
+				return 1
+			elif [ "$single" -eq 1 ]
+			then
+				command scp "${orig_args[@]}"
+				return $?
+			else
+				print -u2 "scp: remote mkdir \"$rdest_raw\": No such file or directory"
+				return 255
+			fi
+		elif [ "$dest_kind" = "missing" ]
+		then
+			if [ "$single" -eq 1 ] && [ ! -d "$s1s" ]
+			then
+				if [ "$slash_typed" -eq 1 ]
+				then
+					print -u2 "scp: dest open \"$rdest_raw\": Failure"
+					print -u2 "scp: failed to upload file ${l_src[1]} to $rdest_raw"
+					return 1
+				fi
+				:
+			elif [ "$single" -eq 1 ]
+			then
+				if [ "$slash_typed" -eq 1 ]
+				then
+					command scp "${orig_args[@]}"
+					return $?
+				fi
+				batch[1]="${batch[1]%/}/" 
+			else
+				:
+			fi
+		fi
+		rsync "${rs_opts[@]}" "${batch[@]}" "$rhost:$rdest" >&2
+		rc=$? 
+		case "$rc" in
+			(0)  ;;
+			(12|14) command scp "${orig_args[@]}"
+				return $? ;;
+			(*) return 1 ;;
+		esac
+		return $errs
+	fi
+	if [ "$target_is_remote" -eq 0 ] && [ "$n_local_src" -eq 0 ] && [ "$n_remote_src" -ge 1 ]
+	then
+		local slash_typed=0 
+		[[ "$target" == */ ]] && slash_typed=1 
+		local ts="$target" 
+		while [[ "$ts" != "/" && "$ts" == */ ]]
+		do
+			ts="${ts%/}" 
+		done
+		local -a dl_hosts=() dl_norm=() dl_typed=() dl_ct=() dl_kind=() _uh=() idxs=() lines=() 
+		for s in "${r_src[@]}"
+		do
+			_scp_split "$s" || {
+				command scp "${orig_args[@]}"
+				return $?
+			}
+			dl_hosts+=("$_rh") 
+			dl_typed+=("$_rp_raw") 
+			_scp_norm "$_rp"
+			dl_norm+=("$_ns") 
+			dl_ct+=("$_ct") 
+			dl_kind+=("?") 
+		done
+		for h in "${dl_hosts[@]}"
+		do
+			case " ${_uh[@]} " in
+				(*" $h "*)  ;;
+				(*) _uh+=("$h")  ;;
+			esac
+		done
+		for h in "${_uh[@]}"
+		do
+			script="" 
+			idxs=() 
+			for ((k=1; k<=${#dl_hosts[@]}; k++)) do
+				if [ "${dl_hosts[$k]}" = "$h" ]
+				then
+					idxs+=("$k") 
+					_scp_sq "${dl_norm[$k]}"
+					script+="{ test -d $_sq && echo DIR || { test -f $_sq && echo FILE || { test -e $_sq && echo OTHER || echo MISSING; }; }; }; { test -L $_sq && echo LINK || echo NOLINK; }; " 
+				fi
+			done
+			if out=$("${_ssh[@]}" "$h" "$script" 2>/dev/null) 
+			then
+				lines=("${(@f)out}") 
+				if [ "${#lines[@]}" -eq "$(( ${#idxs[@]} * 2 ))" ]
+				then
+					local valid=1 
+					for ((m=1; m<=${#idxs[@]}; m++)) do
+						ty="${lines[$(( m * 2 - 1 ))]}" 
+						lk="${lines[$(( m * 2 ))]}" 
+						case "$ty" in
+							(DIR|FILE|OTHER|MISSING)  ;;
+							(*) valid=0 
+								break ;;
+						esac
+						if [ "$lk" != "LINK" ] && [ "$lk" != "NOLINK" ]
+						then
+							valid=0 
+							break
+						fi
+					done
+					if [ "$valid" -eq 1 ]
+					then
+						for ((m=1; m<=${#idxs[@]}; m++)) do
+							ty="${lines[$(( m * 2 - 1 ))]}" 
+							lk="${lines[$(( m * 2 ))]}" 
+							local kk=${idxs[$m]} 
+							if [ "$ty" = "MISSING" ]
+							then
+								dl_kind[$kk]="missing" 
+							elif [ "$lk" = "LINK" ]
+							then
+								command scp "${orig_args[@]}"
+								return $?
+							elif [ "$ty" = "DIR" ]
+							then
+								dl_kind[$kk]="dir" 
+							elif [ "$ty" = "FILE" ]
+							then
+								dl_kind[$kk]="file" 
+							else
+								command scp "${orig_args[@]}"
+								return $?
+							fi
+						done
+					fi
+				fi
+			fi
+		done
+		local errs=0 
+		if [ "$n_remote_src" -gt 1 ]
+		then
+			if [ ! -e "$ts" ] && [ ! -L "$ts" ]
+			then
+				print -u2 "${target}: No such file or directory"
+				return 1
+			fi
+			if [ ! -d "$ts" ]
+			then
+				print -u2 "${target}: Not a directory"
+				return 1
+			fi
+			is_dir_target=1 
+		else
+			is_dir_target=0 
+			[ -d "$ts" ] && is_dir_target=1 
+		fi
+		for ((k=1; k<=${#r_src[@]}; k++)) do
+			rp="${dl_norm[$k]}" 
+			rp_t="${dl_typed[$k]}" 
+			if [ "${dl_kind[$k]}" = "missing" ]
+			then
+				print -u2 "scp: ${rp_t}: No such file or directory"
+				errs=1 
+				continue
+			fi
+			if [ "${dl_kind[$k]}" = "dir" ] && [ "$want_recurse" -eq 0 ]
+			then
+				dmsg="${rp}/" 
+				[ "$rp" = "/" ] && dmsg="/" 
+				print -u2 "scp: download ${dmsg}: not a regular file"
+				errs=1 
+				continue
+			fi
+			if [ "$n_remote_src" -eq 1 ] && [ ! -e "$ts" ] && [ ! -L "$ts" ]
+			then
+				if [ "${dl_kind[$k]}" = "dir" ]
+				then
+					if ! command mkdir -- "$target" 2> /dev/null
+					then
+						print -u2 "scp: mkdir ${target}: No such file or directory"
+						return 1
+					fi
+					dest="$target" 
+					src="${dl_hosts[$k]}:$rp/" 
+				elif [ "$slash_typed" -eq 1 ]
+				then
+					local pt="$ts" 
+					local pp="${pt%/*}" 
+					[ "$pp" = "$pt" ] && pp="." 
+					[ -z "$pp" ] && pp="/" 
+					if [ ! -e "$pp" ]
+					then
+						print -u2 "scp: open local \"${target}\": No such file or directory"
+					else
+						print -u2 "scp: open local \"${target}\": Is a directory"
+					fi
+					errs=1 
+					continue
+				else
+					local pp2="${ts%/*}" 
+					[ "$pp2" = "$ts" ] && pp2="." 
+					[ -z "$pp2" ] && pp2="/" 
+					if [ ! -e "$pp2" ]
+					then
+						print -u2 "scp: open local \"${target}\": No such file or directory"
+						errs=1 
+						continue
+					fi
+					dest="$target" 
+					src="${dl_hosts[$k]}:$rp" 
+				fi
+			else
+				if [ "$n_remote_src" -eq 1 ] && [ ! -d "$ts" ]
+				then
+					if [ "${dl_kind[$k]}" = "dir" ]
+					then
+						command scp "${orig_args[@]}"
+						return $?
+					fi
+					if [ "$slash_typed" -eq 1 ] && [ "${dl_kind[$k]}" != "?" ]
+					then
+						print -u2 "scp: open local \"${target}\": Is a directory"
+						errs=1 
+						continue
+					fi
+				fi
+				if [ "${dl_ct[$k]}" -eq 1 ] || [ "$rp" = "." ] || [ "$rp" = "/" ]
+				then
+					contents_only=1 
+				else
+					contents_only=0 
+					base="${rp##*/}" 
+				fi
+				if [ "$is_dir_target" -eq 1 ]
+				then
+					if [ "$contents_only" -eq 1 ]
+					then
+						dest="$target" 
+						src="${dl_hosts[$k]}:$rp/" 
+					else
+						case "$target" in
+							(*/) dest="${target}${base}"  ;;
+							(*) dest="${target}/${base}"  ;;
+						esac
+						src="${dl_hosts[$k]}:$rp" 
+					fi
+				else
+					dest="$target" 
+					if [ "$contents_only" -eq 1 ]
+					then
+						src="${dl_hosts[$k]}:$rp/" 
+					else
+						src="${dl_hosts[$k]}:$rp" 
+					fi
+				fi
+			fi
+			rsync "${rs_opts[@]}" "$src" "$dest" >&2
+			rc=$? 
+			case "$rc" in
+				(0)  ;;
+				(12|14) command scp "${orig_args[@]}"
+					return $? ;;
+				(*) return 1 ;;
+			esac
+		done
+		return $errs
+	fi
+	command scp "${orig_args[@]}"
+	return $?

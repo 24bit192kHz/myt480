@@ -1,0 +1,38 @@
+From 0e01af23c8f8a9f821dcc415a87430322f8a7604 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:06:32 +0300
+Subject: [PATCH 12/14] at_keyboard coreboot: Skip the self-test ping
+
+grub_at_keyboard_is_alive() sent 0xaa and compared the next data byte
+with 0x55, consuming any key typed before GRUB started, so neither a held
+Shift nor an early Esc reached the decoder (reproduced in QEMU). coreboot
+boards that use this driver have a controller; initialise it directly
+unless the status port floats at 0xff.
+---
+ grub-core/term/at_keyboard.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index e6846032f..19f611ede 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -236,6 +236,16 @@ grub_at_keyboard_is_alive (void)
+ {
+   if (ps2_state.current_set != 0)
+     return 1;
++#if defined (GRUB_MACHINE_COREBOOT)
++  /* The self-test ping below reads the data port while waiting for 0x55
++     and so throws away keys typed before GRUB started.  coreboot boards
++     using this driver have a controller; only a floating bus (0xff) means
++     there is none.  */
++  if (grub_inb (KEYBOARD_REG_STATUS) == 0xff)
++    return 0;
++  grub_keyboard_controller_init ();
++  return 1;
++#endif
+   if (ping_sent
+       && KEYBOARD_COMMAND_ISREADY (grub_inb (KEYBOARD_REG_STATUS))
+       && grub_inb (KEYBOARD_REG_DATA) == 0x55)
+-- 
+2.55.0
+

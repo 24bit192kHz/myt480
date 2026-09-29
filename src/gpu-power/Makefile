@@ -1,0 +1,11 @@
+CFLAGS ?= -O2 -Wall -Wextra -std=c99
+
+gpu-power: gpu-power.c
+	$(CC) $(CFLAGS) -o $@ gpu-power.c
+
+install: gpu-power
+	install -D -m 4755 -o root -g root gpu-power $(DESTDIR)/usr/local/bin/gpu-power
+	install -D -m 755 -o root -g root prime-run $(DESTDIR)/usr/local/bin/prime-run
+
+clean:
+	rm -f gpu-power

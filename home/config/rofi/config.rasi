@@ -1,0 +1,18 @@
+/* rofi — chadwm launcher; colours from grayscale.rasi (theme-sync.sh, palette.conf) */
+configuration {
+    modi:                   "drun,run,window,filebrowser";
+    font:                   "JetBrainsMono Nerd Font Mono 13";
+    show-icons:             true;
+    icon-theme:             "matefaenzadark";
+    terminal:               "st";
+    drun-display-format:    "{icon} {name}";
+    drun-use-desktop-cache: true;   /* parse .desktop files once, not per open */
+    display-drun:           "  Apps";
+    display-run:            "  Run";
+    display-window:         "  Windows";
+    display-filebrowser:    "  Files";
+    disable-history:        false;
+    case-smart:             true;
+    location:               0;
+}
+@theme "/home/btw/.config/rofi/grayscale.rasi"

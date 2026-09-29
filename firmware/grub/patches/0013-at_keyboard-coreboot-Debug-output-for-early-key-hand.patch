@@ -1,0 +1,40 @@
+From 8b22728ecaa96e67df1c349dc568b3b9767a3bc5 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:07:10 +0300
+Subject: [PATCH 13/14] at_keyboard coreboot: Debug output for early key
+ handling (debug=atkeyb)
+
+---
+ grub-core/term/at_keyboard.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index 19f611ede..e5a0e10bc 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -302,6 +302,7 @@ grub_keyboard_controller_init (void)
+   unsigned int npending = 0, i;
+ #endif
+ 
++  grub_dprintf ("atkeyb", "controller init\n");
+   ps2_state.at_keyboard_status = 0;
+   /* Drain input buffer. */
+   while (1)
+@@ -347,10 +348,14 @@ grub_keyboard_controller_init (void)
+ 	  grub_millisleep (1);
+ 	}
+       ps2_state.current_set = (ctl & KEYBOARD_AT_TRANSLATE) ? 1 : 2;
++      grub_dprintf ("atkeyb", "%u early byte(s), ctl 0x%x, set %d\n",
++		    npending, ctl, ps2_state.current_set);
+       for (i = 0; i < npending; i++)
+ 	if (grub_ps2_process_incoming_byte (&ps2_state, pending[i])
+ 	    == GRUB_TERM_ESC)
+ 	  early_key = GRUB_TERM_ESC;
++      grub_dprintf ("atkeyb", "early status 0x%x esc %d\n",
++		    ps2_state.at_keyboard_status, early_key == GRUB_TERM_ESC);
+     }
+ #endif
+ #if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
+-- 
+2.55.0
+

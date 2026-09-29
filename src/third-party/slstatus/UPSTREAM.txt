@@ -1,0 +1,2 @@
+upstream: git://git.suckless.org/slstatus
+commit: 675c83912ea1aca9834448aaa87a040bc9990c52

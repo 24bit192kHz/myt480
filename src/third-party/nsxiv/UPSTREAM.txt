@@ -1,0 +1,2 @@
+upstream: https://github.com/nsxiv/nsxiv
+commit: 691574e5192d255560df0b74e625e2522e9accfd

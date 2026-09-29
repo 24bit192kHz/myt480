@@ -1,0 +1,46 @@
+From d34401b275f0755a76374f6e02df7328eb341c8a Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:52:41 +0300
+Subject: [PATCH 05/14] term/at_keyboard: Report modifier state via
+ getkeystatus
+
+at_keyboard tracked Shift/Ctrl/Alt in ps2_state but never exported it,
+so "keystatus --shift" was always false and holding Shift could not
+interrupt a hidden timeout on PS/2 keyboards (every ThinkPad).
+---
+ grub-core/term/at_keyboard.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index f8a129eb7..3d6b491a4 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -321,11 +321,24 @@ grub_at_restore_hw (void)
+ }
+ 
+ 
++/* Modifier state as tracked from the scancodes read so far, so that
++   "keystatus --shift" and holding Shift to interrupt a hidden timeout
++   work with a PS/2 keyboard too.  */
++static int
++grub_at_keyboard_getkeystatus (struct grub_term_input *term __attribute__ ((unused)))
++{
++  if (!grub_at_keyboard_is_alive ())
++    return 0;
++
++  return ps2_state.at_keyboard_status;
++}
++
+ static struct grub_term_input grub_at_keyboard_term =
+   {
+     .name = "at_keyboard",
+     .fini = grub_keyboard_controller_fini,
+-    .getkey = grub_at_keyboard_getkey
++    .getkey = grub_at_keyboard_getkey,
++    .getkeystatus = grub_at_keyboard_getkeystatus
+   };
+ 
+ GRUB_MOD_INIT(at_keyboard)
+-- 
+2.55.0
+

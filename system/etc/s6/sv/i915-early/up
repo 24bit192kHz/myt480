@@ -1,0 +1,4 @@
+#!/bin/execlineb -P
+# Load i915 before udev coldplug (~0.25 s after s6 start instead of ~2 s):
+# X waits for the i915 KMS node, and udevd only reaches the GPU late.
+foreground { modprobe -q i915 }

@@ -1,0 +1,15 @@
+post_install() {
+  cat <<'EOF'
+==> validity-rs is installed but not enabled.
+    It must NEVER run at the same time as python3-validity.
+    Config example: /usr/share/doc/validity-rs/validity-rs.conf.example
+    Switch-over, verification and rollback: /usr/share/doc/validity-rs/INSTALL.md
+EOF
+}
+
+post_upgrade() {
+  cat <<'EOF'
+==> validity-rs upgraded; restart it to run the new binary:
+    s6 live restart validity-rs
+EOF
+}

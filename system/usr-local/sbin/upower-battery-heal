@@ -1,0 +1,87 @@
+#!/bin/sh
+# upower-battery-heal -- recover UPower BAT1 energy-full after EC garbage reads.
+#
+# Context: T480 + coreboot H8 EC. Across suspend/resume (and boot EC
+# restarts) the fuel gauge briefly reports garbage charge_now. UPower 1.91.3
+# has a ratchet QUIRK (src/up-device-battery.c: "Increase energy_full if
+# energy.cur is higher") with no validation, so energy-full gets pinned to
+# the spike (63 Wh -> 400-488 Wh) until upowerd restarts. Stale history in
+# /var/lib/upower cements it.
+#
+# Usage: upower-battery-heal [--check|--force]   (default: --check)
+#   --check: heal only if D-Bus EnergyFull > 1.5x EnergyFullDesign
+#   --force: heal unconditionally (waits for EC settle first)
+set -u
+LOCK=/run/lock/upower-battery-heal.lock
+BUS=org.freedesktop.UPower
+DEV=/org/freedesktop/UPower/devices/battery_BAT1
+IFACE=org.freedesktop.UPower.Device
+TAG=upower-battery-heal
+
+log() { logger -t "$TAG" "$*"; echo "$TAG: $*"; }
+
+dbval() {
+  busctl --system get-property "$BUS" "$DEV" "$IFACE" "$1" 2>/dev/null | awk '{print $2}'
+}
+
+sysfs_sane() {
+  cf=$(cat /sys/class/power_supply/BAT1/charge_full 2>/dev/null) || return 1
+  cn=$(cat /sys/class/power_supply/BAT1/charge_now 2>/dev/null) || return 1
+  vn=$(cat /sys/class/power_supply/BAT1/voltage_now 2>/dev/null) || return 1
+  [ -n "$cf" ] && [ -n "$cn" ] && [ -n "$vn" ] || return 1
+  # charge_now must not exceed charge_full by more than 20%
+  [ "$cn" -le $(( cf + cf / 5 )) ] || return 1
+  # voltage_now must be in a plausible 9-13.5V window
+  [ "$vn" -ge 9000000 ] && [ "$vn" -le 13500000 ] || return 1
+  return 0
+}
+
+wait_settle() {
+  i=0
+  while [ "$i" -lt 30 ]; do
+    sysfs_sane && return 0
+    sleep 1
+    i=$((i+1))
+  done
+  return 1
+}
+
+do_heal() {
+  rm -f /var/lib/upower/*45N1057* /var/lib/upower/*generic_id*
+  pkill -x upowerd 2>/dev/null || true
+  # daemon D-Bus-activates on next read; retry until it answers
+  i=0
+  ef=""
+  while [ "$i" -lt 5 ]; do
+    sleep 2
+    ef=$(dbval EnergyFull)
+    [ -n "$ef" ] && break
+    i=$((i+1))
+  done
+  log "healed, BAT1 EnergyFull now ${ef:-unknown} (daemon auto-respawned via D-Bus)"
+}
+
+exec 9>"$LOCK" 2>/dev/null || exec 9>/tmp/upower-battery-heal.lock
+flock -n 9 || { echo "another heal in progress, exiting"; exit 0; }
+
+mode=${1:---check}
+case "$mode" in
+  --force)
+    wait_settle || log "warning: sysfs still insane after 30s, healing anyway"
+    do_heal
+    ;;
+  *)
+    ef=$(dbval EnergyFull)
+    design=$(dbval EnergyFullDesign)
+    if [ -z "$ef" ] || [ -z "$design" ]; then echo "cannot read D-Bus values, skipping"; exit 0; fi
+    bad=$(awk -v e="$ef" -v d="$design" 'BEGIN{print ((d>0) && (e/d>1.5)) ? 1 : 0}')
+    if [ "$bad" = 1 ]; then
+      log "corrupt BAT1 EnergyFull=$ef vs design=$design, waiting for EC settle"
+      wait_settle || log "warning: sysfs still insane after 30s, healing anyway"
+      do_heal
+    else
+      echo "OK: BAT1 EnergyFull=$ef design=$design"
+    fi
+    ;;
+esac
+exit 0

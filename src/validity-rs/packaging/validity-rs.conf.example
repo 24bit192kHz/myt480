@@ -1,0 +1,51 @@
+# /etc/validity-rs.conf — example for the ThinkPad T480 (06cb:009a)
+#
+# Format: `key = value`, one per line; `#` starts a comment line.
+# Every key is optional; without this file validity-rs uses the live DMI
+# identity only and the defaults below.
+#
+# --- Pairing identity -------------------------------------------------------
+#
+# When the sensor is paired, the host's private key is stored on the sensor's
+# flash, encrypted with keys derived from the host's SMBIOS identity
+# (product_name + product_serial, i.e. /sys/class/dmi/id/product_name and
+# /sys/class/dmi/id/product_serial). python-validity always uses the *live*
+# DMI values, so changing firmware (stock Lenovo BIOS <-> coreboot) changes
+# the identity, the pairing no longer unlocks, and the only way back is a
+# factory reset + re-pairing, which throws away every enrolled finger.
+#
+# validity-rs tries identities in this order and uses the first one whose
+# keys authenticate the pairing blob:
+#   1. every `hwkey` line (pinned), in file order
+#   2. the live DMI identity
+#   3. every `hwkey_fallback` line, in file order
+# A factory-fresh sensor is paired with the first identity in that list,
+# so pinning keeps future pairings stable too.
+# Values are "<product name> <serial>"; the serial is the last word, so the
+# product name may contain spaces.
+
+# coreboot's SMBIOS identity (product_name "T480", serial "123456789").
+# The current pairing on this machine is sealed with it.
+hwkey = T480 123456789
+
+# The stock Lenovo BIOS identity of this T480 (machine type 20L6S4VC00,
+# serial PF0XXXXX): lets the pairing still unlock if the machine is ever
+# booted on (or was paired under) the stock firmware.
+hwkey_fallback = 20L6S4VC00 PF0XXXXX
+
+# --- Users -------------------------------------------------------------------
+#
+# Fingers are stored on the chip under a Windows-style SID. By default a user
+# maps to S-1-5-21-111111111-1111111111-1111111111-<uid> (same as
+# python-validity, so existing enrollments keep working). Override per user:
+#sid.btw = S-1-5-21-111111111-1111111111-1111111111-1000
+
+# --- Misc --------------------------------------------------------------------
+#
+# Where calib-data.bin (and optionally the fwext firmware file) live.
+# /var/lib/python-validity and /var/run/python-validity are also searched,
+# and calib-data.bin is imported from there on the first start.
+#data_dir = /var/lib/validity-rs
+
+# Pause after a failed capture before the next identify attempt, in ms.
+#retry_delay_ms = 1000

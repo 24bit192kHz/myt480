@@ -1,0 +1,33 @@
+From 00d190b326c505a566bb38dc0e50f263b10896ce Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 15:07:57 +0300
+Subject: [PATCH 3/3] dp_info: Use link N = 0x80000 like Linux i915
+
+The link M/N ratio is unchanged, but i915 compares M/N values exactly when
+deciding whether it can keep the pre-OS mode (fastset). libgfxinit's
+0x100000 made an identical ratio look different (539045/1048576 vs
+269522/524288 for 138.8 MHz on HBR), forcing a full modeset with a panel
+power cycle at boot.
+---
+ common/hw-gfx-dp_info.adb | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/common/hw-gfx-dp_info.adb b/common/hw-gfx-dp_info.adb
+index 09e3da6..a091924 100644
+--- a/common/hw-gfx-dp_info.adb
++++ b/common/hw-gfx-dp_info.adb
+@@ -253,7 +253,10 @@ package body HW.GFX.DP_Info is
+       Link_N   :    out N_Type)
+    is
+       DATA_N_MAX : constant := 16#800000#;
+-      LINK_N_MAX : constant := 16#100000#;
++      -- Linux i915 always uses N = 0x80000 for the link M/N; using the
++      -- same N keeps the values bit-identical so i915 can take over the
++      -- firmware's mode (fastset) instead of forcing a full modeset.
++      LINK_N_MAX : constant := 16#80000#;
+ 
+       subtype Calc_M_Type is Int64 range 0 .. 2 ** 38;
+       subtype Calc_N_Type is Int64 range 0 .. 2 ** 38;
+-- 
+2.55.0
+

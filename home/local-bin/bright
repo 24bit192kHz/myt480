@@ -1,0 +1,79 @@
+#!/bin/sh
+# bright: backlight helper for everything but the Fn keys (those are handled
+# in the kernel by blkeys, which also triggers saving via udev).
+# Usage: bright up|down|set PCT|get|lock|unlock|restore
+#   up/down   one perceptual step (same cubic curve and 5 % step as blkeys);
+#             bar click/scroll
+#   lock      remember the current level, then force 100 % (idempotent: a
+#             second lock keeps the first saved level)
+#   unlock    back to the remembered level; restore = unlock
+# State is shared with /usr/local/sbin/backlight-state (udev, root):
+# /var/lib/backlight/level = "<dev> <brightness> <max>", and
+# /var/lib/backlight/locked marks the lock so its 100 % is never saved.
+set -eu
+DIR=/var/lib/backlight
+STEP=0.05
+
+# same preference as blkeys: raw (native GPU) > platform > firmware
+pick() {
+	for t in raw platform firmware; do
+		for d in /sys/class/backlight/*; do
+			[ "$(cat "$d/type" 2>/dev/null)" = "$t" ] && { echo "$d"; return; }
+		done
+	done
+	return 1
+}
+sys=$(pick) || { echo "bright: no backlight" >&2; exit 1; }
+dev=${sys##*/}
+read -r cur < "$sys/brightness"
+read -r max < "$sys/max_brightness"
+
+put() { echo "$1" > "$sys/brightness"; }
+save() {
+	[ -d "$DIR" ] || return 0
+	printf '%s %s %s\n' "$dev" "$1" "$max" > "$DIR/.level.$$" &&
+		chmod 664 "$DIR/.level.$$" && mv -f "$DIR/.level.$$" "$DIR/level"
+}
+saved() {
+	read -r sdev sval smax < "$DIR/level" 2>/dev/null && [ "${smax:-0}" -gt 0 ] 2>/dev/null || { echo "$max"; return; }
+	if [ "$sdev" = "$dev" ] && [ "$smax" = "$max" ]; then echo "$sval"
+	else echo $(( (sval * max + smax / 2) / smax )); fi
+}
+# raw -> perceptual position -> +-STEP -> raw, always moving at least 1
+nudge() {
+	awk -v c="$cur" -v m="$max" -v d="$1" -v s="$STEP" 'BEGIN {
+		lo = (m > 1) ? 1 : 0; r = m - lo
+		p = (c > lo && r > 0) ? exp(log((c - lo) / r) / 3) : 0
+		p += d * s; if (p < 0) p = 0; if (p > 1) p = 1
+		v = int(lo + r * p * p * p + 0.5)
+		if (v == c) v = c + d
+		if (v < lo) v = lo; if (v > m) v = m
+		print v }'
+}
+
+case ${1:-} in
+up | down)
+	[ "$1" = up ] && d=1 || d=-1
+	v=$(nudge $d); put "$v"
+	[ -e "$DIR/locked" ] || save "$v"
+	;;
+set)
+	pct=${2:?need percent}
+	v=$(( pct * max / 100 )); [ "$v" -ge 1 ] || v=1
+	put "$v"
+	[ -e "$DIR/locked" ] || save "$v"
+	;;
+get) echo $(( cur * 100 / max )) ;;
+lock)
+	if [ ! -e "$DIR/locked" ]; then save "$cur"; : > "$DIR/locked"; fi
+	put "$max"
+	;;
+unlock | restore)
+	put "$(saved)"
+	rm -f "$DIR/locked"
+	;;
+*) echo "usage: bright up|down|set PCT|get|lock|unlock|restore" >&2; exit 2 ;;
+esac
+# the bar redraws on SIGUSR1 (sysfs writes raise no uevent)
+f=${XDG_RUNTIME_DIR:-/tmp}/chadwm-bar.pid
+[ -r "$f" ] && kill -USR1 "$(cat "$f")" 2>/dev/null || true

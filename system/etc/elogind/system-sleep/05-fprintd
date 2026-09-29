@@ -1,0 +1,8 @@
+#!/bin/sh
+# open-fprintd suspend/resume (what open-fprintd-{suspend,resume}.service do
+# on systemd). Without it the Validity 06cb:009a sensor is wedged after sleep.
+case "$1" in
+  pre)  /usr/lib/open-fprintd/suspend.py >/dev/null 2>&1 || true ;;
+  post) /usr/lib/open-fprintd/resume.py  >/dev/null 2>&1 || true ;;
+esac
+exit 0

@@ -1,0 +1,20 @@
+From 61c71ac243d13f8cae32f99a84255f4e74d566ac Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 15:07:58 +0300
+Subject: [PATCH 06/13] 3rdparty/libgfxinit: link N = 0x80000 (i915-identical
+ M/N)
+
+---
+ 3rdparty/libgfxinit | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/3rdparty/libgfxinit b/3rdparty/libgfxinit
+index 94c8f92b1c..00d190b326 160000
+--- a/3rdparty/libgfxinit
++++ b/3rdparty/libgfxinit
+@@ -1 +1 @@
+-Subproject commit 94c8f92b1c517a35e8cebd31de455af98fbab8ae
++Subproject commit 00d190b326c505a566bb38dc0e50f263b10896ce
+-- 
+2.55.0
+

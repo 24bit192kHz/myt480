@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Render a full local day (1440 frames, one per minute) for zero-GPU playback.
+set -u
+REPO="/home/btw/test/earth-80k-native-renderer"
+BIN="$REPO/NativeRenderer/earth-native/target/release/earth-native"
+RT="/home/btw/.local/state/earth-batch-rt"
+DAY="${1:-$(date +%F)}"
+DEST="$HOME/.local/share/earth-daycache/$DAY"
+mkdir -p "$DEST"
+export XDG_RUNTIME_DIR="$RT"
+for m in $(seq 0 1439); do
+    f="$DEST/$(printf "%04d" $m).jpg"
+    [[ -f "$f" ]] && continue
+    SEC=$(date -d "$DAY $((m / 60)):$((m % 60))" +%s)
+    $BIN time unix "$SEC" >/dev/null 2>&1
+    sleep 0.7
+    IMG=$($BIN capture_frame 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)[\"images\"][0])")
+    [[ -f "${IMG:-}" ]] && mv -f "$IMG" "$f"
+    rm -f /tmp/earth-native-scene-capture-*.jpg /tmp/earth-native-scene-capture-*.json 2>/dev/null
+done
+$BIN time live >/dev/null 2>&1 || true
+echo "daycache render done: $(ls $DEST/*.jpg 2>/dev/null | wc -l)/1440 in $DEST"

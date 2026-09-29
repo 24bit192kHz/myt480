@@ -1,0 +1,165 @@
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║              DWM Hotkeys Configuration  ·  hotkeys.toml             ║
+# ╠══════════════════════════════════════════════════════════════════════╣
+# ║  LIVE RELOAD — save this file and changes apply instantly!           ║
+# ║  Manual reload:  kill -USR1 $(pidof dwm)                             ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+#
+# ─────────────────────────────────────────────────────────────────────────────
+#  FORMAT — one binding per line:
+#    { mod="SUPER", key="x", desc="My app", func="spawn", exec=["myapp"] }
+#
+#  mod   Space-separated modifiers.  Use "" for no modifier.
+#          SUPER  SHIFT  CTRL  ALT
+#          Examples:  "SUPER"  "SUPER SHIFT"  "SUPER CTRL"  "SUPER CTRL SHIFT"
+#
+#  key   X11 key name.  Examples:
+#          Letters/numbers : "a"–"z", "0"–"9"
+#          Special         : "Return"  "space"  "Tab"  "Escape"  "Delete"
+#                            "F1"–"F12"  "Print"  "Home"  "End"  "Page_Up"
+#          Symbols         : "comma"  "period"  "semicolon"  "slash"  "equal"
+#                            "minus"  "bracket_left"  "bracket_right"  "grave"
+#          Media           : "XF86AudioMute"  "XF86AudioRaiseVolume"
+#                            "XF86AudioLowerVolume"  "XF86AudioPlay"
+#                            "XF86MonBrightnessUp"  "XF86MonBrightnessDown"
+# ─────────────────────────────────────────────────────────────────────────────
+#  OFFICIAL dwm-titus base + laptop user binds swapped in.
+#  SUPER+t = terminal, SUPER+f = fullscreen, SUPER+a = Titus launcher,
+#  SUPER+k = kbd-lang toggle (us,ara), CAPS toggles group (no LED).
+# ─────────────────────────────────────────────────────────────────────────────
+[vars]
+terminal = "st"
+webapp   = "webapp-launch"
+keys = [
+  # ── Window management ──────────────────────────────────────────────────
+  { mod="SUPER", key="q", desc="[Window Management] close focused window", func="killclient" },
+  { mod="ALT", key="F4", desc="[Window Management] close focused window", func="killclient" },
+  { mod="SUPER", key="w", desc="[Window Management] Toggle floating", func="togglefloating" },
+  { mod="SHIFT", key="F11", desc="[Window Management] toggle fullscreen", func="fullscreen" },
+  { mod="SUPER", key="f", desc="[Personal] fullscreen", func="fullscreen" },
+  { mod="SUPER", key="space", desc="[Window Management] Toggle floating", func="togglefloating" },
+  { mod="SUPER SHIFT", key="y", desc="[Window Management] fake fullscreen (keep bar)", func="togglefakefullscreen" },
+  { mod="SUPER SHIFT", key="b", desc="[Window Management] toggle status bar", func="togglebar" },
+  { mod="SUPER", key="l", desc="[Window Management] lock screen", func="spawn", cmd="loginctl lock-session" },
+  { mod="SUPER", key="Left", desc="[Window Management|Change focus] focus left", func="focusmon", i=-1 },
+  { mod="SUPER", key="Right", desc="[Window Management|Change focus] focus right", func="focusmon", i=1 },
+  { mod="SUPER", key="Up", desc="[Window Management|Change focus] focus up", func="focusstack", i=-1 },
+  { mod="SUPER", key="Down", desc="[Window Management|Change focus] focus down", func="focusstack", i=1 },
+  { mod="ALT", key="Tab", desc="[Window Management|Change focus] Cycle focus", func="focusstack", i=1 },
+  { mod="SUPER", key="j", desc="[Window Management|Change focus] focus next", func="focusstack", i=1 },
+  { mod="SUPER SHIFT", key="j", desc="[Window Management] move window next in stack", func="movestack", i=1 },
+  { mod="SUPER SHIFT", key="k", desc="[Window Management] move window prev in stack", func="movestack", i=-1 },
+  { mod="SUPER", key="Return", desc="[Window Management] promote window to master", func="zoom" },
+  { mod="SUPER", key="t", desc="Terminal st", func="spawn", exec=["st"] },
+  { mod="SUPER", key="i", desc="[Window Management] add window to master area", func="incnmaster", i=1 },
+  { mod="SUPER", key="h", desc="[Window Management] shrink master area", func="setmfact", f=-0.05 },
+  { mod="SUPER SHIFT", key="h", desc="[Window Management] grow window in stack", func="setcfact", f=0.25 },
+  { mod="SUPER SHIFT", key="l", desc="[Window Management] shrink window in stack", func="setcfact", f=-0.25 },
+  { mod="SUPER SHIFT", key="o", desc="[Window Management] reset window size", func="setcfact", f=0.00 },
+  { mod="SUPER CTRL", key="t", desc="[Window Management] tiling layout", func="setlayout", layout_idx=0 },
+  { mod="SUPER SHIFT", key="comma", desc="[Window Management] send window to prev monitor", func="tagmon", i=-1 },
+  { mod="SUPER SHIFT", key="period", desc="[Window Management] send window to next monitor", func="tagmon", i=1 },
+  { mod="SUPER", key="0", desc="[Window Management] show all tags", func="view", ui=-1 },
+  { mod="SUPER SHIFT", key="q", desc="[Window Management] quit dwm", func="quit" },
+  { mod="SUPER CTRL SHIFT", key="r", desc="[Window Management] reboot system", func="spawn", cmd="systemctl reboot" },
+  { mod="SUPER CTRL SHIFT", key="s", desc="[Window Management] suspend system", func="spawn", cmd="systemctl suspend" },
+  # ── Launchers ──────────────────────────────────────────────────────────
+  { mod="SUPER", key="r", desc="[Launcher|Apps] app launcher quickshell", func="spawn", cmd="quickshell ipc --path \"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/shell.qml\" call launcher toggle" },
+  { mod="SUPER", key="x", desc="[Launcher|Apps] terminal", func="spawn", exec=["alacritty"] },
+  { mod="SUPER CTRL", key="g", desc="[Launcher|Apps] ChatGPT launcher", func="spawn", cmd="dwm-quickshell-launcher launch-chatgpt" },
+  { mod="SUPER SHIFT", key="w", desc="[Theming and Wallpaper] select a global wallpaper", func="spawn", cmd="dwm-settings-wallpaper randomize" },
+  { mod="SUPER", key="a", desc="[Launcher|Apps] app launcher", func="spawn", cmd="quickshell ipc --path \"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/shell.qml\" call launcher toggle" },
+  { mod="SUPER SHIFT", key="a", desc="[Launcher|Apps] Gemini", func="spawn", cmd="webapp-launch https://gemini.google.com/" },
+  { mod="SUPER SHIFT", key="x", desc="[Launcher|Apps] compose X post", func="spawn", cmd="webapp-launch https://x.com/compose/post" },
+  { mod="SUPER", key="b", desc="[Launcher|Apps] web browser", func="spawn", cmd="firefox" },
+  { mod="SUPER", key="e", desc="[Launcher|Apps] file explorer", func="spawn", cmd="pcmanfm-qt" },
+  { mod="SUPER ALT", key="F1", desc="[Launcher|Apps] open control center", func="spawn", cmd="quickshell ipc --path \"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/shell.qml\" call controlcenter open" },
+  { mod="SUPER SHIFT", key="r", desc="[Utilities] restart quickshell", func="spawn", cmd="dwm-quickshell-controlcenter action restart-quickshell" },
+  { mod="SUPER CTRL", key="r", desc="[Utilities] restart proton/steam", func="spawn", cmd="protonrestart" },
+  { mod="SUPER", key="Tab", desc="[Window Management] Previous tag", func="view" },
+  { mod="SUPER ALT", key="t", desc="[Launcher|Apps] dropdown terminal", func="spawn", cmd="dwm-terminal" },
+  # special workspace (Hyprland togglespecialworkspace equiv; dwm-native C patch)
+  { mod="SUPER", key="s", desc="[Window Management|Special workspace] toggle special workspace", func="togglescratch" },
+  { mod="SUPER", key="grave", desc="[Window Management|Special workspace] toggle special workspace (layout-proof)", func="togglescratch" },
+  { mod="SUPER SHIFT", key="s", desc="[Window Management|Special workspace] send window to special workspace", func="togglescratchtags" },
+  { mod="SUPER ALT", key="s", desc="[Window Management|Special workspace] send window to special workspace (alt)", func="togglescratchtags" },
+  # ── Keyboard language (us,ara — caps toggles group, no LED) ────────────
+  { mod="SUPER", key="k", desc="Keyboard language us,ara caps toggles", func="spawn", cmd="kbd-lang.sh toggle" },
+  { mod="SUPER CTRL", key="k", desc="Keyboard layout status", func="spawn", cmd="kbd-lang.sh status" },
+  # ── Hardware: volume / media / brightness ──────────────────────────────
+  { mod="", key="F10", desc="[Hardware Controls|Audio] toggle mute output", func="spawn", cmd="amixer sset Master toggle" },
+  { mod="", key="XF86AudioMute", desc="[Hardware Controls|Audio] toggle mute output", func="spawn", cmd="amixer sset Master toggle" },
+  { mod="", key="F11", desc="[Hardware Controls|Audio] decrease volume", func="spawn", cmd="amixer sset Master 5%- unmute" },
+  { mod="", key="F12", desc="[Hardware Controls|Audio] increase volume", func="spawn", cmd="amixer sset Master 5%+ unmute" },
+  { mod="", key="XF86AudioMicMute", desc="[Hardware Controls|Audio] un/mute microphone", func="spawn", cmd="amixer sset Capture toggle" },
+  { mod="", key="XF86AudioLowerVolume", desc="[Hardware Controls|Audio] decrease volume", func="spawn", cmd="amixer sset Master 5%- unmute" },
+  { mod="", key="XF86AudioRaiseVolume", desc="[Hardware Controls|Audio] increase volume", func="spawn", cmd="amixer sset Master 5%+ unmute" },
+  { mod="", key="XF86AudioPlay", desc="[Hardware Controls|Media] play media", func="spawn", cmd="playerctl play-pause" },
+  { mod="", key="XF86AudioPause", desc="[Hardware Controls|Media] pause media", func="spawn", cmd="playerctl play-pause" },
+  { mod="", key="XF86AudioNext", desc="[Hardware Controls|Media] next media", func="spawn", cmd="playerctl next" },
+  { mod="", key="XF86AudioPrev", desc="[Hardware Controls|Media] previous media", func="spawn", cmd="playerctl previous" },
+  { mod="SUPER", key="F1", desc="[Hardware Controls|Media] identify playing song", func="spawn", cmd="playerctl metadata --format '{{artist}} - {{title}}'" },
+  { mod="", key="XF86MonBrightnessUp", desc="[Hardware Controls|Brightness] increase brightness", func="spawn", cmd="bright up" },
+  { mod="", key="XF86MonBrightnessDown", desc="[Hardware Controls|Brightness] decrease brightness", func="spawn", cmd="bright down" },
+  { mod="SUPER", key="F11", desc="[Hardware Controls|Brightness] decrease brightness", func="spawn", cmd="bright down" },
+  { mod="SUPER", key="F12", desc="[Hardware Controls|Brightness] increase brightness", func="spawn", cmd="bright up" },
+  # ── Screenshots ────────────────────────────────────────────────────────
+  { mod="SUPER", key="p", desc="[Utilities|Screen Capture] print monitor", func="spawn", cmd="dwm-screenshot screen" },
+  { mod="SUPER SHIFT", key="p", desc="[Utilities|Screen Capture] snip screen", func="spawn", cmd="dwm-screenshot gui" },
+  { mod="SUPER CTRL", key="p", desc="[Utilities|Screen Capture] snip to clipboard", func="spawn", cmd="dwm-screenshot clip" },
+  # ── Rofi / clipboard / theme ───────────────────────────────────────────
+  { mod="SUPER", key="v", desc="[Launcher|Rofi menus] clipboard", func="spawn", cmd="rofi-clip.sh pick" },
+  { mod="SUPER SHIFT", key="v", desc="[Launcher|Rofi menus] clipboard manager", func="spawn", cmd="rofi-clip.sh menu" },
+  { mod="SUPER", key="comma", desc="[Window Management] focus prev monitor", func="focusmon", i=-1 },
+  { mod="SUPER", key="period", desc="[Window Management] focus next monitor", func="focusmon", i=1 },
+  { mod="SUPER", key="slash", desc="[Launcher|Rofi menus] keybindings hint", func="spawn", cmd="quickshell ipc --path \"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/shell.qml\" call controlcenter openKeybinds" },
+  { mod="SUPER SHIFT", key="t", desc="[Theming and Wallpaper] select a theme", func="spawn", cmd="dwm-settings-theme reset" },
+  { mod="CTRL SHIFT", key="Escape", desc="[Launcher|Apps] system monitor", func="spawn", cmd="alacritty -e btop" },
+  { mod="", key="F9", desc="[Personal] pause and mute", func="spawn", cmd="playerctl pause && amixer sset Master mute" },
+  # ── Session / power / utils / personal ─────────────────────────────────
+  { mod="SUPER CTRL", key="q", desc="[Session] power menu", func="spawn", cmd="quickshell ipc --path \"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/shell.qml\" call power toggle" },
+  { mod="SUPER", key="o", desc="[Utilities|Screen Capture] capture text with OCR", func="spawn", cmd="maim -s | tesseract stdin stdout -l eng+ara 2>/dev/null | xclip -selection clipboard" },
+  { mod="SUPER", key="d", desc="[Utilities|Voice Dictation] toggle voice dictation", func="spawn", cmd="notify-send Dictation 'no STT backend installed'" },
+  { mod="SUPER ALT", key="g", desc="[Utilities] game mode", func="spawn", cmd="notify-send GameMode on" },
+  { mod="SUPER SHIFT", key="g", desc="[Utilities] open game launcher", func="spawn", cmd="firefox https://play.google.com" },
+  { mod="SUPER ALT", key="p", desc="[Utilities|Screen Capture] print monitor", func="spawn", cmd="dwm-screenshot screen" },
+  { mod="", key="Print", desc="[Utilities|Screen Capture] print all monitors", func="spawn", cmd="dwm-screenshot full" },
+  { mod="SUPER CTRL", key="m", desc="[Hardware Controls|Media] toggle mute/unmute for active-window", func="spawn", cmd="pactl set-sink-mute @DEFAULT_SINK@ toggle" },
+  { mod="SUPER", key="c", desc="[Personal] center window", func="spawn", cmd="xdotool getactivewindow windowmove 640 270 windowsize 70% 70%" },
+  { mod="SUPER SHIFT", key="c", desc="[Personal] resize window", func="spawn", cmd="xdotool getactivewindow windowsize 70% 70%" },
+]
+# ── TAG BINDINGS ──────────────────────────────────────────────────────────────
+# Each entry auto-generates 4 bindings for that tag number:
+#   SUPER + key                  → switch to tag
+#   SUPER + CTRL + key           → also show this tag alongside current
+#   SUPER + SHIFT + key          → send focused window to this tag
+#   SUPER + CTRL + SHIFT + key   → also show window on that tag
+#
+# key = X11 key name    tag = 0-based index  (0 = tag 1,  8 = tag 9)
+tag_keys = [
+  { key="1", tag=0 },
+  { key="2", tag=1 },
+  { key="3", tag=2 },
+  { key="4", tag=3 },
+  { key="5", tag=4 },
+  { key="6", tag=5 },
+  { key="7", tag=6 },
+  { key="8", tag=7 },
+  { key="9", tag=8 },
+]
+# ── CUSTOM SHORTCUTS ──────────────────────────────────────────────────────────
+# Add your own below.  Uncomment, fill in the fields, and save.
+#
+# { mod="SUPER SHIFT",  key="f",  desc="Firefox",   func="spawn",  exec=["firefox"] },
+# { mod="SUPER SHIFT",  key="c",  desc="VS Code",   func="spawn",  exec=["code"] },
+# { mod="SUPER SHIFT",  key="d",  desc="Discord",   func="spawn",  exec=["discord"] },
+# { mod="SUPER SHIFT",  key="s",  desc="Screenshot",func="spawn",  cmd="scrot -s ~/Pictures/screenshot.png" },
+# ── MOUSE BUTTON BINDINGS ─────────────────────────────────────────────────────
+buttons = [
+  { click="ClkTagBar",    mod="SUPER",  button=1,  func="tag" },
+  { click="ClkTagBar",    mod="SUPER",  button=3,  func="toggletag" },
+  { click="ClkClientWin", mod="SUPER",  button=1,  func="moveorplace",  i=2 },
+  { click="ClkClientWin", mod="SUPER",  button=3,  func="resizemouse" },
+  { click="ClkTagBar",    mod="",       button=1,  func="view" },
+  { click="ClkTagBar",    mod="",       button=3,  func="toggleview" },
+]

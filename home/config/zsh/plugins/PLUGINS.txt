@@ -1,0 +1,3 @@
+# zsh plugins: clone into this directory (name, URL, commit)
+zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions 85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5
+zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting 2fc57d63067c18b1100ecdbf684fa5baf49459d1

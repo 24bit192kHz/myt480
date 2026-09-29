@@ -1,0 +1,21 @@
+#!/bin/sh
+# dwm-lock-bright: lock at 100% brightness, restore the pre-lock level on unlock.
+# `bright lock` remembers the level (idempotent after dwm-lock did it).
+set -u
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+export DISPLAY="${DISPLAY:-:0}"
+if [ -z "${XAUTHORITY:-}" ] || [ ! -r "${XAUTHORITY:-}" ]; then
+  if [ -r /home/btw/.Xauthority ]; then export XAUTHORITY=/home/btw/.Xauthority;
+  elif [ -r "$HOME/.Xauthority" ]; then export XAUTHORITY="$HOME/.Xauthority"; fi
+fi
+BRIGHT=/home/btw/.local/bin/bright
+"$BRIGHT" lock >/dev/null 2>&1 || true
+restore() { "$BRIGHT" unlock >/dev/null 2>&1 || true; }
+trap restore EXIT HUP INT TERM
+[ "$#" -gt 0 ] || exit 2
+LOCKER=$1
+shift
+"$LOCKER" "$@"
+RC=$?
+exit "$RC"

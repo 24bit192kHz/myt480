@@ -1,0 +1,1 @@
+sudo bash -c 'K=$(dmesg | awk -F"[][]+" "NR>1 && \$2<30{t=\$2} END{printf \"%.2f\",t}"); B=$(uptime -s | awk "{print \$2}"); S=$(grep -a "sddm-autologin" /var/log/everything/current | head -1 | awk "{print \$3}"); U=$(( $(date -d "today $S" +%s) - $(date -d "today $B" +%s) )); echo "Kernel: ${K}s | Userspace: ${U}s | Total: $(echo "$K+$U" | bc)s"'

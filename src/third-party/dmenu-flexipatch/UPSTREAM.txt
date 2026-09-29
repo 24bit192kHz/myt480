@@ -1,0 +1,2 @@
+upstream: https://github.com/bakkeby/dmenu-flexipatch
+commit: c9a0958b71a55a1b3cad475d535ad99286ead454

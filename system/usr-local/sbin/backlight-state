@@ -1,0 +1,51 @@
+#!/bin/sh
+# backlight-state: persist the user's backlight level across reboots.
+# Run by udev (/etc/udev/rules.d/90-backlight-state.rules):
+#   add <dev>      restore the saved level (boot / driver load)
+#   change <dev>   a hotkey changed the level (blkeys): save it unless the
+#                  screen is locked, and redraw the chadwm bar
+# State: /var/lib/backlight/level = "<dev> <brightness> <max>". The dir is
+# group video (setgid, 2775) so `bright lock/unlock` can use it too; while
+# /var/lib/backlight/locked exists the lock screen's forced 100 % is never
+# saved (the lock stored the pre-lock level itself).
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+DIR=/var/lib/backlight
+dev=${2:-}
+sys=/sys/class/backlight/$dev
+case $dev in ''|*/*|.*) exit 2 ;; esac
+[ -d "$sys" ] || exit 0
+
+isnum() { case $1 in ''|*[!0-9]*) return 1 ;; esac; }
+
+case ${1:-} in
+add)
+	install -d -m 2775 -g video "$DIR"
+	rm -f "$DIR/locked"	# a lock cannot survive a reboot
+	read -r sdev sval smax < "$DIR/level" 2>/dev/null || exit 0
+	read -r max < "$sys/max_brightness" || exit 0
+	isnum "$sval" && isnum "$smax" && isnum "$max" && [ "$smax" -gt 0 ] || exit 0
+	if [ "$sdev" = "$dev" ] && [ "$smax" = "$max" ]; then
+		v=$sval
+	else
+		v=$(( (sval * max + smax / 2) / smax ))	# other device: same fraction
+	fi
+	[ "$v" -ge 1 ] || v=1
+	[ "$v" -le "$max" ] || v=$max
+	echo "$v" > "$sys/brightness"
+	;;
+change)
+	if [ ! -e "$DIR/locked" ] && [ -d "$DIR" ]; then
+		read -r v < "$sys/brightness" && read -r max < "$sys/max_brightness" &&
+			printf '%s %s %s\n' "$dev" "$v" "$max" > "$DIR/.level.$$" &&
+			chmod 664 "$DIR/.level.$$" && mv -f "$DIR/.level.$$" "$DIR/level"
+		rm -f "$DIR/.level.$$"
+	fi
+	pkill -USR1 -f '/chadwm/scripts/bar\.sh$' 2>/dev/null
+	;;
+*)
+	echo "usage: backlight-state add|change <backlight-device>" >&2
+	exit 2
+	;;
+esac
+exit 0

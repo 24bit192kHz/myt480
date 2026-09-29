@@ -1,0 +1,147 @@
+chadwm keymap — ported 2026-09-20 from the owner's Hyprland map (HyDE);
+window behaviour matched to Hyprland dwindle 2026-09-28 (chadwm/hyde.c).
+MODKEY = Super.  Section names mirror the HyDE bind descriptions.
+
+[Window Management]
+  Super+Q                  close focused window
+  Alt+F4                   close focused window
+  Super+Delete             kill session (chadwm + bar)
+  Super+Ctrl+Q             kill session (chadwm-native)
+  Super+W                  toggle floating
+  Super+G                  toggle tab bar (HyDE "group")
+  Shift+F11 / Super+F      toggle fullscreen
+  Super+L                  lock screen (dwm-lock)
+  Ctrl+Alt+Delete          power menu: lock/logout/suspend/hibernate/reboot/shutdown
+  Super+Shift+R            restart chadwm (HyDE: wallbash mode — no twin)
+  Super+Shift+F            float layout (HyDE: pin window — no twin)
+
+[Change focus]
+  Super+Left/Right/Up/Down focus the window in that direction
+  Alt+Tab                  cycle focus
+  Super+Tab                window switcher (rofi -show window)
+
+[Resize / move]
+  Super+J                  toggle split (flip the focused node, dwindle)
+  Super+Shift+arrows       resize focused window 30 px (its dwindle split)
+  Super+Ctrl+Shift+arrows  swap with the window in that direction
+                           (floating: move 30 px)
+  Super+Ctrl+H / Super+Ctrl+L    group (tab) prev / next
+  Super+Z / Super+X (hold) move / resize with the mouse, release to stop
+  Super+drag (B1/B3)       move / resize window with mouse
+
+[Launcher|Apps]
+  Super+Return, Super+T    terminal (st)
+  Super+Alt+T              dropdown terminal (pyprland-style, toggles)
+  Super+E                  file explorer (pcmanfm-qt)
+  Super+B                  browser (firefox)
+  Ctrl+Shift+Escape        system monitor (st -e btop)
+
+[Launcher|Rofi menus]
+  Super+A, Super+C         application finder (rofi drun)
+  Super+Shift+E            file finder (rofi filebrowser)
+  Super+/                  this keybinding list
+  Super+Comma              emoji picker (rofimoji)
+  Super+Period             glyph picker (rofimoji symbols)
+  Super+V                  clipboard pick (rofi-clip.sh pick)
+  Super+Shift+V            clipboard manager (rofi-clip.sh menu)
+  Super+Shift+A            rofi combi launcher
+  bar launcher glyph       rofi drun;  bar status click (B2) = st
+
+[Screen Capture]
+  Super+P                  snip screen -> ~/Pictures/Screenshots
+  Super+Ctrl+P             snip to clipboard
+  Super+Alt+P              print monitor
+  Print                    print all monitors
+  Super+U / Super+Ctrl+U   snip / full to clipboard (maim+xclip)
+  Super+O                  OCR capture -> clipboard (tesseract)
+  Super+Shift+P            colour picker (click pixel -> hex to clipboard)
+
+[Hardware Controls]
+  XF86Audio* + F9..F12      volume down/up, mute, mic mute; F9 pause + mute
+  Fn brightness keys        Fn up/down, handled by scripts/brightd.py (started by
+                            run.sh) from the kernel input devices
+                            (/dev/input/event*), so nothing about X's repeat
+                            settings matters. Tap = one 1% step; hold = the ramp
+                            runs for exactly as long as the key is held and stops
+                            when it is released (the EC pulses the key every
+                            ~0.26-0.52 s, so the daemon tracks the pulse train and
+                            tapers as soon as a pulse is overdue). State in
+                            ~/.local/state/brightness-pct.
+  XF86AudioPlay/Next/Prev   playerctl transport
+  Super+F1                  now playing (notification)
+  Super+Ctrl+M              mute the active window's stream (active-audio)
+
+[Utilities]
+  Super+K                  keyboard layout toggle (kbd-lang.sh)
+  Super+D                  dictation (no STT backend installed)
+  Super+O                  OCR: select a region -> text to clipboard + notification
+  Super+Ctrl+S             same OCR capture (HyDE lua-extra parity)
+  Super+Alt+G              game mode (notify placeholder)
+  Super+C                  centre the focused window (floats it if tiled)
+  Super+Shift+C            resize focused window to 30% of the work area, centred
+  Super+Shift+F            pin window above the tiling layer (toggle)
+  Super+Ctrl+Down          jump to the nearest empty workspace
+  Super+Ctrl+Alt+Left/Right  move window to prev/next workspace (silent)
+
+[Workspaces]  (dwm tags 1..10, Super+0 = 10)
+  Super+1..0               view workspace 1..10 (closes the special workspace)
+  Super+Shift+1..0         move window to workspace (follow)
+  Super+Alt+1..0           move window to workspace silently
+  Super+Ctrl+1..9          toggle tag in view
+  Super+Ctrl+Shift+1..9    toggle tag on window
+  Super+Ctrl+Left/Right    relative tag forward/back (HyDE r-1/r+1)
+  scroll wheel on bar/root prev/next tag
+  Super+S                  toggle special workspace: opens even when empty, its
+                           windows tile above the current tag, new windows open
+                           into it while it is shown
+  Super+Shift+S            send focused window to the special workspace (follow)
+  Super+Alt+S              send focused window silently
+  Super+Shift+1..9         move a window from the special workspace to a tag
+
+[Layout / gaps / borders]  (chadwm-native, keys free in the HyDE map)
+  Super+Ctrl+Comma/Period  cycle layouts (default [D] = HyDE dwindle)
+  Super+Space              toggle tile/float layout
+  Super+Shift+Space        toggle floating on the focused window
+  Super+M                  monocle layout
+  Super+Ctrl+G             gapless grid
+  Super+Ctrl+Shift+T       floating layout (no tiling)
+  Super+I / Super+Alt+I    nmaster +/- 1
+  Super+Ctrl+I/D, Super+Ctrl+O, Super+Shift+I  gaps in/out +/- 1
+  Super+Ctrl+Shift+I / Super+Ctrl+Shift+O      inner / outer gaps -1
+  Super+Ctrl+Alt+6..9 (+Shift)  inner-h/inner-v/outer-h/outer-v gaps +/- 1
+  Super+Ctrl+Shift+D       reset gaps to defaults (10 px)
+  Super+Ctrl+T             toggle gaps
+  Super+Shift+B            toggle bar
+  Super+Shift+O            reset client size factor
+  Super+Shift+Minus / Super+Alt+= / Super+Alt+0   border -1 / +1 / reset
+
+[Theming and Wallpaper]
+  Super+Shift+W            wallpaper picker (rofi over ~/Pictures/backgrounds)
+  Super+Alt+Up / Down      previous / next bar theme (rebuilds + reloads the WM)
+  Super+Shift+T            theme picker (dwm-titus themes.toml -> toolkit env)
+  Super+Shift+Y / Super+Shift+U   animations / locker layouts (no X11 twin)
+  Current theme: grayscale dark (bar black, text grays, active tag = white
+  block with black text; no accent colour). Files: chadwm/themes/grayscale.h +
+  scripts/bar_themes/grayscale.
+
+[Mouse]
+  Super+drag B1 / B3       move / resize window (moveorplace / resizemouse)
+  Super+B2 (on a window)   toggle floating
+  Ctrl+B1 / Ctrl+B3        drag mfact / drag cfact
+  Super+scroll, scroll     prev / next tag (bar or root window)
+  tag click / B3           view / toggleview tag;  Super+click / Super+B3 tag / toggletag
+  layout symbol B1 / B3    toggle layout / monocle
+  window title B2          zoom (send to master)
+  status text B2           open st
+  bar launcher glyph (≡)   rofi drun
+  tab bar B1 / tab arrows / tab X   focus tab / move tab -+1 / close tab
+
+[Bar modules]  (click = left, scroll = wheel; scripts/barclick.sh)
+  󰏗 updates               left: pacman -Syu in st   right: recount
+  CPU / RAM               left: btop
+  BAT                     left: battwatch-tui
+  󰃠 brightness            scroll / left / right: up / down
+  󰕾 volume                left: mute   right: pavucontrol   scroll: +/- 5%
+  Wi-Fi                   left: rofi network picker   right: connection editor
+  clock                   left: calendar notification
+  ⏻ power                 lock / logout / suspend / hibernate / reboot / shutdown

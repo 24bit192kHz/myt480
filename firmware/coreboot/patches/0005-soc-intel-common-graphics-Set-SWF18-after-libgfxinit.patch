@@ -1,0 +1,48 @@
+From fea12efaa9b8677f23101a4488e3feb40735ebf1 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 15:04:06 +0300
+Subject: [PATCH 05/13] soc/intel/common/graphics: Set SWF18 after libgfxinit
+ lit a display
+
+A VBIOS/GOP sets the SWF18 scratch register to tell the OS that the
+pre-OS environment enabled the display. With it left at zero, Linux i915
+(skl_sanitize_cdclk) treats CDCLK/DPLL0 as unconfigured and reprograms
+them under the running pipe; the inherited state then never matches and
+i915 does a full modeset including a panel power cycle (~1.2 s and a
+visible blink on a ThinkPad T480). Set it once libgfxinit succeeded.
+---
+ src/soc/intel/common/block/graphics/graphics.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/soc/intel/common/block/graphics/graphics.c b/src/soc/intel/common/block/graphics/graphics.c
+index 6cf5ad9f31..c4658b248a 100644
+--- a/src/soc/intel/common/block/graphics/graphics.c
++++ b/src/soc/intel/common/block/graphics/graphics.c
+@@ -16,6 +16,8 @@
+ #include <soc/pci_devs.h>
+ #include <types.h>
+ 
++#define GFX_SWF18	0x4f060	/* SWF_ILK(0x18) */
++
+ /*
+  * This GUID is used to identify memory resources related to the memory bandwidth
+  * compression functionality for Intel Integrated Graphics Devices (IGD).
+@@ -185,6 +187,15 @@ static void gma_init(struct device *const dev)
+ 			int lightup_ok;
+ 			gma_gfxinit(&lightup_ok);
+ 			gfx_set_init_done(lightup_ok);
++			/*
++			 * SWF18 is the scratch register a VBIOS/GOP sets to tell
++			 * the OS that the pre-OS environment enabled the display.
++			 * With it zero, Linux i915 "sanitizes" CDCLK/DPLL0 under
++			 * the running pipe and can no longer inherit the mode, so
++			 * it does a full modeset (panel power cycle) at boot.
++			 */
++			if (lightup_ok)
++				graphics_gtt_write(GFX_SWF18, 1);
+ 		}
+ 	} else {
+ 		/* Initialize PCI device, load/execute BIOS Option ROM */
+-- 
+2.55.0
+

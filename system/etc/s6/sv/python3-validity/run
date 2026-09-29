@@ -1,0 +1,9 @@
+#!/bin/sh
+# Restore firmware + calibration into volatile /run from persistent backup.
+mkdir -p /var/run/python-validity /var/lib/python-validity
+for f in /var/lib/python-validity/*; do
+  [ -e "$f" ] || continue
+  b=$(basename "$f")
+  [ -e "/var/run/python-validity/$b" ] || cp -a "$f" "/var/run/python-validity/$b"
+done
+exec /usr/lib/python-validity/dbus-service

@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""bootmenu: reboot into the GRUB boot menu once.
+
+Writes 0xb5 to CMOS byte 0x6e. coreboot (sklkbl_thinkpad ramstage.c) keeps it
+across power-off, GRUB's etc/grub.cfg shows the menu and clears it. Holding
+the power button for 4 s requests the menu the same way.
+Usage: bootmenu [--no-reboot]
+"""
+import os
+import sys
+
+CMOS_BOOT_MENU, BOOT_MENU_REQUEST = 0x6E, 0xB5
+
+if os.geteuid() != 0:
+    os.execvp("sudo", ["sudo", sys.executable, os.path.abspath(__file__), *sys.argv[1:]])
+
+fd = os.open("/dev/port", os.O_RDWR)
+os.pwrite(fd, bytes([CMOS_BOOT_MENU]), 0x70)
+os.pwrite(fd, bytes([BOOT_MENU_REQUEST]), 0x71)
+os.pwrite(fd, bytes([CMOS_BOOT_MENU]), 0x70)
+stuck = os.pread(fd, 1, 0x71)[0] == BOOT_MENU_REQUEST
+os.close(fd)
+if not stuck:
+    sys.exit("bootmenu: CMOS write did not stick")
+print("Boot menu requested for the next boot.")
+if "--no-reboot" not in sys.argv[1:]:
+    os.execvp("reboot", ["reboot"])

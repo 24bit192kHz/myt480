@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+[ -n "${DISPLAY:-}" ] || { printf '%s\n' 'dwm-lock: DISPLAY is required' >&2; exit 1; }
+[ -r "${XAUTHORITY:-}" ] || { printf '%s\n' 'dwm-lock: readable XAUTHORITY is required' >&2; exit 1; }
+[ "$(id -u)" -eq "$(id -u)" ] || exit 1
+SLOCK_USER=${SLOCK_USER:-btw}
+export SLOCK_USER
+
+# The custom PAM locker is the sole primary UI. It has isolated password
+# and fingerprint services, a black input surface, and power actions.
+# Already locked (e.g. dwm-lock-watch on idle/suspend): leave it alone; the
+# brightness trap below must not restore the level behind a running lock.
+if pgrep -u "$(id -u)" -x slock-ly >/dev/null 2>&1; then
+	exit 0
+fi
+
+# While locked, chadwm shows an empty tag so the translucent lock only
+# reveals the earth wallpaper, never open windows; the previous tagset
+# comes back on unlock. Needs chadwm with _CHADWM_VIEW (else a no-op).
+VIEW=/home/btw/.local/bin/chadwm-view
+desk() { xprop -root _NET_CURRENT_DESKTOP 2>/dev/null | awk "{print \$NF}"; }
+switched=0
+
+restored=0
+restore_bright() {
+	[ "$restored" = 1 ] && return 0
+	restored=1
+	[ "$switched" = 1 ] && "$VIEW" prev >/dev/null 2>&1 || true
+	/home/btw/.local/bin/bright unlock >/dev/null 2>&1 || true
+}
+trap restore_bright EXIT HUP INT TERM
+
+# 100 % while locked; `bright lock` first remembers the user's level and
+# marks the lock so udev never saves the forced 100 % (see bright).
+/home/btw/.local/bin/bright lock >/dev/null 2>&1 || true
+
+before=$(desk)
+if [ -x "$VIEW" ] && "$VIEW" empty >/dev/null 2>&1; then
+	sleep 0.05
+	if [ "$(desk)" != "$before" ]; then switched=1; fi
+fi
+
+wrapper=/home/btw/.local/bin/dwm-lock-bright
+if [ -x "$wrapper" ]; then
+	"$wrapper" slock-ly
+	exit $?
+fi
+/usr/local/bin/slock-ly

@@ -1,0 +1,9 @@
+#!/bin/execlineb -S0
+# PID 1 wrapper for linux-t480, which boots without an initramfs.
+# Artix's s6 services assume /proc and /sys are already mounted (the
+# mkinitcpio init did that): mount-cgroups, sysctl and others lose a race
+# otherwise (seen 2026-09-28: no cgroups -> elogind and udevd never came up).
+# Mount both, then hand PID 1 to the real init.
+foreground { if -n { mountpoint -q /proc } mount -t proc proc /proc -o nosuid,noexec,nodev }
+foreground { if -n { mountpoint -q /sys } mount -t sysfs sys /sys -o nosuid,noexec,nodev }
+exec /sbin/init $@

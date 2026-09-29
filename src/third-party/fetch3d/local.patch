@@ -1,0 +1,645 @@
+diff --git a/fetch.c b/fetch.c
+index 8e7bb1d..2897ea2 100644
+--- a/fetch.c
++++ b/fetch.c
+@@ -1,4 +1,5 @@
+ #include <dirent.h>
++#include <errno.h>
+ #include <fcntl.h>
+ #include <math.h>
+ #include <stdint.h>
+@@ -13,6 +14,7 @@
+ #include <net/if.h>
+ #include <netinet/in.h>
+ #include <sys/ioctl.h>
++#include <sys/select.h>
+ #include <sys/statvfs.h>
+ #include <sys/utsname.h>
+ #include <termios.h>
+@@ -61,6 +63,25 @@ static void handle_signal(int sig) {
+ 
+ static volatile sig_atomic_t term_resized = 0;
+ 
++// --pinned: fork into the background and animate in a header above a scroll
++// region, so the shell keeps working below it. SIGUSR1 pauses at a frame
++// boundary (the shell sends it before running a command), SIGUSR2 resumes
++// and re-asserts the scroll region (full-screen programs reset it).
++static int pinned = 0;
++static volatile sig_atomic_t pinned_paused = 0;
++static volatile sig_atomic_t pinned_region = 0;
++
++static void handle_pause(int sig) {
++  (void)sig;
++  pinned_paused = 1;
++}
++
++static void handle_resume(int sig) {
++  (void)sig;
++  pinned_paused = 0;
++  pinned_region = 1;
++}
++
+ static void handle_winch(int sig) {
+   (void)sig;
+   term_resized = 1;
+@@ -905,6 +926,12 @@ static char custom_label[MAX_CUSTOM][64];
+ static char custom_value[MAX_CUSTOM][256];
+ static int custom_count = 0;
+ static int is_refresh_pass = 0;     // 1 during the animation refresh tick
++// compact=1: short lowercase labels, trimmed values, no title underline,
++// multiple batteries on one line. value_color colours the values.
++static int compact_info = 0;
++static char value_color[32] = "0";
++static int fps = 20;
++static int canvas_width = 0;
+ static char label_color[16] = "35"; // default magenta
+ static int config_height = 0;       // 0 = auto (match info lines)
+ static float size_scale = 1.0f;
+@@ -1040,6 +1067,34 @@ static void load_config(void) {
+         size_scale = 5.0f;
+       continue;
+     }
++    if (strncmp(line, "compact=", 8) == 0) {
++      char *val = line + 8;
++      strip_inline_hint(val);
++      compact_info = atoi(val);
++      continue;
++    }
++    if (strncmp(line, "value_color=", 12) == 0) {
++      char *val = line + 12;
++      strip_inline_hint(val);
++      strncpy(value_color, val, sizeof(value_color) - 1);
++      continue;
++    }
++    if (strncmp(line, "width=", 6) == 0) {
++      char *val = line + 6;
++      strip_inline_hint(val);
++      canvas_width = atoi(val);
++      continue;
++    }
++    if (strncmp(line, "fps=", 4) == 0) {
++      char *val = line + 4;
++      strip_inline_hint(val);
++      fps = atoi(val);
++      if (fps < 1)
++        fps = 1;
++      if (fps > 60)
++        fps = 60;
++      continue;
++    }
+     if (strncmp(line, "speed=", 6) == 0) {
+       char *val = line + 6;
+       strip_inline_hint(val);
+@@ -1249,6 +1304,82 @@ static void add_line(const char *line) {
+ 
+ static int box_width = 0; // >0 once box_wrap_lines() has run
+ 
++// Drop SGR sequences (the green/yellow/red percentages) so compact values
++// take a single colour.
++static void strip_sgr(char *s) {
++  char *w = s;
++  for (char *r = s; *r;) {
++    if (r[0] == '\033' && r[1] == '[') {
++      r += 2;
++      while (*r && *r != 'm')
++        r++;
++      if (*r)
++        r++;
++    } else {
++      *w++ = *r++;
++    }
++  }
++  *w = '\0';
++}
++
++static void cut_at(char *s, const char *needle) {
++  char *q = strstr(s, needle);
++  if (q)
++    *q = '\0';
++}
++
++// Rewrite val in place into a tidier form; returns the lowercase label.
++static const char *compact_field(const char *label, char *val) {
++  strip_sgr(val);
++  if (strcmp(label, "OS") == 0) {
++    char *sp = strrchr(val, ' ');
++    if (sp && (strcmp(sp + 1, "x86_64") == 0 || strcmp(sp + 1, "aarch64") == 0))
++      *sp = '\0';
++    return "os";
++  }
++  if (strcmp(label, "Kernel") == 0)
++    return "kernel";
++  if (strcmp(label, "Uptime") == 0)
++    return "uptime";
++  if (strcmp(label, "Packages") == 0)
++    return "packages";
++  if (strcmp(label, "Memory") == 0 || strcmp(label, "Swap") == 0) {
++    float used, total;
++    int pct;
++    if (sscanf(val, "%f GiB / %f GiB (%d%%)", &used, &total, &pct) == 3)
++      snprintf(val, MAX_LINE_LEN, "%.1f GiB / %.1f GiB (%d%%)", used, total,
++               pct);
++    return label[0] == 'M' ? "memory" : "swap";
++  }
++  if (strncmp(label, "Battery", 7) == 0) {
++    // "37% (2 hours, 31 mins remaining) [Discharging]" -> "37%, discharging"
++    char status[32] = "";
++    char *lb = strrchr(val, '[');
++    if (lb && sscanf(lb, "[%31[^]]", status) == 1)
++      for (char *c = status; *c; c++)
++        *c = tolower((unsigned char)*c);
++    cut_at(val, " ");
++    if (status[0] && strcmp(status, "unknown") != 0) {
++      strcat(val, ", ");
++      strcat(val, status);
++    }
++    return "battery";
++  }
++  if (strncmp(label, "Disk", 4) == 0)
++    return "disk";
++  if (strcmp(label, "CPU") == 0) {
++    cut_at(val, " @");
++    return "cpu";
++  }
++  if (strcmp(label, "Shell") == 0)
++    return "shell";
++  if (strcmp(label, "Terminal") == 0)
++    return "terminal";
++  if (strcmp(label, "WM") == 0)
++    return "wm";
++  return label;
++}
++
+ static void add_info(const char *label, const char *fmt, ...) {
+   char val[MAX_LINE_LEN];
+   va_list ap;
+@@ -1257,8 +1388,26 @@ static void add_info(const char *label, const char *fmt, ...) {
+   va_end(ap);
+ 
+   char line[MAX_LINE_LEN];
+-  snprintf(line, sizeof(line), "\033[1;%sm%s\033[0m: %s", label_color, label,
+-           val);
++  if (compact_info) {
++    static int bat_line = -1;
++    int is_bat = strncmp(label, "Battery", 7) == 0;
++    const char *short_label = compact_field(label, val);
++    if (is_bat && bat_line >= 0 && !is_refresh_pass) {
++      // second battery: "battery 37%, discharging  89%"
++      char *l = fetch_lines[bat_line];
++      int len = strlen(l);
++      snprintf(l + len, MAX_LINE_LEN - len, " \033[%sm%s\033[0m", value_color,
++               val);
++      return;
++    }
++    if (is_bat && !is_refresh_pass)
++      bat_line = fetch_line_count;
++    snprintf(line, sizeof(line), "\033[%sm%-9s\033[0m\033[%sm%s\033[0m",
++             label_color, short_label, value_color, val);
++  } else {
++    snprintf(line, sizeof(line), "\033[1;%sm%s\033[0m: %s", label_color,
++             label, val);
++  }
+ 
+   // Refresh tick: replace the field's line in place. Initial pass: always
+   // append a new line (so gathers that emit multiple rows, like multi-GPU,
+@@ -1387,6 +1536,12 @@ static void gather_title(void) {
+   gethostname(host, sizeof(host));
+ 
+   char line[MAX_LINE_LEN];
++  if (compact_info) {
++    snprintf(line, sizeof(line), "\033[1;%sm%s\033[0m\033[%sm@%s\033[0m",
++             value_color, user, label_color, host);
++    add_line(line);
++    return;
++  }
+   snprintf(line, sizeof(line), "\033[1;%sm%s\033[0m@\033[1;%sm%s\033[0m",
+            label_color, user, label_color, host);
+   add_line(line);
+@@ -1655,8 +1810,9 @@ static void gather_packages(void) {
+   }
+ #endif
+   
+-  // Nix (NixOS, or Nix package manager on other distros).
+-  {
++  // Nix (NixOS, or Nix package manager on other distros). Skipped without
++  // /nix: it costs a shell spawn on every start.
++  if (access("/nix/store", F_OK) == 0) {
+     const char *home = getenv("HOME");
+     char base[128] = "";
+     if (home) {
+@@ -1730,7 +1886,16 @@ static void gather_packages(void) {
+   }
+ 
+   n = 0;
+-  FILE *flatpak_fp = popen("flatpak list --columns=ref 2>/dev/null", "r");
++  // `flatpak list` takes ~25 ms even with nothing installed; only run it if
++  // an installation has apps.
++  char fp_user[512] = "";
++  if (getenv("HOME"))
++    snprintf(fp_user, sizeof(fp_user), "%s/.local/share/flatpak/app",
++             getenv("HOME"));
++  FILE *flatpak_fp = NULL;
++  if (access("/var/lib/flatpak/app", F_OK) == 0 ||
++      (fp_user[0] && access(fp_user, F_OK) == 0))
++    flatpak_fp = popen("flatpak list --columns=ref 2>/dev/null", "r");
+   if (flatpak_fp) {
+     char buf[256];
+     while (fgets(buf, sizeof(buf), flatpak_fp))
+@@ -2843,6 +3008,73 @@ static void gather_disk(void) {
+     gather_disk_one(extra_disks[i]);
+ }
+ 
++#if !defined(__APPLE__)
++static long read_power_supply(const char *dev, const char *file, char *buf,
++                              int len) {
++  char path[512];
++  snprintf(path, sizeof(path), "/sys/class/power_supply/%s/%s", dev, file);
++  FILE *fp = fopen(path, "r");
++  if (!fp)
++    return -1;
++  char tmp[64];
++  if (!buf) {
++    buf = tmp;
++    len = sizeof(tmp);
++  }
++  int ok = fgets(buf, len, fp) != NULL;
++  fclose(fp);
++  if (!ok)
++    return -1;
++  buf[strcspn(buf, "\n")] = '\0';
++  return atol(buf);
++}
++
++// compact=1: every system battery as one value (the T480 has an internal and
++// an external pack), weighted by energy. Device batteries (mice) are skipped.
++static int gather_battery_total(void) {
++  DIR *d = opendir("/sys/class/power_supply");
++  if (!d)
++    return 0;
++  long now = 0, full = 0;
++  int charging = 0, discharging = 0, all_full = 1;
++  struct dirent *e;
++  while ((e = readdir(d))) {
++    char buf[64];
++    if (e->d_name[0] == '.' ||
++        read_power_supply(e->d_name, "type", buf, sizeof(buf)) < 0 ||
++        strcmp(buf, "Battery") != 0)
++      continue;
++    if (read_power_supply(e->d_name, "scope", buf, sizeof(buf)) >= 0 &&
++        strcmp(buf, "Device") == 0)
++      continue;
++    long n = read_power_supply(e->d_name, "energy_now", NULL, 0);
++    long f = read_power_supply(e->d_name, "energy_full", NULL, 0);
++    if (n < 0 || f <= 0) {
++      n = read_power_supply(e->d_name, "charge_now", NULL, 0);
++      f = read_power_supply(e->d_name, "charge_full", NULL, 0);
++    }
++    if (n < 0 || f <= 0)
++      continue;
++    now += n;
++    full += f;
++    if (read_power_supply(e->d_name, "status", buf, sizeof(buf)) >= 0) {
++      charging |= strcmp(buf, "Charging") == 0;
++      discharging |= strcmp(buf, "Discharging") == 0;
++      all_full &= strcmp(buf, "Full") == 0;
++    }
++  }
++  closedir(d);
++  if (full <= 0)
++    return 0;
++  add_info("Battery", "%d%% [%s]", (int)((now * 100 + full / 2) / full),
++           charging      ? "Charging"
++           : discharging ? "Discharging"
++           : all_full    ? "Full"
++                         : "Not charging");
++  return 1;
++}
++#endif
++
+ static void gather_battery(void) {
+ #if defined(__APPLE__) && !defined(LEGACY_IOKIT)
+   CFTypeRef info = IOPSCopyPowerSourcesInfo();
+@@ -2892,6 +3124,8 @@ static void gather_battery(void) {
+   else
+     add_info("Battery", "\033[%sm%d%%\033[0m", color, capacity);
+ #else
++  if (compact_info && gather_battery_total())
++    return;
+   // Find first battery in /sys/class/power_supply
+   char bat_name[64] = "";
+   DIR *psd = opendir("/sys/class/power_supply");
+@@ -3688,7 +3922,8 @@ static void apply_layout(int show_info) {
+     ideal = MAX_HEIGHT;
+ 
+   render_height = ideal;
+-  anim_width = ANIM_WIDTH;
++  // width= (config) narrows the canvas so a small logo keeps the info close
++  anim_width = canvas_width >= 20 ? canvas_width : ANIM_WIDTH;
+   layout_stacked = 0;
+   info_clip_cols = -1;
+   stacked_info_rows = 0;
+@@ -4086,6 +4321,9 @@ int main(int argc, char **argv) {
+           "  --no-info                 Just the logo, no system info\n"
+           "  --no-color                Disable logo coloring\n"
+           "  --frames <n>              Stop after n frames (default 2000)\n"
++          "  --pinned                  Animate in the background above a scroll\n"
++          "                            region; prints '<pid> <header rows>'.\n"
++          "                            SIGUSR1 pauses, SIGUSR2 resumes\n"
+           "  --infinite                Run forever (keypress or Ctrl-C to "
+           "exit)\n"
+           "  --shading-mode <mode>     ascii (.,-~:;=!*#$@, the default), or "
+@@ -4164,6 +4402,9 @@ int main(int argc, char **argv) {
+       max_frames = atoi(argv[++i]);
+     } else if (strcmp(argv[i], "--infinite") == 0) {
+       max_frames = 0;
++    } else if (strcmp(argv[i], "--pinned") == 0) {
++      pinned = 1;
++      max_frames = 0;
+     } else if (strcmp(argv[i], "--shading-chars") == 0) {
+       if (i + 1 >= argc) {
+         fprintf(stderr, "fetch: option '%s' requires an argument\n", argv[i]);
+@@ -4215,6 +4456,17 @@ int main(int argc, char **argv) {
+ 
+   config_defaults();
+   load_config();
++  int pinned_report = -1;
++  pid_t shell_pid = 0;
++  if (pinned) {
++    int tty = open("/dev/tty", O_WRONLY | O_NOCTTY);
++    if (tty < 0)
++      return 1;
++    pinned_report = dup(STDOUT_FILENO);
++    dup2(tty, STDOUT_FILENO);
++    close(tty);
++    shell_pid = getppid();
++  }
+   get_term_size(&term_rows, &term_cols);
+ 
+   // Shading: CLI flags, then config, then the ascii default
+@@ -4383,7 +4635,7 @@ int main(int argc, char **argv) {
+       render_height = needed;
+   }
+ 
+-  if (tcgetattr(STDIN_FILENO, &orig_termios) == 0) {
++  if (!pinned && tcgetattr(STDIN_FILENO, &orig_termios) == 0) {
+     termios_saved = 1;
+     struct termios raw = orig_termios;
+     raw.c_lflag &= ~(ICANON | ECHO);
+@@ -4392,8 +4644,10 @@ int main(int argc, char **argv) {
+     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+   }
+ 
+-  printf("\033[?25l\033[?1002h\033[?1006h\033[2J");
+-  fflush(stdout);
++  if (!pinned) {
++    printf("\033[?25l\033[?1002h\033[?1006h\033[2J");
++    fflush(stdout);
++  }
+ 
+   int mouse_dragging = 0;
+   int mouse_last_x = 0, mouse_last_y = 0;
+@@ -4404,7 +4658,7 @@ int main(int argc, char **argv) {
+     // Peek one byte first — only consume input if it's an escape (mouse).
+     // Non-escape bytes stay in the buffer so the shell gets the keypress.
+     int should_break = 0;
+-    struct pollfd pfd = {.fd = STDIN_FILENO, .events = POLLIN};
++    struct pollfd pfd = {.fd = pinned ? -1 : STDIN_FILENO, .events = POLLIN};
+     while (poll(&pfd, 1, 0) > 0) {
+       static char ibuf[128];
+       static int ibuf_len = 0;
+@@ -4499,22 +4753,36 @@ int main(int argc, char **argv) {
+     if (term_resized) {
+       term_resized = 0;
+       get_term_size(&term_rows, &term_cols);
++      pinned_region = pinned; // the region's bottom follows the terminal
+       int old_h = render_height, old_w = anim_width;
+       int old_stacked = layout_stacked, old_clip = info_clip_cols;
+       apply_layout(show_info);
++      // Same tightening as at startup, or the frame grows to the full
++      // terminal height (in --pinned mode that would cover the shell).
++      if (config_height == 0) {
++        int logo_bottom = (int)(fixed_y_center + face_dn) + 2;
++        int info_bottom = show_info ? fetch_start + fetch_line_count + 1 : 0;
++        int needed = logo_bottom > info_bottom ? logo_bottom : info_bottom;
++        if (needed < render_height)
++          render_height = needed;
++      }
+       if (render_height != old_h || anim_width != old_w ||
+           layout_stacked != old_stacked || info_clip_cols != old_clip) {
+-        K1 = 37.0f * logo_height / 36.0f;
+-        printf("\033[2J");
+-        fflush(stdout);
++        K1 = 37.0f * logo_height / 36.0f * size_scale;
++        if (!pinned) {
++          printf("\033[2J");
++          fflush(stdout);
++        }
+       }
+     }
+     // Refresh fast dynamic fields every ~1 second (20 frames).
+     // Only uptime/memory/swap — they're pure /proc reads, no popen,
+     // so they don't hitch the animation. Battery/disk/ip use popen and
+     // stay static (user can restart to refresh those).
+-    if (show_info && frame > 0 && frame % 20 == 0) {
++    int info_dirty = 0;
++    if (show_info && frame > 0 && frame % fps == 0) {
+       is_refresh_pass = 1;
++      info_dirty = 1;
+       if (field_line[F_UPTIME] >= 0) {
+         current_field = F_UPTIME;
+         gather_uptime();
+@@ -4527,8 +4795,24 @@ int main(int argc, char **argv) {
+         current_field = F_SWAP;
+         gather_swap();
+       }
++#if !defined(__APPLE__)
++      // sysfs reads only, so cheap enough to keep live (every 30 s)
++      if (compact_info && field_line[F_BATTERY] >= 0 &&
++          frame % (fps * 30) == 0) {
++        current_field = F_BATTERY;
++        gather_battery_total();
++      }
++#endif
+       current_field = -1;
+       is_refresh_pass = 0;
++      // only redraw the info column if a value actually changed
++      unsigned long sum = 0;
++      for (int i = 0; i < fetch_line_count; i++)
++        for (const char *c = fetch_lines[i]; *c; c++)
++          sum = sum * 31 + (unsigned char)*c;
++      static unsigned long last_sum = 0;
++      info_dirty = sum != last_sum;
++      last_sum = sum;
+     }
+ 
+     clear_buf();
+@@ -4537,8 +4821,9 @@ int main(int argc, char **argv) {
+         A += drag_vx;
+         B += drag_vy;
+       } else {
+-        A += rotate_x ? 0.04f * speed : 0.0f;
+-        B += rotate_y ? 0.06f * speed : 0.0f;
++        // per-frame step scaled so the spin speed doesn't depend on fps
++        A += rotate_x ? 0.04f * speed * 20.0f / fps : 0.0f;
++        B += rotate_y ? 0.06f * speed * 20.0f / fps : 0.0f;
+       }
+     }
+     float cA = cosf(A), sA = sinf(A);
+@@ -4608,7 +4893,7 @@ int main(int argc, char **argv) {
+     // Batch entire frame into a single write (reuse buffer across frames)
+     static char *out_buf = NULL;
+     static size_t out_cap = 0;
+-    size_t need = (render_height + stacked_info_rows + 2) * (2048u + left_padding) + 64 + top_padding;
++    size_t need = (render_height + stacked_info_rows + 2) * (2048u + left_padding) + 128 + top_padding;
+     if (need > out_cap) {
+       free(out_buf);
+       out_buf = malloc(need);
+@@ -4619,7 +4904,10 @@ int main(int argc, char **argv) {
+       return 1;
+     }
+     char *p = out_buf;
+-    char *end = out_buf + need - 8;
++    char *end = out_buf + need - 64;
++    if (pinned)
++      p += sprintf(p, frame == 0 ? "\033[2J" : "\0337");
++    char *frame_start = p;
+     *p++ = '\033'; *p++ = '[';
+     *p++ = 'H';
+ 
+@@ -4639,6 +4927,9 @@ int main(int argc, char **argv) {
+       p += top_padding;
+     }
+ 
++    // In --pinned mode the info text is static between refresh ticks, so only
++    // the logo columns are rewritten; the terminal has far less to redraw.
++    const int draw_info = !pinned || frame == 0 || pinned_region || info_dirty;
+     for (int i = 0; i < render_height && p + 8 < end; i++) {
+       if (left_padding > 0) {
+         memset(p, ' ', left_padding);
+@@ -4693,7 +4984,7 @@ int main(int argc, char **argv) {
+       }
+ 
+       int fi = i - fetch_start;
+-      if (!layout_stacked && fi >= 0 && fi < fetch_line_count &&
++      if (draw_info && !layout_stacked && fi >= 0 && fi < fetch_line_count &&
+           p + GAP + 4 < end) {
+         memset(p, ' ', GAP); p += GAP;
+         p = emit_clipped(p, end, fetch_lines[fi], info_clip_cols);
+@@ -4701,23 +4992,112 @@ int main(int argc, char **argv) {
+ 
+       // Erase to end of line + newline
+       if (p + 8 >= end) break;
+-      memcpy(p, clr_seq, 4); p += 4;
++      if (draw_info) {
++        memcpy(p, clr_seq, 3); p += 3;
++      }
+       *p++ = '\n';
+     }
+     if (layout_stacked && stacked_info_rows > 0) {
+       if (render_height > 0 && p + 8 < end) {
+-        memcpy(p, clr_seq, 4); p += 4;
++        memcpy(p, clr_seq, 3); p += 3;
+         *p++ = '\n';
+       }
+       for (int i = 0; i < stacked_info_rows && p + 16 < end; i++) {
+         p = emit_clipped(p, end, fetch_lines[i], info_clip_cols);
+-        memcpy(p, clr_seq, 4); p += 4;
++        memcpy(p, clr_seq, 3); p += 3;
+         *p++ = '\n';
+       }
+     }
+-    if (write(STDOUT_FILENO, out_buf, p - out_buf) < 0)
++    if (pinned) {
++      // Header height is whatever this frame drew; the shell gets the rest.
++      static int header_rows = 0;
++      if (frame == 0 || pinned_region) {
++        int h = 0;
++        for (char *q = frame_start; q < p; q++)
++          h += *q == '\n';
++        if (frame == 0 && h + 3 > term_rows)
++          _exit(1); // too short to share: draw nothing, shell carries on
++        header_rows = h;
++        p += sprintf(p, "\033[%d;%dr", header_rows + 1, term_rows);
++        pinned_region = 0;
++      }
++      if (frame == 0)
++        p += sprintf(p, "\033[%d;1H", header_rows + 1);
++      else
++        p += sprintf(p, "\0338");
++      if (frame == 0) {
++        if (write(STDOUT_FILENO, out_buf, p - out_buf) < 0)
++          _exit(1);
++        signal(SIGUSR1, handle_pause); // before fork: the shell may signal
++        signal(SIGUSR2, handle_resume); // the pid as soon as it reads it
++        pid_t child = fork();
++        if (child != 0) {
++          dprintf(pinned_report, "%d %d\n", child < 0 ? 0 : (int)child,
++                  header_rows);
++          _exit(child < 0);
++        }
++        setsid(); // no SIGINT/SIGHUP from the tty; exits on EIO instead
++        close(pinned_report);
++        int devnull = open("/dev/null", O_RDONLY);
++        if (devnull >= 0) {
++          dup2(devnull, STDIN_FILENO);
++          close(devnull);
++        }
++        usleep(1000000 / fps);
++        continue;
++      }
++    }
++    // One complete write per frame, so it never interleaves with the shell's.
++    // A tty write cut short by a signal returns what it wrote so far; the
++    // shell's output could then land between the halves while the cursor is
++    // in the header (the shell signals us at every prompt). Hold signals
++    // until the whole frame is out.
++    sigset_t hold, unhold;
++    sigemptyset(&hold);
++    if (pinned) {
++      sigaddset(&hold, SIGUSR1);
++      sigaddset(&hold, SIGUSR2);
++      sigaddset(&hold, SIGWINCH);
++      sigaddset(&hold, SIGTERM);
++      sigaddset(&hold, SIGINT);
++    }
++    sigprocmask(SIG_BLOCK, &hold, &unhold);
++    size_t len = p - out_buf, off = 0;
++    ssize_t w = 0;
++    while (off < len) {
++      w = write(STDOUT_FILENO, out_buf + off, len - off);
++      if (w < 0 && errno == EINTR)
++        continue;
++      if (w <= 0)
++        break;
++      off += w;
++    }
++    sigprocmask(SIG_SETMASK, &unhold, NULL);
++    if (w < 0)
+       break;
+-    usleep(50000);
++    usleep(1000000 / fps);
++    if (pinned) {
++      if (pinned_paused) {
++        // Sleep until SIGUSR2; SIGUSR2 is blocked except inside pselect, so
++        // it can't slip in between the check and the wait. Wake once a
++        // second only to notice a closed terminal.
++        sigset_t usr2, old;
++        sigemptyset(&usr2);
++        sigaddset(&usr2, SIGUSR2);
++        sigprocmask(SIG_BLOCK, &usr2, &old);
++        while (pinned_paused && kill(shell_pid, 0) == 0) {
++          struct timespec ts = {1, 0};
++          pselect(0, NULL, NULL, NULL, &ts, &old);
++        }
++        sigprocmask(SIG_SETMASK, &old, NULL);
++      }
++      struct winsize ws;
++      if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 &&
++          (ws.ws_row != term_rows || ws.ws_col != term_cols))
++        term_resized = 1;
++      if (frame % fps == 0 && kill(shell_pid, 0) != 0)
++        break;
++    }
+   }
+ 
+   printf("\033[?25h");

@@ -1,0 +1,5 @@
+# Restore the saved backlight level when a backlight appears; save it and
+# refresh the chadwm bar when a hotkey (blkeys) changes it. See
+# /usr/local/sbin/backlight-state.
+SUBSYSTEM=="backlight", ACTION=="add", RUN+="/usr/local/sbin/backlight-state add %k"
+SUBSYSTEM=="backlight", ACTION=="change", ENV{SOURCE}=="hotkey", RUN+="/usr/local/sbin/backlight-state change %k"

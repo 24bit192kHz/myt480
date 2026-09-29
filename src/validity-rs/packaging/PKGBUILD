@@ -1,0 +1,79 @@
+# Maintainer: btw
+#
+# Local package: builds the checkout this PKGBUILD lives in (packaging/..),
+# not a tarball. Build with `makepkg` from this directory; see INSTALL.md.
+
+pkgname=validity-rs
+pkgver=0.1.0
+pkgrel=2
+pkgdesc='Synaptics/Validity 06cb:009a (ThinkPad T480) match-on-chip fingerprint daemon for open-fprintd (Rust port of python-validity)'
+arch=('x86_64')
+url='https://github.com/uunicorn/python-validity'
+license=('MIT')
+depends=('gcc-libs' 'glibc' 'libusb' 'dbus' 'open-fprintd')
+makedepends=('cargo')
+optdepends=('s6-base: run the daemon from the bundled s6-rc service (/etc/s6/sv/validity-rs)'
+            'python-validity: validity-sensors-firmware, to fetch the fwext firmware for a factory-fresh sensor')
+# Coexistence with python-validity (deliberate):
+# - No file overlaps: own binary, own D-Bus policy file
+#   (io.github.uunicorn.Fprint.validity-rs.conf), own s6 service, own data dir.
+# - NOT conflicts=('python-validity'): that would force pacman to remove
+#   python-validity during the install and throw away the one-command rollback
+#   (switch the s6 services back). Remove python-validity by hand once
+#   validity-rs has proven itself; the D-Bus policy it shipped is duplicated here.
+# - NOT provides=('python-validity'): nothing depends on it (open-fprintd
+#   does not), and validity-rs is not a drop-in for its Python API or tools.
+# Runtime exclusivity is what matters: python3-validity and validity-rs must
+# never be enabled or running at the same time (same USB device; validity-rs
+# resets the port on a wedged session). The s6 run script refuses to start
+# while python-validity's dbus-service is running.
+install=validity-rs.install
+options=('!debug')  # release profile already strips (strip = true)
+
+_srcroot() {
+  realpath "$startdir/.."
+}
+
+prepare() {
+  cd "$(_srcroot)"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')"
+}
+
+build() {
+  cd "$(_srcroot)"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="$srcdir/target"
+  cargo build --release --locked
+}
+
+check() {
+  cd "$(_srcroot)"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="$srcdir/target"
+  # Golden-vector tests are skipped unless tests/golden/golden.json exists
+  # (it holds this machine's pairing blob and is never committed).
+  cargo test --release --locked
+}
+
+package() {
+  cd "$(_srcroot)"
+
+  install -Dm755 "$srcdir/target/release/validity-rs" "$pkgdir/usr/bin/validity-rs"
+
+  install -Dm644 packaging/dbus/io.github.uunicorn.Fprint.validity-rs.conf \
+    "$pkgdir/usr/share/dbus-1/system.d/io.github.uunicorn.Fprint.validity-rs.conf"
+
+  # s6-rc source definition, laid out like Artix's *-s6 packages
+  # (/etc/s6/sv/<name>/{type,run,dependencies.d/}). Installing it triggers
+  # Artix's s6-rc-db-update hook (s6 repository sync + set commit + live
+  # install); enabling it is left to the admin (INSTALL.md).
+  install -Dm644 packaging/s6/validity-rs/type "$pkgdir/etc/s6/sv/validity-rs/type"
+  install -Dm755 packaging/s6/validity-rs/run "$pkgdir/etc/s6/sv/validity-rs/run"
+  install -Dm644 /dev/null "$pkgdir/etc/s6/sv/validity-rs/dependencies.d/open-fprintd"
+
+  install -Dm644 packaging/validity-rs.conf.example \
+    "$pkgdir/usr/share/doc/validity-rs/validity-rs.conf.example"
+  install -Dm644 README.md packaging/INSTALL.md -t "$pkgdir/usr/share/doc/validity-rs/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/validity-rs/LICENSE"
+}

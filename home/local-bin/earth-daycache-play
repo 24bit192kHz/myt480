@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Zero-GPU wallpaper: show the pre-rendered frame for the current minute.
+set -u
+CACHE_BASE="$HOME/.local/state/earth-daycache"
+PIDF="$CACHE_BASE/player.pid"
+pick_dir() {
+    local today="$HOME/.local/share/earth-daycache/$(date +%F)"
+    if [[ $(ls "$today"/*.jpg 2>/dev/null | wc -l) -ge 1400 ]]; then printf "%s" "$today"; return 0; fi
+    local best="" bestn=0 d n
+    for d in "$HOME"/.local/share/earth-daycache/*/; do
+        [[ -d "$d" ]] || continue
+        n=$(ls "$d"/*.jpg 2>/dev/null | wc -l)
+        if (( n > bestn )); then bestn=$n; best="$d"; fi
+    done
+    (( bestn >= 1400 )) && printf "%s" "${best%/}" && return 0
+    return 1
+}
+loop() {
+    mkdir -p "$CACHE_BASE"
+    echo "$$" > "$PIDF"
+    local last="" dir f m
+    while [[ -S /tmp/.X11-unix/X0 ]]; do
+        dir="$(pick_dir)" || { sleep 60; continue; }
+        m=$(( 10#$(date +%H) * 60 + 10#$(date +%M) ))
+        f="$dir/$(printf "%04d" $m).jpg"
+        [[ -f "$f" ]] || f="$dir/0000.jpg"
+        if [[ "$f" != "$last" && -f "$f" ]]; then
+            DISPLAY=:0 XAUTHORITY="$HOME/.Xauthority" feh --no-fehbg --bg-fill "$f" >/dev/null 2>&1 && last="$f"
+        fi
+        sleep $(( 60 - 10#$(date +%S) ))
+    done
+}
+case "${1:-status}" in
+    start) mkdir -p "$CACHE_BASE"; setsid nohup "$0" play >> "$CACHE_BASE/player.log" 2>&1 < /dev/null & echo started ;;
+    play) loop ;;
+    stop) [[ -f "$PIDF" ]] && kill "$(cat "$PIDF")" 2>/dev/null; rm -f "$PIDF"; echo stopped ;;
+    status) if [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then echo "daycache: up (pid $(cat "$PIDF"))"; else echo "daycache: down"; fi; pick_dir >/dev/null 2>&1 && echo "cache: $(pick_dir) ($(ls $(pick_dir)/*.jpg | wc -l) frames)" || echo "cache: incomplete/missing" ;;
+    *) echo "usage: earth-daycache-play {start|stop|status}" >&2; exit 2 ;;
+esac

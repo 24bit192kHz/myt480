@@ -1,0 +1,26 @@
+#!/bin/sh
+# Run a program on the MX150 (NVIDIA PRIME render offload).
+# Turns the GPU on for the program and off again after the last one ended
+# (gpu-power). Needs `dgpu on` in the firmware; without the GPU the program
+# runs on the iGPU as usual.
+[ $# -gt 0 ] || { echo "usage: prime-run <program> [args]" >&2; exit 64; }
+
+lock="${XDG_RUNTIME_DIR:-/tmp}/gpu-power-$(id -u).lock"
+exec 9>"$lock"
+flock -s 9			# shared: a program is using the GPU
+
+if gpu-power on; then
+	export __NV_PRIME_RENDER_OFFLOAD=1
+	export __VK_LAYER_NV_optimus=NVIDIA_only
+	export __GLX_VENDOR_LIBRARY_NAME=nvidia
+fi
+
+"$@" 9>&-
+rc=$?
+
+flock -u 9
+# exclusive: nobody else is between "on" and the end of their program
+if flock -n -x 9; then
+	gpu-power off 2>/dev/null
+fi
+exit $rc

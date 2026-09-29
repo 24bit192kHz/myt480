@@ -1,0 +1,3 @@
+#!/bin/sh
+# throttled now supervised as throttled-srv; keep boot moving
+exit 0

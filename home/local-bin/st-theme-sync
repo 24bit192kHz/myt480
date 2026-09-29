@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+#
+# st-theme-sync — mirror the active dwm-titus theme into suckless st.
+#
+# Reads the [active] theme from ~/.config/dwm-titus/themes.toml (awk/sed
+# only, no python), rewrites ONLY the hex values between the
+# ALACRITTY-SYNC markers in ~/build/st/config.h (comments and formatting
+# are left byte-identical), rebuilds st, and best-effort installs it.
+#
+# Theme values are normalized to lowercase #rrggbb to match the
+# established config.h style, so rerunning on the same theme is a no-op.
+#
+# Mapping (19 term_* values -> 20 color slots):
+#   term_color0..15 -> palette 0..15
+#   term_cursor     -> 256 (cursor)
+#   term_color8     -> 257 (reverse cursor)
+#   term_fg         -> 258 (foreground)
+#   term_bg         -> 259 (background)
+#
+# Usage: st-theme-sync [--check]
+#   --check regenerates to a temp file and diffs against config.h
+#           (exit 0 = in sync, exit 1 = drifted, diff printed).
+
+set -euo pipefail
+
+THEMES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dwm-titus/themes.toml"
+ST_DIR="/home/btw/build/st"
+CONFIG_H="$ST_DIR/config.h"
+START_MARK="ALACRITTY-SYNC-START"
+END_MARK="ALACRITTY-SYNC-END"
+
+die() { printf 'st-theme-sync: error: %s\n' "$*" >&2; exit 1; }
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    printf 'usage: st-theme-sync [--check]\n'
+    exit 0
+fi
+[[ $# -eq 0 || "${1:-}" == "--check" ]] || die "usage: st-theme-sync [--check]"
+
+[[ -f "$THEMES_FILE" ]] || die "themes file not found: $THEMES_FILE"
+[[ -f "$CONFIG_H" ]] || die "st config.h not found: $CONFIG_H"
+
+# --- active theme name (awk/sed only) ---
+THEME="$(awk '
+    /^[[:space:]]*\[/ {
+        h = $0
+        sub(/^[[:space:]]*/, "", h)
+        sub(/[[:space:]]*#.*$/, "", h)
+        sub(/[[:space:]]*$/, "", h)
+        in_sec = (h == "[active]")
+        next
+    }
+    in_sec && /^[[:space:]]*theme[[:space:]]*=/ {
+        line = $0
+        sub(/^[^=]*=/, "", line)
+        print line
+        exit
+    }
+' "$THEMES_FILE" | sed -e 's/^[[:space:]]*//' -e "s/^['\"]//" -e "s/['\"[:space:]].*//")"
+[[ -n "${THEME:-}" ]] || die "no [active] theme set in $THEMES_FILE"
+SECTION="[theme.$THEME]"
+
+# --- one term_* value, normalized to lowercase #rrggbb ---
+theme_get() {
+    awk -v sec="$SECTION" -v key="$1" '
+        /^[[:space:]]*\[/ {
+            h = $0
+            sub(/^[[:space:]]*/, "", h)
+            sub(/[[:space:]]*#.*$/, "", h)
+            sub(/[[:space:]]*$/, "", h)
+            in_sec = (h == sec)
+            next
+        }
+        in_sec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+            line = $0
+            sub(/^[^=]*=/, "", line)
+            print line
+            exit
+        }
+    ' "$THEMES_FILE" | sed -e 's/^[[:space:]]*//' -e "s/^['\"]//" -e "s/['\"[:space:]].*//" | tr '[:upper:]' '[:lower:]'
+}
+
+HEX='#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
+vals=()
+for i in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    v="$(theme_get "term_color$i")"
+    [[ "$v" =~ ^$HEX$ ]] || die "theme '$THEME' has invalid term_color$i: '${v:-<missing>}'"
+    vals+=("$v")
+done
+for k in term_cursor term_fg term_bg; do
+    v="$(theme_get "$k")"
+    [[ "$v" =~ ^$HEX$ ]] || die "theme '$THEME' has invalid $k: '${v:-<missing>}'"
+    case "$k" in
+        term_cursor) CURSOR="$v" ;;
+        term_fg) FG="$v" ;;
+        term_bg) BG="$v" ;;
+    esac
+done
+# 256 cursor, 257 reverse cursor (= bright black), 258 fg, 259 bg
+vals+=("$CURSOR" "${vals[8]}" "$FG" "$BG")
+
+# --- regenerate the block between the markers into a temp file ---
+tmp="$(mktemp)"
+vals_f="$(mktemp)"
+trap 'rm -f "$tmp" "$vals_f"' EXIT
+printf '%s\n' "${vals[@]}" >"$vals_f"
+
+awk -v vf="$vals_f" -v start="$START_MARK" -v end="$END_MARK" '
+    BEGIN {
+        n = 0
+        while ((getline line < vf) > 0) val[++n] = line
+        close(vf)
+        hexre = "\"#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]\""
+    }
+    index($0, start) { in_block = 1; seen_start++; print; next }
+    index($0, end)   { in_block = 0; seen_end++; print; next }
+    in_block {
+        if ($0 ~ hexre) {
+            if (++k > n) {
+                print "st-theme-sync: error: more color slots than values" > "/dev/stderr"
+                exit 1
+            }
+            sub(hexre, "\"" val[k] "\"")
+        }
+        print
+        next
+    }
+    { print }
+    END {
+        if (seen_start != 1 || seen_end != 1) {
+            print "st-theme-sync: error: expected exactly one START and one END marker" > "/dev/stderr"
+            exit 1
+        }
+        if (k != n) {
+            print "st-theme-sync: error: replaced " (k + 0) " slots, expected " n > "/dev/stderr"
+            exit 1
+        }
+    }
+' "$CONFIG_H" >"$tmp" || die "block regeneration failed"
+
+if [[ "${1:-}" == "--check" ]]; then
+    if cmp -s "$CONFIG_H" "$tmp"; then
+        printf "st-theme-sync: in sync with theme '%s'\n" "$THEME"
+        exit 0
+    else
+        diff -u "$CONFIG_H" "$tmp" || true
+        exit 1
+    fi
+fi
+
+if cmp -s "$CONFIG_H" "$tmp"; then
+    printf "st-theme-sync: config.h already in sync with theme '%s'\n" "$THEME"
+else
+    cat "$tmp" >"$CONFIG_H"
+    printf "st-theme-sync: updated %s from theme '%s'\n" "$CONFIG_H" "$THEME"
+fi
+
+make -C "$ST_DIR"
+
+if sudo -n make -C "$ST_DIR" install >/dev/null 2>&1; then
+    printf 'st-theme-sync: installed system-wide\n'
+else
+    printf 'st-theme-sync: rebuilt OK — run `sudo make -C ~/build/st install` to publish system-wide\n'
+fi

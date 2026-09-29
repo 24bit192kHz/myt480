@@ -1,0 +1,23 @@
+#!/bin/sh
+# validity-rs: Synaptics 06cb:009a (T480) fingerprint daemon for open-fprintd.
+# Replaces python3-validity; never enable both. They drive the same USB
+# device, and validity-rs resets the port when a session looks wedged, which
+# would also kill python-validity's TLS session.
+#
+# No state to shuttle around (python3-validity copies /var/lib -> /run and
+# back in finish): validity-rs reads and writes /var/lib/validity-rs directly,
+# imports calib-data.bin from /var/lib/python-validity on its first start and
+# also looks there for the fwext firmware file when the sensor needs it.
+#
+# Logging: stdout and stderr go to s6-svscan's catch-all logger
+# (/run/uncaught-logs/current), like python3-validity and open-fprintd.
+exec 2>&1
+
+if pgrep -f /usr/lib/python-validity/dbus-service >/dev/null 2>&1; then
+  echo "validity-rs: python-validity's dbus-service is running;" \
+       "run 's6 live stop python3-validity' first. Retrying in 10 s."
+  sleep 10
+  exit 1
+fi
+
+exec /usr/bin/validity-rs daemon

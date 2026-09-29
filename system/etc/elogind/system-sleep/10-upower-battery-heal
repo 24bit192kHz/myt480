@@ -1,0 +1,12 @@
+#!/bin/sh
+# elogind sleep hook: heal UPower BAT1 energy-full corruption after resume.
+# Runs after suspend/hibernate/hybrid-sleep; waits for the EC fuel gauge to
+# settle, then heals only if D-Bus values are corrupt (cheap no-op otherwise).
+case "$1" in
+  post)
+    # EC needs a moment after "EC started" before gauge reads are sane
+    sleep 5
+    /usr/local/sbin/upower-battery-heal --check || true
+    ;;
+esac
+exit 0

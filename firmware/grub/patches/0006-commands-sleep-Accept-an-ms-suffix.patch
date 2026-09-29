@@ -1,0 +1,42 @@
+From 93b00c995201a8ac4ec33e655b0301945e158fb1 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:52:41 +0300
+Subject: [PATCH 06/14] commands/sleep: Accept an ms suffix
+
+"sleep --interruptible 150ms" gives a short window to hold Shift or press
+Esc without the one-second granularity, matching the ms timeout patch.
+---
+ grub-core/commands/sleep.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/grub-core/commands/sleep.c b/grub-core/commands/sleep.c
+index a1370b710..7e41e379f 100644
+--- a/grub-core/commands/sleep.c
++++ b/grub-core/commands/sleep.c
+@@ -65,12 +65,22 @@ static grub_err_t
+ grub_cmd_sleep (grub_extcmd_context_t ctxt, int argc, char **args)
+ {
+   struct grub_arg_list *state = ctxt->state;
++  const char *end = 0;
+   int n;
+ 
+   if (argc != 1)
+     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected"));
+ 
+-  n = grub_strtoul (args[0], 0, 10);
++  n = grub_strtoul (args[0], &end, 10);
++
++  /* "150ms" sleeps milliseconds, like the ms suffix of "timeout".  */
++  if (end && end[0] == 'm' && end[1] == 's' && end[2] == '\0')
++    {
++      if (state[1].set)
++	return grub_interruptible_millisleep (n) ? 1 : 0;
++      grub_millisleep (n);
++      return 0;
++    }
+ 
+   if (n == 0)
+     {
+-- 
+2.55.0
+

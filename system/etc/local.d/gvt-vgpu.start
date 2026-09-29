@@ -1,0 +1,18 @@
+#!/bin/sh
+# GVT-g: create the WinApps vGPU (mdev slice of the UHD 620) at boot.
+# Needs linux-t480 >= 7.2.8-2 (CONFIG_CMDLINE i915.enable_gvt=1, kvmgt module).
+# Container side: ~btw/.config/winapps/compose.yaml passes /sys/bus/mdev/devices/$UUID.
+exec >>/var/log/gvt-vgpu.log 2>&1
+echo "--- $(date -u +%FT%TZ) gvt-vgpu ---"
+UUID=19e7dedf-c47d-445e-96e5-c391a0ab0fa6
+GPU=/sys/bus/pci/devices/0000:00:02.0
+modprobe kvmgt || { echo 'kvmgt unavailable (GVT kernel not booted?)'; exit 0; }
+modprobe vfio_iommu_type1
+[ -e /sys/bus/mdev/devices/$UUID ] && { echo 'vGPU already exists'; exit 0; }
+for TYPE in i915-GVTg_V5_4 i915-GVTg_V5_8; do
+  T=$GPU/mdev_supported_types/$TYPE
+  [ -d "$T" ] && [ "$(cat $T/available_instances)" -gt 0 ] || continue
+  echo $UUID > $T/create && { echo "created $TYPE $UUID group $(basename $(readlink /sys/bus/mdev/devices/$UUID/iommu_group))"; exit 0; }
+done
+echo 'no vGPU type available:'; ls $GPU/mdev_supported_types 2>&1
+exit 0

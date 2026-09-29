@@ -1,0 +1,26 @@
+From d177377e371cbb4047bdf3869dcbbd6585ddc410 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 12:19:24 +0300
+Subject: [PATCH 03/14] loader/i386/coreboot/chainloader: filesize is
+ grub_size_t (passed as grub_size_t *)
+
+---
+ grub-core/loader/i386/coreboot/chainloader.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/grub-core/loader/i386/coreboot/chainloader.c b/grub-core/loader/i386/coreboot/chainloader.c
+index 4a5179806..99e926950 100644
+--- a/grub-core/loader/i386/coreboot/chainloader.c
++++ b/grub-core/loader/i386/coreboot/chainloader.c
+@@ -390,7 +390,7 @@ load_chewed (grub_file_t file, const char *filename)
+ 	  {
+ 	    grub_uint32_t target = grub_be_to_cpu64 (segment.load_addr);
+ 	    grub_uint32_t memsize = grub_be_to_cpu32 (segment.mem_len);
+-	    grub_uint32_t filesize = grub_be_to_cpu32 (segment.len);
++	    grub_size_t filesize = grub_be_to_cpu32 (segment.len);
+ 	    grub_uint8_t *load_addr;
+ 	    grub_relocator_chunk_t ch;
+ 
+-- 
+2.55.0
+

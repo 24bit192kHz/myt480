@@ -1,0 +1,40 @@
+From 0dc6728e0cac0e8189573f335449f14056f1b302 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:54:47 +0300
+Subject: [PATCH 07/13] device/pciexp_device: Only endpoints limit ASPM exit
+ latency
+
+The L0s/L1 Acceptable Latency fields of Device Capabilities exist for
+endpoints only; other functions hardwire them to 0. pciexp_enable_aspm()
+compared the link exit latency against that 0 for a switch upstream
+port and so never enabled L1 on the root port link of a Thunderbolt
+controller (T480: 00:1d.0 <-> 02:00.0 stayed in L0 at 8 GT/s x2 and
+kept the package in PC3 unless the OS forced ASPM). Treat non-endpoints
+as unlimited, like Linux does.
+---
+ src/device/pciexp_device.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/device/pciexp_device.c b/src/device/pciexp_device.c
+index 8fd7017582..f5361b1950 100644
+--- a/src/device/pciexp_device.c
++++ b/src/device/pciexp_device.c
+@@ -649,6 +649,15 @@ static void pciexp_enable_aspm(struct device *root, unsigned int root_cap,
+ 	/* Get endpoint device capabilities for acceptable limits */
+ 	devcap = pci_read_config32(endp, endp_cap + PCI_EXP_DEVCAP);
+ 
++	/*
++	 * The L0s/L1 Acceptable Latency fields only exist for endpoints. Other
++	 * functions, e.g. the upstream port of a switch like a Thunderbolt
++	 * controller, hardwire them to 0 (< 64 ns / < 1 us), which would veto
++	 * ASPM on the link. Treat them as unlimited, like Linux does.
++	 */
++	if (!pcie_is_endpoint(endp))
++		devcap |= PCI_EXP_DEVCAP_L0S | PCI_EXP_DEVCAP_L1;
++
+ 	/* Enable L0s if it is within endpoint acceptable limit */
+ 	ok_latency = (devcap & PCI_EXP_DEVCAP_L0S) >> 6;
+ 	exit_latency = pciexp_aspm_latency(root, root_cap, endp, endp_cap,
+-- 
+2.55.0
+

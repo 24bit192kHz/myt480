@@ -1,0 +1,58 @@
+From 4393e5aa36f84e562033e9a16779c540cfc4dbee Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:02:55 +0300
+Subject: [PATCH 11/14] at_keyboard coreboot: Keep an Esc pressed before GRUB
+ started
+
+Tapping Esc during power-on is the other way to ask for the menu when it
+is hidden; hand an Esc found among the drained bytes to the next getkey.
+---
+ grub-core/term/at_keyboard.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/grub-core/term/at_keyboard.c b/grub-core/term/at_keyboard.c
+index f05379cf4..e6846032f 100644
+--- a/grub-core/term/at_keyboard.c
++++ b/grub-core/term/at_keyboard.c
+@@ -37,6 +37,11 @@ static int ping_sent;
+ static void
+ grub_keyboard_controller_init (void);
+ 
++#if defined (GRUB_MACHINE_COREBOOT)
++/* Esc pressed before the controller was set up, handed out once by getkey.  */
++static int early_key = GRUB_TERM_NO_KEY;
++#endif
++
+ static void
+ keyboard_controller_wait_until_ready (void)
+ {
+@@ -259,6 +264,15 @@ grub_at_keyboard_getkey (struct grub_term_input *term __attribute__ ((unused)))
+   if (!grub_at_keyboard_is_alive ())
+     return GRUB_TERM_NO_KEY;
+ 
++#if defined (GRUB_MACHINE_COREBOOT)
++  if (early_key != GRUB_TERM_NO_KEY)
++    {
++      ret = early_key;
++      early_key = GRUB_TERM_NO_KEY;
++      return ret;
++    }
++#endif
++
+   if (! KEYBOARD_ISREADY (grub_inb (KEYBOARD_REG_STATUS)))
+     return GRUB_TERM_NO_KEY;
+   at_key = grub_inb (KEYBOARD_REG_DATA);
+@@ -324,7 +338,9 @@ grub_keyboard_controller_init (void)
+ 	}
+       ps2_state.current_set = (ctl & KEYBOARD_AT_TRANSLATE) ? 1 : 2;
+       for (i = 0; i < npending; i++)
+-	grub_ps2_process_incoming_byte (&ps2_state, pending[i]);
++	if (grub_ps2_process_incoming_byte (&ps2_state, pending[i])
++	    == GRUB_TERM_ESC)
++	  early_key = GRUB_TERM_ESC;
+     }
+ #endif
+ #if defined (GRUB_MACHINE_MIPS_LOONGSON) || defined (GRUB_MACHINE_MIPS_QEMU_MIPS)
+-- 
+2.55.0
+

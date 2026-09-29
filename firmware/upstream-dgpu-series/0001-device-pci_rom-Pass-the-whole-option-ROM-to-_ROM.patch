@@ -1,0 +1,108 @@
+From fb0015c2fc6bff66c36f2e678e721afc3155e9c8 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 19:53:22 +0300
+Subject: [PATCH 1/4] device/pci_rom: Pass the whole option ROM to _ROM
+
+pci_rom_ssdt() takes the length of an option ROM from the size field of
+its header. That field is a single byte, so it cannot describe more
+than 127.5 KiB, and it only covers the first image of the ROM.
+
+The VBIOS of a GeForce MX150 (10de:1d10) has 119808 bytes in that field,
+but 182272 bytes as image length in its PCI data structure. With only
+the first 119808 bytes in _ROM, the NVIDIA driver (580.178.04) fails to
+initialize the GPU:
+
+  NVRM: GPU 0000:01:00.0: RmInitAdapter failed! (0x24:0x40:1603)
+
+For ROMs that are not loaded yet, add up the image lengths of the PCI
+data structures instead, with the size of the header as lower bound.
+
+TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS as
+     pci10de,1d10.rom in CBFS: the NVIDIA driver initializes the GPU.
+
+---
+ src/device/pci_rom.c | 36 +++++++++++++++++++++++++++++++++---
+ 1 file changed, 33 insertions(+), 3 deletions(-)
+
+diff --git a/src/device/pci_rom.c b/src/device/pci_rom.c
+index dc41ef14ce..66cd2f12a4 100644
+--- a/src/device/pci_rom.c
++++ b/src/device/pci_rom.c
+@@ -344,10 +344,37 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
+ 	return current;
+ }
+ 
++/*
++ * The size field of the ROM header is a single byte and cannot describe more
++ * than 127.5 KiB, and it only covers the first image. Add up the image
++ * lengths of the PCI data structures to get the size of the whole ROM.
++ */
++static size_t pci_rom_images_size(const struct rom_header *rom)
++{
++	size_t size = 0;
++
++	while (le16_to_cpu(rom->signature) == PCI_ROM_HDR) {
++		const struct pci_data *data = (void *)rom + le16_to_cpu(rom->data);
++		const size_t ilen = le16_to_cpu(data->ilen) * 512;
++
++		if (le32_to_cpu(data->signature) != PCI_DATA_HDR || !ilen)
++			break;
++
++		size += ilen;
++		if (data->indicator & 0x80)	/* last image */
++			break;
++
++		rom = (void *)rom + ilen;
++	}
++
++	return size;
++}
++
+ void pci_rom_ssdt(const struct device *device)
+ {
+ 	const struct rom_header *rom;
+ 	static size_t ngfx;
++	size_t length;
+ 
+ 	/* Only handle display devices */
+ 	if ((device->class >> 16) != PCI_BASE_CLASS_DISPLAY)
+@@ -359,7 +386,9 @@ void pci_rom_ssdt(const struct device *device)
+ 
+ 	/* Already loaded into DRAM? */
+ 	rom = device->pci_vga_option_rom;
+-	if (!rom) {
++	if (rom) {
++		length = rom->size * 512;
++	} else {
+ 		/* Probe for option rom */
+ 		rom = pci_rom_probe(device);
+ 		if (!rom || !rom->size) {
+@@ -375,7 +404,7 @@ void pci_rom_ssdt(const struct device *device)
+ 		}
+ 
+ 		/* Prepare memory */
+-		const size_t cbrom_length = rom->size * 512;
++		const size_t cbrom_length = MAX(pci_rom_images_size(rom), rom->size * 512);
+ 		if (!cbrom_length) {
+ 			printk(BIOS_ERR, "%s: ROM has zero length!\n",
+ 			dev_path(device));
+@@ -394,6 +423,7 @@ void pci_rom_ssdt(const struct device *device)
+ 		memcpy(cbrom, rom, cbrom_length);
+ 
+ 		rom = cbrom;
++		length = cbrom_length;
+ 	}
+ 
+ 	const char *scope = acpi_device_path(device);
+@@ -404,7 +434,7 @@ void pci_rom_ssdt(const struct device *device)
+ 
+ 	/* write _ROM method */
+ 	acpigen_write_scope(scope);
+-	acpigen_write_rom((void *)rom, rom->size * 512);
++	acpigen_write_rom((void *)rom, length);
+ 	acpigen_pop_len(); /* pop scope */
+ }
+ #endif
+-- 
+2.55.0
+

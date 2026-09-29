@@ -1,0 +1,59 @@
+From 7e9bbda541cad88790e2bca2a9f0ce9aa045a7ce Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 14:54:27 +0300
+Subject: [PATCH 1/3] gma skylake: Set DPLL0 to HBR (1350MHz) before enabling
+ it
+
+Resolves the 'Set to preferred eDP rate' TODO. DPLL0 drives eDP on DDI A
+and its link rate can only be set while it is disabled. Left at the 810MHz
+default, eDP links are limited to RBR even on HBR panels, while Linux i915
+chooses HBR; i915 then cannot take over the firmware's mode and does a full
+modeset including a panel power cycle (~1.2s on a ThinkPad T480).
+
+1350MHz is compatible with the 8100MHz CDClk VCO. RBR-only panels fall back
+to a configurable DPLL through PLLs.Alloc.
+---
+ .../skylake/hw-gfx-gma-power_and_clocks.adb   | 27 +++++++++++++++----
+ 1 file changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/common/skylake/hw-gfx-gma-power_and_clocks.adb b/common/skylake/hw-gfx-gma-power_and_clocks.adb
+index acc4753..d778ab3 100644
+--- a/common/skylake/hw-gfx-gma-power_and_clocks.adb
++++ b/common/skylake/hw-gfx-gma-power_and_clocks.adb
+@@ -341,11 +341,28 @@ package body HW.GFX.GMA.Power_And_Clocks is
+       PD_On (PW1);
+       PD_On (MISC_IO);
+ 
+-      -- TODO: Set to preferred eDP rate:
+-      -- Registers.Unset_And_Set_Mask
+-      --   (Register    => Registers.DPLL_CTRL1,
+-      --    Unset_Mask  => DPLL_CTRL1_DPLL0_LINK_RATE_MASK,
+-      --    Set_Mask    => DPLL_CTRL1_DPLL0_LINK_RATE_...);
++      -- DPLL0 also clocks eDP (DDI A) and its rate can only be chosen while
++      -- it is off. Its default (810MHz) forces eDP to RBR (1.62Gbps) even
++      -- if the panel does HBR, while the Linux driver picks HBR (2.7Gbps).
++      -- The mismatch makes i915 reject the inherited mode and do a full
++      -- modeset with a panel power cycle at boot. Use 1350MHz (HBR); it is
++      -- compatible with the 8100MHz CDClk VCO. Panels that are RBR-only
++      -- get a configurable DPLL instead (see PLLs.Alloc).
++      declare
++         Enabled : Boolean;
++      begin
++         Registers.Is_Set_Mask
++           (Register => Registers.LCPLL1_CTL,
++            Mask     => LCPLL1_CTL_PLL_ENABLE,
++            Result   => Enabled);
++         if not Enabled then
++            Registers.Unset_And_Set_Mask
++              (Register    => Registers.DPLL_CTRL1,
++               Mask_Unset  => DPLL_CTRL1_DPLL0_LINK_RATE_MASK,
++               Mask_Set    => DPLL_CTRL1_DPLL0_LINK_RATE_1350MHZ or
++                              DPLL_CTRL1_DPLL0_OVERRIDE);
++         end if;
++      end;
+       Registers.Set_Mask
+         (Register    => Registers.LCPLL1_CTL,
+          Mask        => LCPLL1_CTL_PLL_ENABLE);
+-- 
+2.55.0
+

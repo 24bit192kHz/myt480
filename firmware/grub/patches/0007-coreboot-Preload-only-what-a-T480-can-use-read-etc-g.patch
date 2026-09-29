@@ -1,0 +1,43 @@
+From c31ee24ee053a44915d6fa61239b541359fa1de8 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 19:21:31 +0300
+Subject: [PATCH 07/14] coreboot: Preload only what a T480 can use, read
+ etc/grub.cfg once
+
+- default_payload.elf: drop ahci, pata, ehci, uhci, ohci, usb_keyboard,
+  usbms and usbserial_usbdebug from the preloaded modules. The T480 has
+  no SATA/PATA/EHCI/UHCI/OHCI and GRUB has no xHCI driver; each of the
+  controller probes cost ~28 ms at every boot (boottime).
+- coreboot.cfg: source etc/grub.cfg directly. "test -f" walked the CBFS
+  a second time; with 32 KiB disk-cache blocks over uncached SPI flash
+  each walk costs ~120 ms.
+---
+ Makefile.am  | 2 +-
+ coreboot.cfg | 4 +---
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 2c86dbbf6..a010c4502 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -434,7 +434,7 @@ if COND_i386_coreboot
+ FS_PAYLOAD_MODULES ?= $(shell cat grub-core/fs.lst)
+ default_payload.elf: grub-mkstandalone grub-mkimage FORCE
+ 	test -f $@ && rm $@ || true
+-	pkgdatadir=. ./grub-mkstandalone --grub-mkimage=./grub-mkimage -O i386-coreboot -o $@ --modules='ahci pata nvme ehci uhci ohci usb_keyboard usbms part_msdos ext2 fat at_keyboard part_gpt usbserial_usbdebug cbfs' --install-modules='ls linux search configfile normal cbtime cbls memrw iorw minicmd lsmmap lspci halt reboot hexdump pcidump regexp setpci lsacpi chain test serial multiboot cbmemc linux16 gzio echo help syslinuxcfg xnu $(FS_PAYLOAD_MODULES) password_pbkdf2 $(EXTRA_PAYLOAD_MODULES)' --fonts= --themes= --locales= -d grub-core/ /boot/grub/grub.cfg=$(srcdir)/coreboot.cfg
++	pkgdatadir=. ./grub-mkstandalone --grub-mkimage=./grub-mkimage -O i386-coreboot -o $@ --modules='nvme part_msdos ext2 fat at_keyboard part_gpt cbfs' --install-modules='ls linux search configfile normal cbtime cbls memrw iorw minicmd lsmmap lspci halt reboot hexdump pcidump regexp setpci lsacpi chain test serial multiboot cbmemc linux16 gzio echo help syslinuxcfg xnu $(FS_PAYLOAD_MODULES) password_pbkdf2 $(EXTRA_PAYLOAD_MODULES)' --fonts= --themes= --locales= -d grub-core/ /boot/grub/grub.cfg=$(srcdir)/coreboot.cfg
+ endif
+ 
+ endif
+diff --git a/coreboot.cfg b/coreboot.cfg
+index 188090d3a..0c5a504b5 100644
+--- a/coreboot.cfg
++++ b/coreboot.cfg
+@@ -1,3 +1 @@
+-if test -f (cbfsdisk)/etc/grub.cfg; then
+-   source (cbfsdisk)/etc/grub.cfg
+-fi
++source (cbfsdisk)/etc/grub.cfg
+-- 
+2.55.0
+

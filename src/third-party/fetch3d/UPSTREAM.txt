@@ -1,0 +1,2 @@
+upstream: https://github.com/areofyl/fetch
+commit: 7b19d22c2d8e4b7b2295cc625c9fdf87adcabbcd

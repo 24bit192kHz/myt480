@@ -1,0 +1,2 @@
+upstream: https://git.suckless.org/st
+commit: 6e970474743d57a5d8b054c41fd3bff2bc895742

@@ -1,0 +1,36 @@
+From 717a566ca28eb39c157c4afd68d9a7aced264331 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 12:17:54 +0300
+Subject: [PATCH 02/14] types: make 32-bit grub_size_t the compiler's size_t
+
+On bare-metal i386-elf cross compilers (e.g. coreboot crossgcc) size_t is
+'long unsigned int' while grub_size_t was 'unsigned int'. Same width, but
+distinct types: gcrypt headers declare functions with size_t that GRUB
+implements with grub_size_t, which GCC 14+ rejects (conflicting types,
+incompatible pointer types). Unchanged on i686-linux, where both are
+'unsigned int'.
+---
+ include/grub/types.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/include/grub/types.h b/include/grub/types.h
+index b3ba762fc..bafab478b 100644
+--- a/include/grub/types.h
++++ b/include/grub/types.h
+@@ -137,7 +137,13 @@ typedef grub_int64_t	grub_ssize_t;
+ # endif
+ #else
+ typedef grub_uint32_t	grub_addr_t;
++#ifdef __SIZE_TYPE__
++/* Match the compiler's size_t exactly: bare-metal i386-elf toolchains use
++   'long unsigned int', and gcrypt prototypes mix size_t with grub_size_t. */
++typedef __SIZE_TYPE__	grub_size_t;
++#else
+ typedef grub_uint32_t	grub_size_t;
++#endif
+ typedef grub_int32_t	grub_ssize_t;
+ 
+ # define GRUB_SIZE_MAX 4294967295UL
+-- 
+2.55.0
+

@@ -1,0 +1,5 @@
+# 1.0 (T480)
+CPU(s):                                  8
+Model name:                              Intel(R) Core(TM) i7-8650U CPU @ 1.90GHz
+CPU(s) scaling MHz:                      19%
+Mem:            31Gi       1.0Gi        29Gi       130Mi       1.4Gi        30Gi

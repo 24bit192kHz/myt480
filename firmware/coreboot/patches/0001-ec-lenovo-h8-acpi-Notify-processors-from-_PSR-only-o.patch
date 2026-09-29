@@ -1,0 +1,41 @@
+From 45310a0962d5c40c7f1a0c23cdec9d508e05db53 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 13:56:27 +0300
+Subject: [PATCH 01/13] ec/lenovo/h8/acpi: Notify processors from _PSR only on
+ a state change
+
+_PSR runs every time the OS reads the AC adapter state (Linux evaluates
+it on each read of /sys/class/power_supply/AC/online). Calling PNOT()
+unconditionally sends Notify(0x81) to every CPU on each read, making the
+OS re-evaluate _CST on all cores; with a few polling readers that is 8
+notifications per second on a T480, plus the acpid/logging churn.
+
+Only notify when the power source actually changed. AC plug/unplug is
+still signalled by the EC query events (_Q26/_Q27), which call PNOT().
+---
+ src/ec/lenovo/h8/acpi/ac.asl | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/ec/lenovo/h8/acpi/ac.asl b/src/ec/lenovo/h8/acpi/ac.asl
+index 436fdcfaeb..3db94833de 100644
+--- a/src/ec/lenovo/h8/acpi/ac.asl
++++ b/src/ec/lenovo/h8/acpi/ac.asl
+@@ -16,8 +16,13 @@ Device(AC)
+ 	Method(_PSR, 0, NotSerialized)
+ 	{
+ 		Local0 = HPAC
+-		\PWRS = Local0
+-		\PNOT()
++		/* _PSR is evaluated on every read of the OS power-supply
++		   state; only notify processors when the state changed.
++		   The EC AC events (_Q26/_Q27) cover real transitions. */
++		If (Local0 != \PWRS) {
++			\PWRS = Local0
++			\PNOT()
++		}
+ 		return (Local0)
+ 	}
+ 
+-- 
+2.55.0
+

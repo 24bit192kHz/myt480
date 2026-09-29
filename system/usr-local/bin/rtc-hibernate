@@ -1,0 +1,16 @@
+#!/bin/sh
+# RTC self-wake hibernate. Usage: rtc-hibernate [seconds, default 75]
+set -eu
+SECS=${1:-75}
+RTC=/sys/class/rtc/rtc0/wakealarm
+echo 0 > "$RTC" 2>/dev/null || true
+sleep 1
+T=$(($(date +%s)+SECS))
+echo "$T" > "$RTC"
+echo "alarm: $(cat $RTC) now: $(date +%s) (+$SECS)"
+grep -E "alrm|pending" /proc/driver/rtc || true
+echo platform > /sys/power/disk
+echo 8 > /sys/power/hibernate_compression_threads
+date +%s > /tmp/hib-t0
+sync
+echo disk > /sys/power/state

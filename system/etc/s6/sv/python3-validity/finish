@@ -1,0 +1,4 @@
+#!/bin/sh
+# Persist calibration updates back to /var/lib (firmware blob is static).
+[ -f /var/run/python-validity/calib-data.bin ] && cp -a /var/run/python-validity/calib-data.bin /var/lib/python-validity/calib-data.bin
+exit 0
