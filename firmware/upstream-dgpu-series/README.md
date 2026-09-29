@@ -20,8 +20,8 @@ flashed build reads CMOS byte 0x6f (it has no option backend).
 |---|---|
 | Builds | T480, T480s, T580, X280, T470s, X380 Yoga; every patch on its own for the T480; with the setup menu (CFR) for T480 and X280 |
 | `checkpatch` | clean, apart from the sign-off that you add |
-| Tested on hardware | the code of patches 0001 to 0003 in a build for this T480, before the last round of changes |
-| Not tested | this series as built from main; the wait for the link and the size check added last; patch 0004; T480s and T580 |
+| Tested on hardware | the code of 0001 to 0003 in builds for this T480 (C35, and C36 with the option read from CBFS in the bootblock): warm reset, first boot after enabling, S3 resume with a program on the GPU, 20 on/off cycles; the link wait reported 0 ms on a warm boot and 2 ms on resume |
+| Not tested | this series as built from coreboot main (only on the branch this laptop runs, base 61483663b2); a cold boot with the final code; patch 0004; T480s and T580 |
 
 ## What reviewers will ask
 

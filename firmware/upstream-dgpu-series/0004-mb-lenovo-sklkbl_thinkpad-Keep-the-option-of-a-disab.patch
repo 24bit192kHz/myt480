@@ -1,8 +1,8 @@
-From ebcb9637b2ca881896a979d0c2753a7cdad1f499 Mon Sep 17 00:00:00 2001
+From ba2b9cbfea78fc1461503b8a2d41d0c3f4fbbbca Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 4/5] mb/lenovo/sklkbl_thinkpad: Keep the dGPU option of a
- disabled dGPU
+Subject: [PATCH 4/5] mb/lenovo/sklkbl_thinkpad: Keep the option of a disabled
+ dGPU
 
 The setup menu hides the option "dgpu_enable" if the device of the
 dGPU is disabled, and dgpu_detect() disables that device when the
@@ -10,7 +10,8 @@ option is off. So the option hides itself once it is turned off.
 
 Hide it only if the board has no dGPU.
 
-Build tested only.
+TEST=Builds for T480 and X280 with PAYLOAD_EDK2 and SMMSTORE. Not run:
+     the setup menu was not available on the test machine.
 
 ---
  src/mainboard/lenovo/sklkbl_thinkpad/cfr.c     | 8 ++------

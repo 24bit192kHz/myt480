@@ -1,4 +1,4 @@
-From f233a332911ce4a8676bddccc23345a08aac1aad Mon Sep 17 00:00:00 2001
+From 01ab3492b45e80deaf8b9fea914285bcc67da494 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 2/5] mb/lenovo/sklkbl_thinkpad: Power the dGPU in the
@@ -37,11 +37,13 @@ S3 to S5. Remove them from the GPIO tables of the ramstage, which would
 turn the GPU off before FSP-S, and turn the GPU off in the SMI handler
 before the system goes to sleep.
 
-TEST=Lenovo ThinkPad T480 with GeForce MX150 (10de:1d10). With the dGPU
-     enabled it is at 01:00.0 with an 8 GT/s x4 link after a cold boot,
-     a warm reset and S3 resume. The first boot after enabling it does
-     one full reset. With the dGPU disabled the power rail stays off.
-     T480s and T580 are build tested only.
+TEST=Lenovo ThinkPad T480 with GeForce MX150 (10de:1d10), the option
+     read from CBFS in the bootblock. With the dGPU enabled it is at
+     01:00.0 with an 8 GT/s x4 link after a warm reset and after S3
+     resume (link up 0 ms and 2 ms after FSP-S was asked to wait), and
+     after a cold boot with an earlier build of the same sequence. The
+     first boot after enabling it does one full reset. With the dGPU
+     disabled the power rail stays off. T480s and T580 build only.
 
 ---
  .../lenovo/sklkbl_thinkpad/Makefile.mk        |   3 +

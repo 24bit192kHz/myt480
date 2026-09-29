@@ -22,10 +22,10 @@ program asks for it.
 | Branch | Firmware | State |
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
-| `main` | C35: C32 plus a wait for the GPU link, a checked `_ROM` length, `panic=10`, a debug build, and the series for upstream after review | builds; **not flashed yet** |
+| `main` | C35: C32 plus a wait for the GPU link, a checked `_ROM` length, `panic=10`, a debug build, and the series for upstream after review | flashed and tested: warm reset, off and on, suspend with and without a GPU program, 20 on/off cycles |
 
 Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
-Use `speed` if you want what is known to work today.
+`main` is what runs on my laptop now; `speed` is the state before the review round.
 
 ## Layout
 

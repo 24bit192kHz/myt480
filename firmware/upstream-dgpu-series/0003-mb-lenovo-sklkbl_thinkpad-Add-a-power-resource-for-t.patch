@@ -1,4 +1,4 @@
-From 2b34347b992abadaec6f37fbe701bc7e549b23bf Mon Sep 17 00:00:00 2001
+From 954aa86600761c9423d70875ef57ff2baf072981 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 3/5] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
@@ -17,8 +17,9 @@ end up at the wrong root port.
 
 TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2: without a
      driver the root port and the GPU go to D3cold and the power rail
-     is off. Loading the NVIDIA driver turns the GPU on again, and it
-     works after S3 resume.
+     is off. Loading the NVIDIA driver 580.178.04 turns the GPU on,
+     70 load/unload cycles in a row, S3 resume with a program running on
+     the GPU (video memory preserved by the driver).
 
 ---
  .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 70 +++++++++++++++++++

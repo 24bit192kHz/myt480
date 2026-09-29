@@ -1,4 +1,4 @@
-From 1bcac84eecdc97614aa9a1435bc40be0f3318480 Mon Sep 17 00:00:00 2001
+From 805f717712afb61e8103c294c5d66b4a16c31f3a Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 1/5] device/pci_rom: Pass the whole option ROM to _ROM
@@ -18,9 +18,11 @@ For ROMs that are not loaded yet, add up the image lengths of the PCI
 data structures instead, with the size of the header as lower bound.
 For a ROM from CBFS, do not go beyond the size of the file.
 
-TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS as
-     pci10de,1d10.rom in CBFS: _ROM returns 182272 bytes and the
-     NVIDIA driver initializes the GPU.
+TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS (184320 byte
+     file) as pci10de,1d10.rom in CBFS: the region of _ROM is 0x2c800
+     (182272) bytes long and the NVIDIA driver initializes the GPU.
+     Builds for qemu-q35 and the six sklkbl_thinkpad variants.
+
 
 ---
  src/device/pci_rom.c | 59 +++++++++++++++++++++++++++++++++++++++++---
