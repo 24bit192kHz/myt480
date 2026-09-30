@@ -199,7 +199,7 @@ static int read_long(int fd, long *out)
 static int temp_fd = -1, ac_fd = -1, gpu_fd = -1;
 /* /sys/class/hwmon/hwmonN/<file> of the hwmon called <name>: the ids shift across
    boots and may appear after we start; resolved lazily, dropped on any read failure */
-static int hwmon_open(const char *name, const char *file)
+static int hwmon_open(const char *name, const char *file, int quiet)
 {
     char p[64];
     int i;
@@ -215,7 +215,7 @@ static int hwmon_open(const char *name, const char *file)
             close(fd);
             strcpy(strrchr(p, '/'), file);
             fd = open(p, O_RDONLY | O_CLOEXEC);
-            if (fd >= 0) logs("temp ", p);
+            if (fd >= 0 && !quiet) logs("temp ", p);
             return fd;
         }
         close(fd);
@@ -230,21 +230,22 @@ static int temp_open(const struct conf *c)
         if (temp_fd >= 0) logs("temp ", c->temp_path);
         return temp_fd < 0 ? -1 : 0;
     }
-    temp_fd = hwmon_open("coretemp", "/temp1_input");
+    temp_fd = hwmon_open("coretemp", "/temp1_input", 0);
     return temp_fd < 0 ? -1 : 0;
 }
 /* The discrete GPU as the EC reads it: thinkpad hwmon temp2 (-128 C while the GPU
-   is off). gpu_temp_path auto | off | <file>; the hotter of CPU and GPU drives the fan. */
+   is off, and the read fails while it is in D3cold). gpu_temp_path auto | off | <file>;
+   the hotter of CPU and GPU drives the fan. */
+static int gpu_seen;
 static int gpu_open(const struct conf *c)
 {
     if (gpu_fd >= 0) return 0;
     if (!strcmp(c->gpu_temp_path, "off")) return -1;
     if (strcmp(c->gpu_temp_path, "auto")) {
         gpu_fd = open(c->gpu_temp_path, O_RDONLY | O_CLOEXEC);
-        if (gpu_fd >= 0) logs("gpu temp ", c->gpu_temp_path);
         return gpu_fd < 0 ? -1 : 0;
     }
-    gpu_fd = hwmon_open("thinkpad", "/temp2_input");
+    gpu_fd = hwmon_open("thinkpad", "/temp2_input", 1);
     return gpu_fd < 0 ? -1 : 0;
 }
 /* ac_glob "<dir>/<prefix>*<suffix>": first matching entry wins.
@@ -503,8 +504,13 @@ int main(int argc, char **argv)
             warned = 0;
             raw /= 1000;
             if (!gpu_open(&c)) {
-                if (read_long(gpu_fd, &g)) { close(gpu_fd); gpu_fd = -1; }
-                else if (g > 0 && g < 120000 && g / 1000 > raw) raw = g / 1000;
+                if (read_long(gpu_fd, &g) || g <= 0 || g >= 120000) {
+                    close(gpu_fd); gpu_fd = -1;
+                    if (gpu_seen) { logs("gpu sensor off", 0); gpu_seen = 0; }
+                } else {
+                    if (!gpu_seen) { logs("gpu sensor on (thinkpad temp2)", 0); gpu_seen = 1; }
+                    if (g / 1000 > raw) raw = g / 1000;
+                }
             }
             fan_apply(&c, raw, now);
         }
