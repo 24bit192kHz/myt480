@@ -114,3 +114,25 @@ The sections above describe C19-C23 and are history. Current state:
 - thermald-t480 (`src/thermald-t480`): the fan curve now follows the hotter of the CPU
   package and that GPU sensor (`gpu_temp_path auto|off|<file>`, default auto), so a GPU
   load raises the fan even while the CPU stays cool.
+
+## 2026-09-30, later: what the vendor firmware still had over coreboot, fixed
+
+A comparison of kernel logs, ACPI device lists and wake sources found these gaps, all
+closed by firmware C50 (patches 0022-0024) and kernel 7.2.8-3:
+
+- Bluetooth was hard-blocked on every boot: the generic ThinkPad ASL reported the master
+  wireless switch from an EC bit the T480 does not have. WLSW now answers "on", as
+  Lenovo's firmware does; Wi-Fi no longer needs the unblock rule either.
+- Wake sources: Wake-on-LAN (GbE device with `_PRW`), PME wake on the Thunderbolt root
+  port, lid wake from S4, like the vendor firmware.
+- thinkpad_acpi no longer sees a tablet mode switch.
+- Subsystem IDs 17aa:225d on all PCH devices, the root ports and the system agent devices
+  (FSP programs those read/write-once registers before coreboot's drivers run, so it gets
+  the board's IDs); GMM at 00:08.0 enabled.
+- Kernel: TPM 2.0 (`tpm_tis` on coreboot's MSFT0101 node) and the PCH TCO watchdog. The
+  watchdog is armed by `local.d/watchdog.start`; killing the loop cleanly disarms it.
+  Lesson from setting it up: a keepalive started from an ssh shell that is cut by a
+  suspend dies without the magic close, and the machine resets 30 s after resume.
+
+Not implemented: the USB-C PD controller node (UCSI over the EC), DPTF and WMI; nothing
+on this Linux system uses them. The GPU's own subsystem ID stays unset.

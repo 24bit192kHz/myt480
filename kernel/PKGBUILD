@@ -183,7 +183,7 @@ _minor=8
 #_rcver=rc8
 pkgver=${_major}.${_minor}
 _tagrel=1
-pkgrel=2
+pkgrel=3
 _srcname=cachyos-${_major}.${_minor}-${_tagrel}
 pkgdesc='Linux EEVDF + LTO + AutoFDO + Propeller Cachy Sauce Kernel by CachyOS with other patches and improvements.'
 _kernver="$pkgver-$pkgrel"
@@ -535,6 +535,11 @@ prepare() {
         -m VFIO -e VFIO_GROUP -e VFIO_CONTAINER -m VFIO_IOMMU_TYPE1 -m VFIO_MDEV \
         -m DRM_I915_GVT_KVMGT -e DRM_I915_GVT \
         -e CMDLINE_BOOL --set-str CMDLINE "i915.enable_gvt=1" -d CMDLINE_OVERRIDE
+    ### TPM 2.0 (Infineon on LPC, tpm_tis; coreboot declares it as MSFT0101) and the
+    ### PCH TCO hardware watchdog, so a hang can reset the machine
+    scripts/config \
+        -e TCG_TPM -e TCG_TIS_CORE -e TCG_TIS -e HW_RANDOM_TPM -e TCG_CRB -e SECURITYFS \
+        -e WATCHDOG -e WATCHDOG_CORE -m ITCO_WDT -e ITCO_VENDOR_SUPPORT
     make "${BUILD_FLAGS[@]}" olddefconfig
 
     ### Rewrite configuration

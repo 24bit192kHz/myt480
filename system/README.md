@@ -22,6 +22,7 @@ Artix Linux with s6.
 | `elogind/system-sleep/` | hooks around suspend: lock, fingerprint reader, battery, WinApps |
 | `s6/sv/` | own services and changed dependencies |
 | `thermald.conf` | fan curve, undervolt and power limits for `thermald-t480` |
+| `local.d/watchdog.start`, `modules-load.d/itco-watchdog.conf` | arm the TCO hardware watchdog at boot |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
 

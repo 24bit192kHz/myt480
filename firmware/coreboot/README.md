@@ -30,6 +30,9 @@
 | 0019 | no ASPM at all on the GPU's root port, as on the vendor firmware (its FADT declares ASPM unsupported and root port 1 advertises none) | belongs in the series |
 | 0020 | 256-byte PCIe payloads on the GPU, Wi-Fi and SSD root ports, the vendor firmware's values (the Thunderbolt port stays at 128) | belongs in the series |
 | 0021 | SMBIOS BIOS version `CBET4000 <version>`: thinkpad_acpi only reads the EC version (and only then enables the EC thermal sensors, GPU temperature included) when the BIOS version has Lenovo's form | belongs in the series |
+| 0022 | ec/lenovo/h8: options for boards without a wireless switch (the T480 EC has no such bit; WLSW read 0 and thinkpad_acpi hard-blocked Bluetooth and WWAN) or a tablet switch, and a lid wake-state macro | belongs in the series |
+| 0023 | soc/intel/skylake: the GbE ACPI device with its wake entry (Wake-on-LAN in `/proc/acpi/wakeup`), PME wake on root port 9 (Thunderbolt), and the board's subsystem IDs handed to FSP for the read/write-once registers it programs first | belongs in the series |
+| 0024 | t480: radios never hard-blocked, no tablet switch, lid wakes from S4, GMM 00:08.0 on, subsystem IDs 17aa:225d on every PCH and system agent device, as on the vendor firmware | belongs in the series |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

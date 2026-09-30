@@ -1,0 +1,96 @@
+From f206269c1e7add3edb6125b075cef6bee503647c Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 17:23:18 +0300
+Subject: [PATCH 22/24] ec/lenovo/h8: Options for boards without a wireless or
+ tablet switch, lid wake state
+
+H8_NO_WIRELESS_SWITCH: WLSW returns 1. The T480's EC has no master wireless
+switch bit at 0x48; it reads 0, thinkpad_acpi hard-blocks Bluetooth and WWAN
+on every boot, and the vendor firmware's WLSW is the constant 0x10010001.
+H8_NO_TABLET_MODE_SWITCH: no MHKG, so thinkpad_acpi does not register a
+tablet mode switch on a laptop. H8_LID_WAKE_STATE: the mainboard can set
+the deepest sleep state the lid wakes from (the vendor firmware says S4).
+---
+ src/ec/lenovo/h8/Kconfig           | 15 +++++++++++++++
+ src/ec/lenovo/h8/acpi/lid.asl      |  7 ++++++-
+ src/ec/lenovo/h8/acpi/thinkpad.asl |  6 ++++++
+ 3 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/src/ec/lenovo/h8/Kconfig b/src/ec/lenovo/h8/Kconfig
+index 7f6d45be30..aad2a861c5 100644
+--- a/src/ec/lenovo/h8/Kconfig
++++ b/src/ec/lenovo/h8/Kconfig
+@@ -96,4 +96,19 @@ config H8_HAS_2ND_THERMAL_ZONE
+ 	bool
+ 	default n
+ 
++config H8_NO_WIRELESS_SWITCH
++	bool
++	default n
++	help
++	  The EC has no master wireless switch bit at 0x48 (newer boards); the
++	  ACPI WLSW method then reports the radios as enabled, as the vendor
++	  firmware does, instead of a bit that reads 0 and hard-blocks them.
++
++config H8_NO_TABLET_MODE_SWITCH
++	bool
++	default n
++	help
++	  The board is no tablet: do not offer the MHKG method, which makes
++	  thinkpad_acpi register a tablet mode switch.
++
+ endif # EC_LENOVO_H8
+diff --git a/src/ec/lenovo/h8/acpi/lid.asl b/src/ec/lenovo/h8/acpi/lid.asl
+index 7695e4e5ab..6ee6d9b3ed 100644
+--- a/src/ec/lenovo/h8/acpi/lid.asl
++++ b/src/ec/lenovo/h8/acpi/lid.asl
+@@ -1,5 +1,10 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
++/* Deepest sleep state the lid wakes from; the mainboard may define it before including this */
++#ifndef H8_LID_WAKE_STATE
++#define H8_LID_WAKE_STATE 3
++#endif
++
+ Field(ERAM, ByteAcc, NoLock, Preserve)
+ {
+ 		Offset (0x32),
+@@ -21,7 +26,7 @@ Device(LID)
+ 
+ 	Method(_PRW, 0, NotSerialized)
+ 	{
+-		Return (Package() { 0x18, 0x03 })
++		Return (Package() { 0x18, H8_LID_WAKE_STATE })
+ 	}
+ 
+ 	Method(_PSW, 1, NotSerialized)
+diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
+index 4991c6d139..f26f807b2e 100644
+--- a/src/ec/lenovo/h8/acpi/thinkpad.asl
++++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
+@@ -111,11 +111,13 @@ Device (HKEY)
+ 		Return (0x07FFFFFF)
+ 	}
+ 
++#if !CONFIG(H8_NO_TABLET_MODE_SWITCH)
+ 	/* Report tablet mode switch state */
+ 	Method (MHKG, 0, NotSerialized)
+ 	{
+ 		Return (TBSW << 3)
+ 	}
++#endif
+ 
+ 	/* Mute audio */
+ 	Method (SSMS, 1, NotSerialized)
+@@ -145,7 +147,11 @@ Device (HKEY)
+ 	/* Master wireless switch state */
+ 	Method (WLSW, 0, NotSerialized)
+ 	{
++#if CONFIG(H8_NO_WIRELESS_SWITCH)
++		Return (1)
++#else
+ 		Return (\_SB.PCI0.LPCB.EC.GSTS)
++#endif
+ 	}
+ 
+ 	/* Set to one on first boot */

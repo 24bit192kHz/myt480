@@ -133,6 +133,8 @@ compared, see `firmware/MX150-notes.md`): the GPU port runs with the same link s
 (ASPM off, 256-byte payloads), the EC reads the GPU temperature on both and thinkpad_acpi
 shows it as `temp2`, and the fan follows it. Missing on purpose: GC6, the Optimus and
 power-sharing `_DSM`s (Windows only) and the GPU's subsystem ID. Rendering is not affected.
+Bluetooth, Wake-on-LAN, wake from the Thunderbolt port and from the lid in S4, the TPM and
+the Lenovo subsystem IDs on the PCH devices came with firmware C50 and kernel 7.2.8-3.
 Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 works).
 
 ## Known limits
@@ -143,7 +145,8 @@ Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 wor
   under load.
 - The kernel only has the modules my hardware needs. For other hardware add the module
   to `kernel/extra-modules.txt` and rebuild.
-- No hardware watchdog: a hang stays a hang until someone holds the power button.
+- The PCH TCO watchdog is armed at boot (`system/etc/local.d/watchdog.start`, 30 s, petted
+  every 5 s): a kernel hang ends in a reset. Killing the keepalive loop disarms it.
 
 ## Licences
 
