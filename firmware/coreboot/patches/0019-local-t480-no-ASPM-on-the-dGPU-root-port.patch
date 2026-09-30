@@ -1,0 +1,29 @@
+From 8511f487e77f7989aa051296aeb5f9115a386bf7 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 07:55:41 +0300
+Subject: [PATCH 19/20] [local] t480: no ASPM on the dGPU root port
+
+Second silent hang of the day, again with the driver loaded and the GPU
+idle on battery; the hard-lockup detector did not fire, so every CPU
+stalled at once, as on a PCIe read that never completes. Without L1 the
+link never has to wake up.
+---
+ .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb     | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index 1115bf5302..bf83ae4bed 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -55,6 +55,11 @@ chip soc/intel/skylake
+ 			# without a trace (2026-09-30, after a GPU benchmark on battery). The link
+ 			# is powered down with the GPU anyway, so L1.0 is all it needs.
+ 			register "pcie_rp_l1substates[0]"		= "L1SS_Disabled"
++			# No ASPM at all on the GPU port: a second silent hang on 2026-09-30 with
++			# the driver loaded and the GPU idle (nvtop polling every second, the link
++			# in and out of L1 each time). Costs a little power only while the driver
++			# is loaded; the policy keeps it unloaded on battery.
++			register "pcie_rp_aspm[0]"			= "AspmDisabled"
+ 			chip drivers/pcie/generic
+ 				register "name" = ""PEGP""
+ 				device pci 00.0 alias dgpu on end

@@ -1,0 +1,52 @@
+From 1a66539d14f8b8cc7cbdafbe8e1cb0d9e584adec Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 16:06:59 +0300
+Subject: [PATCH 20/20] [local] t480: 256-byte PCIe payloads on the dGPU, WLAN
+ and SSD ports
+
+The vendor firmware sets Max_Payload_Size 256 on root ports 1, 7 and 11
+and leaves the Thunderbolt port at 128; coreboot left every port at the
+FSP default of 128. The enumeration code sets each endpoint to the
+smaller of its own capability and the port's, so the GPU and the NVMe
+drive move 256-byte TLPs and the Wi-Fi card stays at 128.
+---
+ .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb     | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index bf83ae4bed..c9c429ae1a 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -43,6 +43,8 @@ chip soc/intel/skylake
+ 		#   PCIE 9-10  - RP9  - TB3  - CLKOUT4 - CLKREQ4
+ 		#   PCIE 11-12 - RP11 - SSD  - CLKOUT5 - CLKREQ5
+ 
++		# Root ports 1, 7 and 11 allow 256-byte TLPs as on the vendor firmware; the
++		# Thunderbolt port stays at 128 there.
+ 		# dGPU - x4
+ 		device ref pcie_rp1 on
+ 			register "PcieRpClkReqSupport[0]"		= "true"
+@@ -50,6 +52,7 @@ chip soc/intel/skylake
+ 			register "PcieRpClkSrcNumber[0]"		= "0"
+ 			register "PcieRpAdvancedErrorReporting[0]"	= "true"
+ 			register "PcieRpLtrEnable[0]"			= "true"
++			register "PcieRpMaxPayload[0]"			= "RpMaxPayload_256"
+ 			# No L1 substates on the GPU port. Linux does not own ASPM here (_OSC),
+ 			# so this is what the GPU runs with; a failed L1.2 exit hangs the machine
+ 			# without a trace (2026-09-30, after a GPU benchmark on battery). The link
+@@ -81,6 +84,7 @@ chip soc/intel/skylake
+ 			register "PcieRpClkSrcNumber[6]"		= "2"
+ 			register "PcieRpAdvancedErrorReporting[6]"	= "true"
+ 			register "PcieRpLtrEnable[6]"			= "true"
++			register "PcieRpMaxPayload[6]"			= "RpMaxPayload_256"
+                         smbios_slot_desc "SlotTypeM2Socket1_DP" "SlotLengthOther" "M.2/A 2230" "SlotDataBusWidth1X"
+ 		end
+ 
+@@ -111,6 +115,7 @@ chip soc/intel/skylake
+ 			register "PcieRpClkSrcNumber[10]"		= "5"
+ 			register "PcieRpAdvancedErrorReporting[10]"	= "true"
+ 			register "PcieRpLtrEnable[10]"			= "true"
++			register "PcieRpMaxPayload[10]"			= "RpMaxPayload_256"
+                         smbios_slot_desc "SlotTypeM2Socket3" "SlotLengthOther" "M.2/M 2280 Sub Card" "SlotDataBusWidth2X"
+ 		end
+ 	end

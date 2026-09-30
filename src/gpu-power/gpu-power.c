@@ -80,6 +80,13 @@ static int read_word(const char *path, char *buf, size_t len)
 	return 0;
 }
 
+/* With the root port disabled in the firmware, 01:00.0 is another device */
+static int gpu_present(void)
+{
+	char v[16];
+	return read_word(GPU "/vendor", v, sizeof(v)) == 0 && !strcmp(v, "0x10de");
+}
+
 static int on_ac(void)
 {
 	char s[8];
@@ -119,7 +126,7 @@ static int status(void)
 	char state[16] = "?";
 	const char *m = manual();
 
-	if (read_word(GPU "/power_state", state, sizeof(state))) {
+	if (!gpu_present() || read_word(GPU "/power_state", state, sizeof(state))) {
 		puts("GPU is switched off in the firmware (dgpu on, then reboot)");
 		return 2;
 	}
@@ -139,7 +146,7 @@ static int on(int quiet)
 	struct timespec ts = { 0, 50 * 1000 * 1000 };
 	size_t i;
 
-	if (!exists(GPU)) {
+	if (!gpu_present()) {
 		if (!quiet)
 			fputs("gpu-power: GPU is switched off in the firmware (dgpu on, then reboot)\n", stderr);
 		return 2;
@@ -157,11 +164,25 @@ static int on(int quiet)
 	return 0;
 }
 
+/* PCI devices start with runtime power management forbidden ("on"). Without a
+   driver the GPU then keeps its root port awake and the ACPI power resource never
+   turns the rail off; "auto" lets the port and the GPU go to D3cold. */
+static void allow_runtime_pm(void)
+{
+	FILE *f = fopen(GPU "/power/control", "w");
+
+	if (f) {
+		fputs("auto", f);
+		fclose(f);
+	}
+}
+
 static int off(int quiet)
 {
 	char *argv[] = { "modprobe", "-r", "-q", "nvidia_uvm", "nvidia_drm", "nvidia_modeset",
 			 "nvidia", NULL };
 
+	allow_runtime_pm();
 	if (!exists("/sys/module/nvidia"))
 		return 0;
 	if (run(argv)) {
@@ -176,7 +197,7 @@ static int off(int quiet)
    under a running program (prime-run holds USERS shared). */
 static int apply(int users_fd)
 {
-	if (!exists(GPU))
+	if (!gpu_present())
 		return 0;
 	if (!strcmp(wanted(), "on"))
 		return on(1);

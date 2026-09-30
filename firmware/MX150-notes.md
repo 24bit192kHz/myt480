@@ -74,3 +74,35 @@ The sections above describe C19-C23 and are history. Current state:
   port; ASPM L1 stays. Battery impact: none while the GPU is off (its link is powered
   down), well under 0.1 W while it is on.
 - Battery: GPU off (rail off) 6.7 W idle, driver loaded and idle 7.7 W, rendering 9.1 W.
+
+## Update 2026-09-30 (evening): the freezes, and a comparison with the vendor firmware
+
+- The silent freezes under GPU load were the CPU undervolt (-130 mV core and cache in
+  `thermald.conf`), not the firmware or the GPU: the Lenovo firmware froze the same way,
+  and with the undervolt at 0 the 10-minute GPU test passes on both. `system/etc/thermald.conf`
+  now has `uv_* 0`; step it down again only with a test like `freeze-test.sh`.
+- Vendor firmware versus coreboot, for the MX150 (dumps compared with inteltool, lspci,
+  the EC RAM and the decompiled ACPI tables):
+  - ASPM: Lenovo runs the GPU port with ASPM off and tells Linux in the FADT that ASPM is
+    unsupported. Patches 0018 and 0019 give the same on that port (C47).
+  - PCIe payload: Lenovo allows 256-byte TLPs on the GPU, Wi-Fi and SSD ports; patch 0020
+    does the same, the GPU and the NVMe drive negotiate 256 bytes (C48).
+  - Power sequencing: the vendor's power resource does power, 8 ms, reset release, 16 ms,
+    link enable, wait for L0; coreboot's `PGPU` follows the same order. Lenovo also rewrites
+    the GPU's subsystem ID (config 0x40) at every power-on; coreboot leaves it, a boot-time
+    attempt hung the board twice and nothing depends on it.
+  - Vendor ACPI the Linux driver does not need: Optimus `_DSM` (NVOP), the power-sharing
+    `_DSM` (GPS: AC/DC notifications, CPU throttling on the GPU's request), GC6 (JT) and the
+    MXM table. The driver takes AC/DC from the AC adapter device and reports "Runtime D3
+    status: Disabled by default" on this Pascal GPU on both firmwares.
+  - EC: the EC reads the GPU temperature itself (EC RAM 0x79) on both firmwares. The
+    "SW power cap" seen on AC under Lenovo is the GPU's own power limit at full utilisation,
+    not a firmware policy.
+  - Wake: an RTC alarm wakes the board from S5 under coreboot (`PM1_STS: WAK RTC`,
+    `prev_sleep_state 5` in the console); `tools/coldboot.sh` uses that for cold-boot
+    tests. A cold boot with the GPU enabled needs no extra reset; only a warm reset after a
+    boot with the port disabled does (patch 0017).
+- `gpu-power`: `status`, `on` and `apply` check the PCI vendor (01:00.0 is the Wi-Fi card
+  when the port is off), and `off` sets the GPU's runtime PM control to `auto`. PCI devices
+  start with it `on`, and then the root port never suspends, so after a fresh boot the
+  ACPI power resource never cut the rail after `gpu-power off`.
