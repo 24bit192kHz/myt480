@@ -171,3 +171,17 @@ Disk GRUB (MBR) checked in QEMU before the flash. Machine shut down after the fl
 - Stock-vs-coreboot summary for the MX150: ASPM off on the GPU port (as vendor), payload 256
   (as vendor); vendor's NVOP/GPS/GC6/MXM ACPI and the subsystem-ID rewrite are not needed by
   the Linux driver; the EC reads the GPU temperature itself on both firmwares.
+
+### 2026-09-30 17:00-18:00: the rest of the stock comparison, fixed (C50 + kernel 7.2.8-3)
+
+- Bluetooth was hard-blocked under coreboot (the generic ThinkPad ASL read a wireless-switch
+  EC bit the T480 does not have); C50 answers WLSW = on like Lenovo. Wake-on-LAN, wake from the
+  Thunderbolt port and from the lid in S4 are back; no bogus tablet switch; subsystem IDs
+  17aa:225d on all PCH devices; GMM 00:08.0 on.
+- Kernel 7.2.8-3: TPM 2.0 (`tpm0`) and the PCH TCO watchdog, armed at boot by
+  `/etc/local.d/watchdog.start` (30 s, petted every 5 s). Disarm with
+  `pkill -TERM -f 'watchdog-keepalive$'`; never start the loop from an ssh shell that may be
+  cut (it died without the magic close twice while being set up and the machine reset 30 s
+  after the next resume, "TCO_STS: SECOND_TO" in cbmem).
+- S3 tests: run `loginctl suspend` as root; the earlier user-level runs from detached scripts
+  never suspended. Verified on C50 + 7.2.8-3 with the watchdog armed.

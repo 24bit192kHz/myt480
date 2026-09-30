@@ -81,7 +81,7 @@ static void logs(const char *a, const char *b) { ls_(a); if (b) ls_(b); lend(); 
 static void loge(const char *a) { ls_(a); ls_(": errno "); li_(errno); lend(); }
 
 /* ---------------- config (milli-units) ---------------- */
-struct profile { long long pl1_w, pl1_s, pl2_w, pl2_s, trip, interval, icc[3]; };
+struct profile { long long pl1_w, pl1_s, pl2_w, pl2_s, trip, interval, icc[3]; long long uv[5]; int uv_set; };
 struct conf {
     char temp_path[128], ac_glob[128], gpu_temp_path[128];
     long long poll_s;
@@ -132,13 +132,23 @@ static void set_key(struct conf *c, const char *k, const char *v)
         P("batt_pl2_s", batt.pl2_s), P("batt_trip", batt.trip), P("batt_interval", batt.interval),
         P("uv_core", uv[PL_CORE]), P("uv_gpu", uv[PL_GPU]), P("uv_cache", uv[PL_CACHE]),
         P("uv_uncore", uv[PL_UNCORE]), P("uv_analogio", uv[PL_ANALOGIO]),
+        /* per-profile undervolt: any ac_uv_* / batt_uv_* key makes that profile use its own set */
+        P("ac_uv_core", ac.uv[PL_CORE]), P("ac_uv_gpu", ac.uv[PL_GPU]), P("ac_uv_cache", ac.uv[PL_CACHE]),
+        P("ac_uv_uncore", ac.uv[PL_UNCORE]), P("ac_uv_analogio", ac.uv[PL_ANALOGIO]),
+        P("batt_uv_core", batt.uv[PL_CORE]), P("batt_uv_gpu", batt.uv[PL_GPU]), P("batt_uv_cache", batt.uv[PL_CACHE]),
+        P("batt_uv_uncore", batt.uv[PL_UNCORE]), P("batt_uv_analogio", batt.uv[PL_ANALOGIO]),
         P("icc_core_ac", ac.icc[0]), P("icc_gpu_ac", ac.icc[1]), P("icc_cache_ac", ac.icc[2]),
         P("icc_core_batt", batt.icc[0]), P("icc_gpu_batt", batt.icc[1]), P("icc_cache_batt", batt.icc[2]),
 #undef P
     };
     size_t i;
     for (i = 0; i < sizeof num / sizeof *num; i++)
-        if (!strcmp(k, num[i].k)) { *(long long *)((char *)c + num[i].off) = milli(v, 0); return; }
+        if (!strcmp(k, num[i].k)) {
+            *(long long *)((char *)c + num[i].off) = milli(v, 0);
+            if (!strncmp(k, "ac_uv_", 6)) c->ac.uv_set = 1;
+            if (!strncmp(k, "batt_uv_", 8)) c->batt.uv_set = 1;
+            return;
+        }
     if (!strcmp(k, "temp_path")) copy(c->temp_path, sizeof c->temp_path, v);
     else if (!strcmp(k, "gpu_temp_path")) copy(c->gpu_temp_path, sizeof c->gpu_temp_path, v);
     else if (!strcmp(k, "ac_glob")) copy(c->ac_glob, sizeof c->ac_glob, v);
@@ -515,12 +525,12 @@ int main(int argc, char **argv)
             fan_apply(&c, raw, now);
         }
         if (src != last_src || need_power) {
-            apply_power(p, c.uv, src ? "BATT" : "AC");
+            apply_power(p, p->uv_set ? p->uv : c.uv, src ? "BATT" : "AC");
             last_src = src;
             need_power = 0;
             next_drift = now + DRIFT_S;
         } else if (now >= next_drift) {
-            if (drifted(p)) { logs("drift detected, re-applying", 0); apply_power(p, c.uv, src ? "BATT" : "AC"); }
+            if (drifted(p)) { logs("drift detected, re-applying", 0); apply_power(p, p->uv_set ? p->uv : c.uv, src ? "BATT" : "AC"); }
             next_drift = now + DRIFT_S;
         }
         if (once) break;

@@ -10,3 +10,4 @@
 - `boot-times.sh`: one line of boot times for the current boot.
 - `cmos6d.py`: shows CMOS 0x6d, the "GPU reset tried" flag of coreboot patch 0017 (0 after a good boot).
 - `coldboot.sh [on|off] [seconds]`: `dgpu` request, RTC alarm, power off: a cold boot without touching the power button (root).
+- `undervolt/`: the CPU undervolt sweep kit (its README explains the runs); `bench-all.sh`: the benchmark set used before and after; `hib-measure2.sh`: hibernate cycle timing.

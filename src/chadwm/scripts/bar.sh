@@ -3,6 +3,7 @@
 # records its position and a click/scroll runs scripts/barclick.sh N BUTTON.
 #   1 updates  2 cpu  3 mem  4 battery  5 brightness  6 volume  7 wifi
 #   8 clock  9 power  10 caffeine (cup filled = sleep inhibited, caffeine.sh)
+#   11 bluetooth (name of the connected device; btmenu.sh)
 # Refresh: every 5 s (aligned so the clock flips on the minute), at once on
 # SIGUSR1 (`pkill -USR1 -x bar.sh` style: barclick.sh / volume keys send it).
 # Cost per tick: builtins + one `date`; pactl only on start, SIGUSR1 and
@@ -87,6 +88,18 @@ wifi() {
 	esac
 }
 
+bluetooth() {
+	# bluetoothd state every 30 s and on SIGUSR1; a D-Bus call, not a fork storm
+	p=$(timeout 3 bluetoothctl show 2>/dev/null | awk '/Powered:/{print $2}')
+	case $p in
+	yes)
+		d=$(timeout 3 bluetoothctl devices Connected 2>/dev/null | head -1 | cut -d' ' -f3-)
+		if [ -n "$d" ]; then printf "^k11^^c$black^^b$blue^ 󰂱 ^c$blue^^b$black^ ${d%% *} "
+		else printf "^k11^^c$blue^^b$black^ 󰂯 "; fi ;;
+	*) printf "^k11^^c$darkblue^^b$black^ 󰂲 " ;;
+	esac
+}
+
 caffeine() {
 	# on while caffeine.sh's elogind-inhibit process lives (builtins only)
 	if read -r cpid 2>/dev/null < "${XDG_RUNTIME_DIR:-/tmp}/caffeine.pid" &&
@@ -114,6 +127,7 @@ while :; do
 	set -- $(date '+%s %-I:%M %p'); now=$1 hm="$2 $3"
 	[ $interval = 0 ] || [ $((interval % 720)) = 0 ] && updates=$(pkg_updates)
 	[ $((interval % 6)) = 0 ] && bat=$(battery)
+	[ $wakeup = 1 ] || [ $((interval % 6)) = 0 ] && bts=$(bluetooth)
 	if [ $wakeup = 1 ] || [ $((interval % 12)) = 0 ]; then
 		vol=$(volume)
 	fi
@@ -121,7 +135,7 @@ while :; do
 	wakeup=0
 	interval=$((interval + 1))
 
-	line="$updates$(cpu) $(mem)$bat $(brightness)$vol$wifis$(caffeine)$(clock)$(power)"
+	line="$updates$(cpu) $(mem)$bat $(brightness)$vol$wifis$bts$(caffeine)$(clock)$(power)"
 	[ "$line" = "$last" ] || { xsetroot -name "$line"; last=$line; }
 	sleep $((5 - now % 5)) & sp=$!
 	wait $sp 2>/dev/null

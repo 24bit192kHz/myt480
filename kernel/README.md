@@ -9,7 +9,8 @@ laptop uses.
 | `config` | kernel configuration |
 | `config-7.2.8-1-t480` | configuration of the first build, before the MX150 work |
 | `config-7.2.8-2-t480` | adds GVT-g (mediated iGPU for a Windows VM), `i915.enable_gvt=1` built into the command line |
-| `config-7.2.8-3-t480` | the running build: adds the TPM 2.0 driver (`tpm_tis`, the Infineon chip coreboot declares as MSFT0101) and the PCH TCO watchdog (`iTCO_wdt`) |
+| `config-7.2.8-3-t480` | adds the TPM 2.0 driver (`tpm_tis`, the Infineon chip coreboot declares as MSFT0101) and the PCH TCO watchdog (`iTCO_wdt`) |
+| `config-7.2.8-4-t480` | the running build: hibernation image compressed with LZ4 (resume 1.5 s faster than LZO) |
 | `modprobed.db` | module list for `localmodconfig`, made from the two files below |
 | `lsmod.t480` | modules seen loaded |
 | `extra-modules.txt` | modules that were not loaded at that time but are needed |

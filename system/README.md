@@ -23,6 +23,9 @@ Artix Linux with s6.
 | `s6/sv/` | own services and changed dependencies |
 | `thermald.conf` | fan curve, undervolt and power limits for `thermald-t480` |
 | `local.d/watchdog.start`, `modules-load.d/itco-watchdog.conf` | arm the TCO hardware watchdog at boot |
+| `local.d/bluetooth.start`, `bluetooth/main.conf` | bluetoothd at boot, adapter auto-enabled |
+| `local.d/hibernate-tune.start` | hibernate image size and compression threads |
+| `thermald.conf` `ac_uv_*` / `batt_uv_*` | undervolt per power source (see `docs/notes/2026-09-30-undervolt.md`) |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
 

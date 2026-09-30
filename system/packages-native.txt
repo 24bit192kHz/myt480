@@ -19,6 +19,7 @@ bat
 bc
 blocaled
 bluez-s6
+bluez-utils
 breeze-icons
 brightnessctl
 btop
@@ -196,6 +197,7 @@ stress-ng
 sudo
 sway
 swaybg
+sysbench
 sysfsutils
 terminus-font
 tesseract

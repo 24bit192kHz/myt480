@@ -1,6 +1,8 @@
 upstream: https://github.com/siduck/chadwm
 upstream base: 7991ac8d33878b716e7e7cabf58b47503864f622
 local commits:
+d5a51a7 keybinds: Bluetooth bar module
+b3ade81 bar: Bluetooth module 11 (connected device), btmenu.sh rofi picker
 615d3de keybinds: bar modules
 172c939 clickable bar modules (^kN^ -> barclick.sh): updates, cpu, mem, battery, brightness, volume, wifi (rofi picker), clock, power menu; vol.sh with instant bar refresh
 ca0bdc6 HyDE behaviour: dwindle default layout with togglesplit/resize per node, directional focus/move, real special workspace, pyprland dropdown, Super+Z/X hold-drag, 10 workspaces, HyDE gaps/border, power menu
@@ -8,4 +10,3 @@ ca0bdc6 HyDE behaviour: dwindle default layout with togglesplit/resize per node,
 a92e570 brightd in C (masked evdev, no idle wakeups); bar.sh: builtins over forks; bar font JetBrainsMono NF (Iosevka not installed)
 a5c0ddf bar.sh: 5 s aligned refresh, battery every 30 s (combined packs, energy_* or charge_*), xsetroot only on change
 dcad846 chadwm: _CHADWM_VIEW root message (view first empty tag / previous tagset, used by dwm-lock); run.sh: picom first, wallpaper start in background; grayscale theme, bar theme, brightd, keybinds
-working tree of 2026-09-30 on top (uncommitted): .Xresources, chadwm/config.def.h, chadwm/config.mk, chadwm/drw.c, chadwm/dwm.c, keybinds.txt, scripts/bar.sh, scripts/barclick.sh, scripts/brightd.c, scripts/caffeine.sh, scripts/clipwatch.c, scripts/powermenu.sh, scripts/rofi-clip.sh, scripts/run.sh, scripts/wallpaper-select.sh, scripts/wifimenu.sh

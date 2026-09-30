@@ -1,0 +1,4 @@
+#!/bin/sh
+# Hibernate image settings at boot (rc.local's call did not run reliably): image_size 40 % of RAM
+# so the kernel does not shrink memory before the snapshot (2-3 s saved), 8 compression threads.
+[ -x /usr/local/bin/hibernate-tune ] && /usr/local/bin/hibernate-tune

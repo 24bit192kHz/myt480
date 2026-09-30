@@ -1,0 +1,2 @@
+
+Bar module 11 (Bluetooth): left click = picker (power, scan, connect/disconnect/pair), right click = power toggle

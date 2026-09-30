@@ -183,7 +183,7 @@ _minor=8
 #_rcver=rc8
 pkgver=${_major}.${_minor}
 _tagrel=1
-pkgrel=3
+pkgrel=4
 _srcname=cachyos-${_major}.${_minor}-${_tagrel}
 pkgdesc='Linux EEVDF + LTO + AutoFDO + Propeller Cachy Sauce Kernel by CachyOS with other patches and improvements.'
 _kernver="$pkgver-$pkgrel"
@@ -540,6 +540,8 @@ prepare() {
     scripts/config \
         -e TCG_TPM -e TCG_TIS_CORE -e TCG_TIS -e HW_RANDOM_TPM -e TCG_CRB -e SECURITYFS \
         -e WATCHDOG -e WATCHDOG_CORE -m ITCO_WDT -e ITCO_VENDOR_SUPPORT
+    ### hibernation image compressed with LZ4 (decompresses several times faster than LZO)
+    scripts/config -e HIBERNATION_COMP_LZ4 -e HIBERNATION_COMP_LZO --set-str HIBERNATION_DEF_COMP "lz4"
     make "${BUILD_FLAGS[@]}" olddefconfig
 
     ### Rewrite configuration

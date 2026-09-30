@@ -15,8 +15,9 @@ when a program needs it. This repository has everything to build the same laptop
 
 Results on this machine: firmware hands over to GRUB about 0.6 s after power-on with the
 MX150 enabled (0.4 s without), the desktop is up about 2.6 s after a reset, the laptop
-idles at 6.7 W on battery with the MX150 off, and the MX150 is ready about 2 s after a
-program asks for it.
+idles at 6.7 W on battery with the MX150 off, the MX150 is ready about 2 s after a
+program asks for it, hibernate resumes 5 s after power-on, and a tested undervolt
+(-115 mV core on AC) gives about 15 % more CPU throughput at the same temperature.
 
 ## Branches
 

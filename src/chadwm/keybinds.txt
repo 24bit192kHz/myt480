@@ -145,3 +145,5 @@ MODKEY = Super.  Section names mirror the HyDE bind descriptions.
   Wi-Fi                   left: rofi network picker   right: connection editor
   clock                   left: calendar notification
   ⏻ power                 lock / logout / suspend / hibernate / reboot / shutdown
+
+Bar module 11 (Bluetooth): left click = picker (power, scan, connect/disconnect/pair), right click = power toggle
