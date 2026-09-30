@@ -1,0 +1,61 @@
+From 08ff17ec602006e40bb7e5c1d669e99626f41c11 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 06:52:08 +0300
+Subject: [PATCH] [local] dGPU: reset once at most when the root port is
+ missing
+
+FSP-S drops a root port whose link is down. A GPU that is enabled but does
+not link would make every warm boot reset again forever. Remember the
+attempt in CMOS 0x6d: the second time, boot without the GPU.
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c    | 13 +++++++++++--
+ src/mainboard/lenovo/sklkbl_thinkpad/variant.h |  3 +++
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+index e4763ca764..d771da7184 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+@@ -4,6 +4,7 @@
+ #include <acpi/acpigen.h>
+ #include <cf9_reset.h>
+ #include <console/console.h>
++#include <pc80/mc146818rtc.h>
+ #include <delay.h>
+ #include <device/device.h>
+ #include <device/pci_def.h>
+@@ -126,10 +127,18 @@ void dgpu_detect(void)
+ 		const struct chipset_power_state *ps = pmc_get_power_state();
+ 
+ 		if (ps && (ps->gen_pmcon_a & MEM_SR)) {
+-			printk(BIOS_INFO, "dGPU: root port is disabled, full reset\n");
+-			full_reset();
++			/* Once: a link that never comes up must not reset forever */
++			if (cmos_read(CMOS_DGPU_RESET) != DGPU_RESET_TRIED) {
++				cmos_write(DGPU_RESET_TRIED, CMOS_DGPU_RESET);
++				printk(BIOS_INFO, "dGPU: root port is disabled, full reset\n");
++				full_reset();
++			}
++			cmos_write(0, CMOS_DGPU_RESET);
++			printk(BIOS_ERR, "dGPU: root port still disabled after a reset, booting without the GPU\n");
+ 		}
+ 	}
++	if (rp && rp->enabled && cmos_read(CMOS_DGPU_RESET) == DGPU_RESET_TRIED)
++		cmos_write(0, CMOS_DGPU_RESET);
+ 
+ 	if (!rp || !rp->enabled) {
+ 		printk(BIOS_ERR, "dGPU: no PCIe link, powering it off\n");
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index 452fd4ab41..26b8815817 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -10,6 +10,9 @@ uint8_t variant_memory_sku(void);
+ 
+ /* CMOS byte 0x6f: 0xd6 powers the dGPU from the next boot on (`dgpu on` in Linux) */
+ #define CMOS_DGPU		0x6f
++/* CMOS byte 0x6d: 0xa5 while a full reset for a missing GPU link is in flight */
++#define CMOS_DGPU_RESET		0x6d
++#define DGPU_RESET_TRIED	0xa5
+ #define  DGPU_REQUEST		0xd6
+ 
+ void dgpu_power_on(void);

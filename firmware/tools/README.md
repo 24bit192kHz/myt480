@@ -8,3 +8,4 @@
 | `tscmono.c`, `pm_ab.py` | boot time measurement |
 - `romcheck.sh`: refuses a ROM whose GRUB payload does not carry `site-local/grub.cfg` (run before every flash).
 - `boot-times.sh`: one line of boot times for the current boot.
+- `cmos6d.py`: shows CMOS 0x6d, the "GPU reset tried" flag of coreboot patch 0017 (0 after a good boot).

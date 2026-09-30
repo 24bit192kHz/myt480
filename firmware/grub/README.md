@@ -11,7 +11,8 @@ Patches on top of upstream GRUB at `BASE-COMMIT` (18 commits after the tag grub-
 | 0007, 0008 | which modules are preloaded on coreboot |
 | 0009 - 0014 | PS/2 keyboard through the ThinkPad EC: scan code set, keys pressed before GRUB started, debug output |
 | 0015 | NVMe: commands time out instead of hanging; PCI: scan only buses that exist (module init 201 -> 12 ms); `site.cfg` from the memdisk |
-| 0016 | file reads merge consecutive blocks into one disk request, NVMe transfers of 1 MiB (kernel load 120 -> 105 ms) |
+| 0016 | file reads merge consecutive blocks into one disk request, NVMe transfers of 1 MiB |
+| 0017 | NVMe PRP lists for any dword-aligned buffer instead of a 4 KiB bounce buffer (kernel load 120 -> 21 ms; the loaded kernel's SHA-256 was checked on the real NVMe and in QEMU); `sha256sum` reads 1 MiB at a time |
 
 coreboot builds the payload from `payloads/external/GRUB2/grub2` and checks out the
 revision named in the defconfig (`CONFIG_GRUB2_REVISION_ID="t480-fast"`). So that directory

@@ -47,12 +47,13 @@ Measured on a warm reboot with `cbmem -t`, GRUB's `boottime` and the kernel log
 
 | Stage | Before (September 2026, C35) | Now (C42) |
 |---|---|---|
-| coreboot, reset to payload | 1,026 ms | 600-710 ms |
-| GRUB, start to kernel jump | 680 ms | 140 ms |
+| coreboot, reset to payload | 1,026 ms | 650-710 ms with the GPU, 450 ms without |
+| GRUB, start to kernel jump | 680 ms | 50 ms |
 | kernel, start to init | 570 ms | 410 ms |
 | Xorg starts | 1.06 s after kernel start | 0.9 s |
 | window manager up | 1.74 s after kernel start | 1.5 s |
-| reset to desktop | about 3.5 s | about 2.3 s |
+| kernel clock zero after the reset | 1.73 s | 0.96 s |
+| reset to desktop | about 3.5 s | about 2.6 s |
 
 What made the difference, in order of size:
 
@@ -64,11 +65,14 @@ What made the difference, in order of size:
   port with a 65 ms I2C timeout, twice at boot and on every `xrandr`
 - after a reset without power loss the DIMM serial numbers are not read again
   over SMBus (0015): 130 ms
-- GRUB reads a file in runs of consecutive blocks with 1 MiB NVMe transfers (GRUB
-  patch 0016), ramstage is LZ4 compressed (`t480.defconfig`)
+- GRUB reads a file in runs of consecutive blocks and hands them to the NVMe as 1 MiB
+  transfers with proper PRP lists instead of a 4 KiB bounce buffer (GRUB patches 0016,
+  0017): the 18 MB kernel loads in 21 ms instead of 120; ramstage is LZ4 compressed
 
-What is left, and why it stays: FSP-S takes 330-480 ms and varies from boot to boot;
-no setting of the Kaby Lake FSP was found that changes it without losing a device.
+What is left, and why it stays: FSP-S takes 330-480 ms with the MX150 enabled and about
+180 ms without it; the difference is FSP's own init of the GPU's root port (Gen3 link
+equalization), and the only settings that would shorten it limit the link speed or drop
+a device, so it stays.
 libgfxinit's remaining 13 ms and the 50 ms of FSP-M are at the floor. The kernel's
 18 MB image loads in about 100 ms from the NVMe. A Linux payload in the flash was
 considered and dropped: the kernel image does not fit next to the firmware in 16 MB,

@@ -1,0 +1,109 @@
+From fb40995250874853982cb5cc8416cad4fce11706 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 06:48:45 +0300
+Subject: [PATCH] nvme: PRP lists for any dword-aligned buffer, clamp requests
+ to the list; hashsum: read 1 MiB at a time
+
+---
+ grub-core/commands/hashsum.c |  2 +-
+ grub-core/disk/nvme.c        | 53 ++++++++++++++++++------------------
+ 2 files changed, 28 insertions(+), 27 deletions(-)
+
+diff --git a/grub-core/commands/hashsum.c b/grub-core/commands/hashsum.c
+index b6f8e3d1a..7dc568173 100644
+--- a/grub-core/commands/hashsum.c
++++ b/grub-core/commands/hashsum.c
+@@ -65,7 +65,7 @@ hash_file (grub_file_t file, const gcry_md_spec_t *hash, void *result)
+ {
+   void *context;
+   grub_uint8_t *readbuf;
+-#define BUF_SIZE 4096
++#define BUF_SIZE (1024 * 1024)
+   readbuf = grub_malloc (BUF_SIZE);
+   if (!readbuf)
+     return grub_errno;
+diff --git a/grub-core/disk/nvme.c b/grub-core/disk/nvme.c
+index 45297943b..9bf5a5114 100644
+--- a/grub-core/disk/nvme.c
++++ b/grub-core/disk/nvme.c
+@@ -456,53 +456,54 @@ nvme_bounce_xfer(struct nvme_namespace *ns, grub_uint64_t lba, void *buf, grub_u
+     return res;
+ }
+ 
+-#define NVME_MAX_PRPL_ENTRIES 255 /* Allows requests up to 1 MiB; the list is one page */
++#define NVME_MAX_PRPL_ENTRIES 255 /* one page of PRP entries; with PRP1 that is 1 MiB */
+ 
+-// Transfer data using page list (if applicable)
++/* Transfer data using a PRP list where needed. PRP1 may point into the middle
++   of a page; every following page of the buffer is listed whole, so any
++   dword-aligned buffer can be transferred directly. */
+ static int
+ nvme_prpl_xfer(struct nvme_namespace *ns, grub_uint64_t lba, void *buf, grub_uint16_t count,
+                int write)
+ {
+-    grub_uint32_t base = (long)buf;
+-    grub_int32_t size;
++    grub_uint32_t base = (grub_uint32_t)(grub_addr_t)buf;
++    grub_uint32_t off = base & ~NVME_PAGE_MASK;
++    grub_uint32_t max_bytes, size;
+ 
+     if (count > ns->max_req_size)
+         count = ns->max_req_size;
+ 
+-    size = count * ns->block_size;
+-    /* Special case for transfers that fit into PRP1, but are unaligned */
+-    if (((size + (base & ~NVME_PAGE_MASK)) <= NVME_PAGE_SIZE))
+-        goto single;
++    /* The first page is described by PRP1, the rest by the list. */
++    max_bytes = (NVME_MAX_PRPL_ENTRIES + 1) * NVME_PAGE_SIZE - off;
++    if ((grub_uint32_t)count * ns->block_size > max_bytes)
++        count = max_bytes / ns->block_size;
++    size = (grub_uint32_t)count * ns->block_size;
+ 
+-    /* Every request has to be page aligned */
+-    if (base & ~NVME_PAGE_MASK)
+-        goto bounce;
++    /* Fits into PRP1, whatever the alignment */
++    if (size + off <= NVME_PAGE_SIZE)
++        goto single;
+ 
+-    /* Make sure a full block fits into the last chunk */
+-    if (size & (ns->block_size - 1ULL))
++    /* PRP entries have to be dword aligned */
++    if (base & 0x3)
+         goto bounce;
+ 
+-    /* Build PRP list if we need to describe more than 2 pages */
+-    if ((ns->block_size * count) > (NVME_PAGE_SIZE * 2)) {
++    if (size + off > 2 * NVME_PAGE_SIZE) {
+         grub_uint32_t prpl_len = 0;
+         grub_uint64_t *prpl = nvme_dma_buffer;
+-        int first_page = 1;
+-        for (; size > 0; base += NVME_PAGE_SIZE, size -= NVME_PAGE_SIZE) {
+-            if (first_page) {
+-                /* First page is special */
+-                first_page = 0;
+-                continue;
+-            }
++        grub_uint32_t page;
++
++        for (page = (base & NVME_PAGE_MASK) + NVME_PAGE_SIZE; page < base + size;
++             page += NVME_PAGE_SIZE) {
+             if (prpl_len >= NVME_MAX_PRPL_ENTRIES)
+                 goto bounce;
+-            prpl[prpl_len++] = base;
++            prpl[prpl_len++] = page;
+         }
+         return nvme_io_xfer(ns, lba, buf, prpl, count, write);
+     }
+ 
+-    /* Directly embed the 2nd page if we only need 2 pages */
+-    if ((ns->block_size * count) > NVME_PAGE_SIZE)
+-        return nvme_io_xfer(ns, lba, buf, (char *) buf + NVME_PAGE_SIZE, count, write);
++    /* Two pages: the second one goes directly into PRP2 */
++    return nvme_io_xfer(ns, lba, buf,
++                        (void *)(grub_addr_t)((base & NVME_PAGE_MASK) + NVME_PAGE_SIZE),
++                        count, write);
+ 
+ single:
+     /* One page is enough, don't expose anything else */
