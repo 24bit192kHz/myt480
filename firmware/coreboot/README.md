@@ -53,6 +53,14 @@ make defconfig KBUILD_DEFCONFIG=site-local/t480.defconfig
 make -j4
 ```
 
+Before flashing, check that the image carries this tree's `grub.cfg` and not the
+QEMU harness one (`site-local/Makefile.mk` rebuilds the shared payload on every
+`make`; the check is the belt to those braces):
+
+```sh
+sh ../../tools/romcheck.sh build/coreboot.rom     # prints "romcheck: OK"
+```
+
 ## Debug build
 
 A boot that hangs leaves nothing behind: the log is in RAM and the way out is a

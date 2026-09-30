@@ -66,3 +66,13 @@ etc/boot-menu-wait-type := raw
 cbfs-files-y += etc/pci-optionrom-exec
 etc/pci-optionrom-exec-file := $(obj)/site-local/pci-optionrom-exec.bin
 etc/pci-optionrom-exec-type := raw
+
+# The GRUB payload is one file shared by every build directory (build/ for the
+# laptop, build-qemu/ for the test harness), and coreboot only rebuilds it when
+# it is missing. A ROM built after a harness run carried the harness grub.cfg
+# (2026-09-30, two external reflashes). Rebuild the payload on every make: the
+# grub-mkstandalone step costs a few seconds, a wrong config costs a brick.
+ifeq ($(CONFIG_PAYLOAD_GRUB2),y)
+.PHONY: grub2
+$(obj)/coreboot.pre: payloads/external/GRUB2/grub2/build/default_payload.elf
+endif
