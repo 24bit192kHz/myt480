@@ -1,11 +1,11 @@
-From 805f717712afb61e8103c294c5d66b4a16c31f3a Mon Sep 17 00:00:00 2001
-From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+From 650346e7fc5e21bb44d12e4cee352a4dbee61a9e Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 1/5] device/pci_rom: Pass the whole option ROM to _ROM
+Subject: [PATCH 01/12] device/pci_rom: Pass the whole option ROM to _ROM
 
 pci_rom_ssdt() takes the length of an option ROM from the size field of
-its header. That field is a single byte, so it cannot describe more
-than 127.5 KiB, and it only covers the first image of the ROM.
+its header. That field is a single byte, so it cannot describe more than
+127.5 KiB, and it only covers the first image of the ROM.
 
 The VBIOS of a GeForce MX150 (10de:1d10) has 119808 bytes in that field,
 but 182272 bytes as image length in its PCI data structure. With only
@@ -15,15 +15,17 @@ initialize the GPU:
   NVRM: GPU 0000:01:00.0: RmInitAdapter failed! (0x24:0x40:1603)
 
 For ROMs that are not loaded yet, add up the image lengths of the PCI
-data structures instead, with the size of the header as lower bound.
-For a ROM from CBFS, do not go beyond the size of the file.
+data structures instead, with the size of the header as lower bound. For
+a ROM from CBFS, do not go beyond the size of the file.
 
 TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS (184320 byte
      file) as pci10de,1d10.rom in CBFS: the region of _ROM is 0x2c800
      (182272) bytes long and the NVIDIA driver initializes the GPU.
      Builds for qemu-q35 and the six sklkbl_thinkpad variants.
 
-
+Change-Id: I595d1620390c826acc43e7f3e2680d2a21a245ec
+Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  src/device/pci_rom.c | 59 +++++++++++++++++++++++++++++++++++++++++---
  1 file changed, 56 insertions(+), 3 deletions(-)

@@ -1,19 +1,19 @@
-From dadd09d1c8ddfaf2c2f1c7e1769d8163db904035 Mon Sep 17 00:00:00 2001
-From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+From 3f34b1a02317c391c19413596a59e5f2356d511f Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 3/5] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
+Subject: [PATCH 03/12] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
  dGPU
 
 Let the OS turn the dGPU off and on at runtime (D3cold) with an ACPI
 power resource for root port 1. The sequence follows the vendor
-firmware: disable the link and wait for it to go down before the GPU
-is put into reset and loses power, and enable the link again when the
-GPU has left reset.
+firmware: disable the link and wait for it to go down before the GPU is
+put into reset and loses power, and enable the link again when the GPU
+has left reset.
 
-Without the dGPU, root port 7 takes the place of root port 1 at
-00:1c.0, and RP01 in the DSDT describes that one. Add the power
-resource in the SSDT, and only if the dGPU is there, so that it cannot
-end up at the wrong root port.
+Without the dGPU, root port 7 takes the place of root port 1 at 00:1c.0,
+and RP01 in the DSDT describes that one. Add the power resource in the
+SSDT, and only if the dGPU is there, so that it cannot end up at the
+wrong root port.
 
 TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2: without a
      driver the root port and the GPU go to D3cold and the power rail
@@ -21,6 +21,9 @@ TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2: without a
      70 load/unload cycles in a row, S3 resume with a program running on
      the GPU (video memory preserved by the driver).
 
+Change-Id: I1e821855916e285123909cff581cccc6f48ca241
+Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 70 +++++++++++++++++++
  src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 39 +++++++++++

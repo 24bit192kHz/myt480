@@ -1,0 +1,33 @@
+From c56b14c8516e3adc58e4e38cac6390c0058c607c Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Wed, 30 Sep 2026 18:41:56 +0300
+Subject: [PATCH 10/12] soc/intel/skylake: Add the GbE ACPI device
+
+Include the common GbE ACPI device. It carries the PME wake, so Wake-on-
+LAN appears in /proc/acpi/wakeup as on the vendor firmware.
+
+TEST=T480: GLAN listed in /proc/acpi/wakeup (S4).
+
+Change-Id: I84a7e3b6171701aeb57dfc9d3acbd8e0e46a130e
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/soc/intel/skylake/acpi/pch.asl | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/soc/intel/skylake/acpi/pch.asl b/src/soc/intel/skylake/acpi/pch.asl
+index ba9780881c..380ab1f0f5 100644
+--- a/src/soc/intel/skylake/acpi/pch.asl
++++ b/src/soc/intel/skylake/acpi/pch.asl
+@@ -43,6 +43,9 @@
+ /* USB XHCI 0:14.0 */
+ #include "xhci.asl"
+ 
++/* Gigabit Ethernet 0:1f.6, with its wake capability */
++#include <soc/intel/common/block/acpi/acpi/pch_glan.asl>
++
+ /* CSE/HECI #1 0:16.0 */
+ #include <soc/intel/common/block/acpi/acpi/heci.asl>
+ 
+-- 
+2.55.0
+

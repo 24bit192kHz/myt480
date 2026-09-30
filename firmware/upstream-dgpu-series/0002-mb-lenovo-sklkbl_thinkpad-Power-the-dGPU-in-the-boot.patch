@@ -1,7 +1,7 @@
-From 1f661738df9f6766df8739c0214f4b352470e537 Mon Sep 17 00:00:00 2001
-From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+From 33ae3ed025cdce08f53e08f7f037e278619bb958 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 2/5] mb/lenovo/sklkbl_thinkpad: Power the dGPU in the
+Subject: [PATCH 02/12] mb/lenovo/sklkbl_thinkpad: Power the dGPU in the
  bootblock
 
 The dGPU sits behind PCIe root port 1, and FSP-S disables root ports
@@ -14,13 +14,13 @@ Power the GPU and release its reset in the bootblock. Root port 1 uses
 CLKREQ0#, and that pad has to be in its native function for the PCH to
 drive the reference clock, so configure it there, too. Wait for power
 good with a timeout instead of forever; on the T480 it takes 4.7 ms.
-Before FSP-S, wait for the link, for up to the 100 ms that PCIe gives
-a device after its reset.
+Before FSP-S, wait for the link, for up to the 100 ms that PCIe gives a
+device after its reset.
 
-FSP-S disables the root port for good: after a boot without the GPU,
-it does not find the GPU on any warm reset, even if the GPU has power
-and left its reset in the bootblock. That is what happens on the first
-boot after the GPU was enabled. Seen on a T480:
+FSP-S disables the root port for good: after a boot without the GPU, it
+does not find the GPU on any warm reset, even if the GPU has power and
+left its reset in the bootblock. That is what happens on the first boot
+after the GPU was enabled. Seen on a T480:
 
   GPU off:            GEN_PMCON_A e0a40200, PWRM+0x628 03402afc
   warm reset, GPU on: GEN_PMCON_A e0a40200, no root port 1
@@ -28,9 +28,9 @@ boot after the GPU was enabled. Seen on a T480:
                       root port 1 and the GPU are there
 
 So do a full reset if the GPU has power but no root port. MEM_SR in
-GEN_PMCON_A is only set after a reset without power cycle, which
-limits this to one reset. If there is still no link after that, power
-the GPU off.
+GEN_PMCON_A is only set after a reset without power cycle, which limits
+this to one reset. If there is still no link after that, power the GPU
+off.
 
 The power and reset pads are in the RSMRST well and keep their state in
 S3 to S5. Remove them from the GPIO tables of the ramstage, which would
@@ -49,6 +49,9 @@ TEST=Lenovo ThinkPad T480 with GeForce MX150 (10de:1d10).
      Not booted on top of main. T480s and T580 are build tested
      only.
 
+Change-Id: I84264d1f3834204a5b8167ae348325697159020c
+Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/Makefile.mk        |   3 +
  .../lenovo/sklkbl_thinkpad/bootblock.c        |   7 ++

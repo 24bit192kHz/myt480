@@ -1,0 +1,40 @@
+From cfb07321155253013f307779ba92e8e801d4d18f Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Wed, 30 Sep 2026 18:39:01 +0300
+Subject: [PATCH 08/12] mb/lenovo/sklkbl_thinkpad/t480: No ASPM on the dGPU
+ root port
+
+The vendor firmware runs root port 1 with ASPM disabled (its FADT also
+declares that the platform does not support PCIe ASPM), and Linux is not
+granted ASPM control by coreboot's _OSC either, so whatever FSP sets is
+what the GPU runs with. Match the vendor: no ASPM and no L1 substates on
+the port. The link is powered down together with the GPU when it is not
+in use, so this costs nothing while the GPU is off.
+
+TEST=T480: LnkCap of 00:1c.0 reports "ASPM not supported", no L1SubCap;
+10-minute GPU load test, suspend/resume and 20 power cycles of the GPU
+pass.
+
+Change-Id: I668d6d746d621bcb5a7cac2267ae6c0fc994c511
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb       | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index bc8e44a75c..17fec4cd26 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -45,6 +45,9 @@ chip soc/intel/skylake
+ 			register "PcieRpAdvancedErrorReporting[0]"	= "true"
+ 			register "PcieRpLtrEnable[0]"			= "true"
+ 			register "PcieRpMaxPayload[0]"			= "RpMaxPayload_256"
++			# No ASPM on the dGPU port, as on the vendor firmware (see the commit)
++			register "pcie_rp_aspm[0]"			= "AspmDisabled"
++			register "pcie_rp_l1substates[0]"		= "L1SS_Disabled"
+ 			chip drivers/pcie/generic
+ 				register "name" = ""PEGP""
+ 				device pci 00.0 alias dgpu on end
+-- 
+2.55.0
+

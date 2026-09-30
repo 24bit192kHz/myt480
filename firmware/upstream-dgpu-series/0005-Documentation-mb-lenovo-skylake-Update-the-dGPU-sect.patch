@@ -1,12 +1,16 @@
-From fdee772e1dc8e7e9a04ef15eec162d76a86d0f9b Mon Sep 17 00:00:00 2001
-From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+From a74fa90b8ba36f0b2b545eab2b11841dbe294085 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:55 +0300
-Subject: [PATCH 5/5] Documentation/mb/lenovo/skylake: Update the dGPU section
+Subject: [PATCH 05/12] Documentation/mb/lenovo/skylake: Update the dGPU
+ section
 
 The power sequence and the proprietary driver work now. Describe the
 option, the full reset on the first boot with the GPU and the power
 management.
 
+Change-Id: I9cbbb7d22a0036c44c61f1d8f3820775a0a5e908
+Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  Documentation/mainboard/lenovo/skylake.md | 22 ++++++++++++++++++----
  1 file changed, 18 insertions(+), 4 deletions(-)

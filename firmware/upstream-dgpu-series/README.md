@@ -44,3 +44,12 @@ flashed build reads CMOS byte 0x6f (it has no option backend).
 5. `git push origin HEAD:refs/for/main%topic=t480-dgpu`
 
 Send 0001 first: it stands on its own.
+
+## Gerrit
+
+v3, pushed 2026-09-30 on top of coreboot main d440ade0d9, topic `t480-dgpu`
+(https://review.coreboot.org/q/topic:t480-dgpu): changes 95872 to 95883, one per
+patch in this directory, in order. The four commits with `[local]` prefixes in
+`../coreboot/patches` that are not in the series are local to this laptop's build
+(GRUB payload, panel power before FSP-S, the SMBIOS version that upstream already
+had, and the Thunderbolt root port wake).
