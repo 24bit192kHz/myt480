@@ -1,0 +1,5 @@
+#!/bin/sh
+# udev: the AC adapter changed (or was found at boot). Apply the GPU policy
+# outside udev's event handling (loading the driver takes a few seconds).
+logger -t gpu-power "AC $(cat /sys/class/power_supply/AC/online 2>/dev/null): applying the policy"
+exec setsid -f /usr/local/bin/gpu-power apply

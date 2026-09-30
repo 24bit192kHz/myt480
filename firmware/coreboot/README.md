@@ -26,6 +26,7 @@
 | 0015 | put `grub.cfg` into the payload's memdisk (no CBFS walk at every GRUB start); after a reset without power loss trust the SPD cache without reading the DIMM serial numbers (130 ms) | local |
 | 0016 | request eDP panel power before FSP-S, so the panel's 210 ms power-up overlaps FSP-S (graphics init 259 -> 13 ms); pull-ups on the HDMI DDC pads, an empty HDMI port answers in 3 ms instead of a 65 ms timeout | could go upstream |
 | 0017 | a GPU whose link never comes up resets the machine once, not forever (CMOS 0x6d remembers the attempt); the second time it boots without the GPU | belongs in the series |
+| 0018 | no PCIe L1 substates on the GPU's root port (ASPM L1 stays). Linux is not given ASPM control here, so the port ran with FSP's L1.1/L1.2; the machine once hung without a trace right after a GPU benchmark, the signature of a failed L1.2 exit | belongs in the series |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

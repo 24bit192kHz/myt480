@@ -57,3 +57,20 @@ The sections above describe C19-C23 and are history. Current state:
   Option "AutoAddGPU" "false" in /etc/X11/xorg.conf.d/20-intel-fast.conf keeps X from
   holding the GPU. Source: ~/systemagent/src/gpu-power.
 - To go back to "driver always loaded": remove nvidia-ondemand.conf and the AutoAddGPU line.
+
+## Update 2026-09-30: AC/battery policy, and a freeze
+
+- `gpu-power` now has a policy: on AC the driver stays loaded (GPU ready at once), on
+  battery the GPU is off unless a program uses it. `gpu-power on|off` by hand wins until
+  `gpu-power auto` or the next boot; `gpu-power status` says which mode is active.
+  A udev rule on the AC adapter (`/etc/udev/rules.d/90-gpu-power.rules`, hook
+  `gpu-power-hook`) applies it on plug/unplug and at boot; `prime-run` uses
+  `gpu-power use` / `release` and a shared lock in `/run/gpu-power.users`, so a
+  running program is never switched off. Source: `src/gpu-power/`.
+- After a GPU benchmark on battery the laptop hung with nothing in the logs. The root
+  port had PCIe L1.1/L1.2 substates enabled by FSP (Linux is not granted ASPM control
+  by coreboot's `_OSC`, so it cannot change that), and the hang came right after the
+  GPU went idle. Firmware C46 (coreboot patch 0018) turns the substates off on that
+  port; ASPM L1 stays. Battery impact: none while the GPU is off (its link is powered
+  down), well under 0.1 W while it is on.
+- Battery: GPU off (rail off) 6.7 W idle, driver loaded and idle 7.7 W, rendering 9.1 W.

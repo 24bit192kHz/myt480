@@ -1,0 +1,2 @@
+# MX150 on AC: driver loaded, GPU ready. On battery: off unless a program uses it.
+SUBSYSTEM=="power_supply", KERNEL=="AC", RUN+="/usr/local/bin/gpu-power-hook"

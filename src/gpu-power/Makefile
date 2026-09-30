@@ -9,3 +9,7 @@ install: gpu-power
 
 clean:
 	rm -f gpu-power
+
+install-policy:
+	install -D -m 755 -o root -g root gpu-power-hook $(DESTDIR)/usr/local/bin/gpu-power-hook
+	install -D -m 644 -o root -g root 90-gpu-power.rules $(DESTDIR)/etc/udev/rules.d/90-gpu-power.rules

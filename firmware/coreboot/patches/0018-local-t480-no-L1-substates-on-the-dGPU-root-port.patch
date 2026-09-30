@@ -1,0 +1,30 @@
+From 2ceae624be70ee8dccac2633b0a2cf011e0e57da Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 07:47:15 +0300
+Subject: [PATCH] [local] t480: no L1 substates on the dGPU root port
+
+Linux is not granted ASPM control by the _OSC, so the root port runs with
+what FSP-S programmed: ASPM L1 with L1.1 and L1.2 substates. After a GPU
+benchmark on battery the machine hung without a trace right after the GPU
+went idle, the pattern of an L1.2 exit that never completes. L1.0 stays;
+the link is powered off with the GPU when it is not in use.
+---
+ .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb     | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index 7839237a30..1115bf5302 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -50,6 +50,11 @@ chip soc/intel/skylake
+ 			register "PcieRpClkSrcNumber[0]"		= "0"
+ 			register "PcieRpAdvancedErrorReporting[0]"	= "true"
+ 			register "PcieRpLtrEnable[0]"			= "true"
++			# No L1 substates on the GPU port. Linux does not own ASPM here (_OSC),
++			# so this is what the GPU runs with; a failed L1.2 exit hangs the machine
++			# without a trace (2026-09-30, after a GPU benchmark on battery). The link
++			# is powered down with the GPU anyway, so L1.0 is all it needs.
++			register "pcie_rp_l1substates[0]"		= "L1SS_Disabled"
+ 			chip drivers/pcie/generic
+ 				register "name" = ""PEGP""
+ 				device pci 00.0 alias dgpu on end
