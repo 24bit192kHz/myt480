@@ -136,3 +136,13 @@ closed by firmware C50 (patches 0022-0024) and kernel 7.2.8-3:
 
 Not implemented: the USB-C PD controller node (UCSI over the EC), DPTF and WMI; nothing
 on this Linux system uses them. The GPU's own subsystem ID stays unset.
+
+Verified afterwards on battery (2026-09-30 18:20-18:26): charge thresholds and cycle counts
+work under coreboot (BAT0 85/90 as on stock; BAT1 had lost its thresholds when reinserted,
+set to 85/90 again and kept across a reset); the GPU policy parks the MX150 in D3cold about
+a minute after boot; idle draw 6.8 W with the GPU off, package C8 34 % of the time. A
+deliberate kernel hang (`kernel.panic=0`, sysrq crash) was reset by the TCO watchdog 30 s
+later and the next boot re-armed it and brought the GPU back through the one-time reset
+path. Hibernate to the swap partition and resume by RTC alarm from S4 work with the GPU
+and the watchdog; the X session survives. The Wi-Fi rfkill unblock rule and script were
+removed: its log never saw a soft block, and Wi-Fi comes up unblocked on C50.

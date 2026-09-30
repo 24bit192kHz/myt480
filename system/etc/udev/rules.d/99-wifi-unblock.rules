@@ -1,2 +1,0 @@
-# Auto-unblock wifi rfkill switch when kernel rfkill device appears.
-SUBSYSTEM=="rfkill", ATTR{type}=="wlan", RUN+="/usr/bin/rfkill unblock wifi"
