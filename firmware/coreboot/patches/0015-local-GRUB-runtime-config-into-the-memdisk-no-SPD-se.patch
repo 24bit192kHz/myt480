@@ -1,0 +1,107 @@
+From 79a8a87b86231f5e62d87462ab9036dd0e239b40 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 01:15:54 +0300
+Subject: [PATCH 15/16] [local] GRUB runtime config into the memdisk; no SPD
+ serial check on a warm reset
+
+---
+ payloads/external/GRUB2/Makefile                   | 14 +++++++++++++-
+ payloads/external/Makefile.mk                      |  6 ++++--
+ .../variants/t480/memory_init_params.c             | 10 +++++++++-
+ 3 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/payloads/external/GRUB2/Makefile b/payloads/external/GRUB2/Makefile
+index 4abcce44b3..01fff7d37c 100644
+--- a/payloads/external/GRUB2/Makefile
++++ b/payloads/external/GRUB2/Makefile
+@@ -39,11 +39,23 @@ grub2/build/config.h: $(CONFIG_DEP) | checkout
+ 
+ config: grub2/build/config.h checkout
+ 
++# The runtime config also goes into the memdisk: reading it from there is
++# instant, walking CBFS for etc/grub.cfg takes ~140 ms on a T480.
++RUNTIME_CFG=$(CONFIG_GRUB2_RUNTIME_CONFIG_FILE)
++ifneq ($(CONFIG_GRUB2_INCLUDE_RUNTIME_CONFIG_FILE),y)
++EXTRA_PAYLOAD_FILES=
++else ifeq ($(filter /%,$(RUNTIME_CFG)),)
++EXTRA_PAYLOAD_FILES=/boot/grub/site.cfg=$(abspath ../../../$(RUNTIME_CFG))
++else
++EXTRA_PAYLOAD_FILES=/boot/grub/site.cfg=$(RUNTIME_CFG)
++endif
++
+ grub2: config
+ 	echo "    MAKE       GRUB2 $(NAME-y)"
+ 	$(MAKE) -C grub2/build
+ 	$(MAKE) -C grub2/build default_payload.elf \
+-		EXTRA_PAYLOAD_MODULES="$(CONFIG_GRUB2_EXTRA_MODULES)"
++		EXTRA_PAYLOAD_MODULES="$(CONFIG_GRUB2_EXTRA_MODULES)" \
++		EXTRA_PAYLOAD_FILES="$(EXTRA_PAYLOAD_FILES)"
+ 
+ clean:
+ 	test -f grub2/build/Makefile && $(MAKE) -C grub2/build clean || exit 0
+diff --git a/payloads/external/Makefile.mk b/payloads/external/Makefile.mk
+index f7d2bcfeff..c4d45c36e1 100644
+--- a/payloads/external/Makefile.mk
++++ b/payloads/external/Makefile.mk
+@@ -294,7 +294,7 @@ img/grub2-file := $(GRUB_TARGET_PATH)
+ img/grub2-type := payload
+ img/grub2-compression := $(CBFS_SECONDARY_PAYLOAD_COMPRESS_FLAG)
+ 
+-grub2: $(obj)/config.h
++grub2: $(obj)/config.h $(call strip_quotes,$(CONFIG_GRUB2_RUNTIME_CONFIG_FILE))
+ 	$(MAKE) -C payloads/external/GRUB2 \
+ 			HOSTCC="$(HOSTCC)" \
+ 			CC="$(CC_x86_32)" LD="$(LD_x86_32)" \
+@@ -304,7 +304,9 @@ grub2: $(obj)/config.h
+ 			CONFIG_GRUB2_MASTER=$(CONFIG_GRUB2_MASTER) \
+ 			CONFIG_GRUB2_REVISION=$(CONFIG_GRUB2_REVISION) \
+ 			CONFIG_GRUB2_REVISION_ID=$(CONFIG_GRUB2_REVISION_ID) \
+-			CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES)
++			CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES) \
++			CONFIG_GRUB2_INCLUDE_RUNTIME_CONFIG_FILE=$(CONFIG_GRUB2_INCLUDE_RUNTIME_CONFIG_FILE) \
++			CONFIG_GRUB2_RUNTIME_CONFIG_FILE=$(call strip_quotes,$(CONFIG_GRUB2_RUNTIME_CONFIG_FILE))
+ 
+ $(GRUB_TARGET_PATH): grub2
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/memory_init_params.c b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/memory_init_params.c
+index 902f17e8be..6aa493f65e 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/memory_init_params.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/memory_init_params.c
+@@ -1,6 +1,9 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
+ #include <console/console.h>
++#include <intelblocks/pmclib.h>
++#include <soc/pm.h>
++#include <soc/pmc.h>
+ #include <soc/romstage.h>
+ #include <spd_bin.h>
+ #include <spd_cache.h>
+@@ -9,6 +12,9 @@ void mainboard_memory_init_params(FSPM_UPD *mupd)
+ {
+ 	FSP_M_CONFIG *mem_cfg = &mupd->FspmConfig;
+ 	struct spd_block blk = { .addr_map = { 0x50, 0x51, } };
++	const struct chipset_power_state *ps = pmc_get_power_state();
++	/* MEM_SR: a reset without power loss, so the DIMMs cannot have changed */
++	const bool warm = ps && (ps->gen_pmcon_a & MEM_SR);
+ 	bool dimm_changed = true;
+ 
+ 	mem_cfg->DqPinsInterleaved = true;			/* DDR_DQ in interleave mode */
+@@ -19,6 +25,8 @@ void mainboard_memory_init_params(FSPM_UPD *mupd)
+ 	 * Reading two full DDR4 SPDs over SMBus costs ~100 ms on every boot.
+ 	 * Keep them in RW_SPD_CACHE and only compare the module serial numbers;
+ 	 * read everything again (and drop the MRC cache) when a DIMM changed.
++	 * Even the serial numbers cost ~130 ms over SMBus, so skip them after a
++	 * reset without power loss: nobody can swap DIMMs in a running machine.
+ 	 */
+ 	if (CONFIG(SPD_CACHE_IN_FMAP)) {
+ 		uint8_t *spd_cache;
+@@ -26,7 +34,7 @@ void mainboard_memory_init_params(FSPM_UPD *mupd)
+ 
+ 		if (load_spd_cache(&spd_cache, &spd_cache_sz) == CB_SUCCESS &&
+ 		    spd_cache_is_valid(spd_cache, spd_cache_sz)) {
+-			dimm_changed = check_if_dimm_changed(spd_cache, &blk);
++			dimm_changed = warm ? false : check_if_dimm_changed(spd_cache, &blk);
+ 			if (dimm_changed) {
+ 				printk(BIOS_INFO, "SPD: DIMMs changed, invalidating MRC cache\n");
+ 				mupd->FspmArchUpd.NvsBufferPtr = 0;

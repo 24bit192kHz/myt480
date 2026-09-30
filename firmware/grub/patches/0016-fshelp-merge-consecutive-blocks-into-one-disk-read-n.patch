@@ -1,0 +1,122 @@
+From 2c2e9e6956df0d5c577fa2648ae460bb867e7420 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 02:07:16 +0300
+Subject: [PATCH 16/16] fshelp: merge consecutive blocks into one disk read;
+ nvme: 1 MiB requests
+
+---
+ grub-core/disk/nvme.c |  5 ++--
+ grub-core/fs/fshelp.c | 57 +++++++++++++++++++++++++++++++++++++------
+ 2 files changed, 52 insertions(+), 10 deletions(-)
+
+diff --git a/grub-core/disk/nvme.c b/grub-core/disk/nvme.c
+index 59f361673..45297943b 100644
+--- a/grub-core/disk/nvme.c
++++ b/grub-core/disk/nvme.c
+@@ -456,7 +456,7 @@ nvme_bounce_xfer(struct nvme_namespace *ns, grub_uint64_t lba, void *buf, grub_u
+     return res;
+ }
+ 
+-#define NVME_MAX_PRPL_ENTRIES 15 /* Allows requests up to 64kb */
++#define NVME_MAX_PRPL_ENTRIES 255 /* Allows requests up to 1 MiB; the list is one page */
+ 
+ // Transfer data using page list (if applicable)
+ static int
+@@ -737,7 +737,8 @@ static grub_err_t
+ nvme_readwrite(struct nvme_namespace *ns, grub_disk_addr_t sector, grub_size_t num_sectors, char *buf, int write)
+ {
+     for (int i = 0; i < num_sectors;) {
+-        grub_uint16_t blocks_remaining = num_sectors - i;
++        grub_size_t remaining = num_sectors - i;
++        grub_uint16_t blocks_remaining = remaining > 0xffff ? 0xffff : remaining;
+         char *op_buf = buf + i * ns->block_size;
+         int blocks = nvme_prpl_xfer(ns, sector + i, op_buf, blocks_remaining, write);
+         if (blocks < 0)
+diff --git a/grub-core/fs/fshelp.c b/grub-core/fs/fshelp.c
+index 15278fb80..9d8635924 100644
+--- a/grub-core/fs/fshelp.c
++++ b/grub-core/fs/fshelp.c
+@@ -22,6 +22,9 @@
+ #include <grub/misc.h>
+ #include <grub/disk.h>
+ #include <grub/fshelp.h>
++
++/* Longest merged read in bytes; keeps single requests bounded.  */
++#define GRUB_FSHELP_MAX_RUN (16 * 1024 * 1024)
+ #include <grub/dl.h>
+ #include <grub/i18n.h>
+ 
+@@ -364,6 +367,10 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
+ {
+   grub_disk_addr_t i, blockcnt;
+   int blocksize = 1 << (log2blocksize + GRUB_DISK_SECTOR_BITS);
++  grub_disk_addr_t run_sector = 0;
++  grub_size_t run_len = 0;
++  int run_skip = 0;
++  char *run_buf = NULL;
+ 
+   /*
+    * Catch blatantly invalid log2blocksize. We could be a lot stricter, but
+@@ -425,20 +432,54 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
+ 	 is zero filled instead.  */
+       if (blknr)
+ 	{
+-	  disk->read_hook = read_hook;
+-	  disk->read_hook_data = read_hook_data;
++	  blknr += blocks_start;
+ 
+-	  grub_disk_read (disk, blknr + blocks_start, skipfirst,
+-			  blockend, buf);
+-	  disk->read_hook = 0;
+-	  if (grub_errno)
+-	    return -1;
++	  if (read_hook)
++	    {
++	      disk->read_hook = read_hook;
++	      disk->read_hook_data = read_hook_data;
++
++	      grub_disk_read (disk, blknr, skipfirst, blockend, buf);
++	      disk->read_hook = 0;
++	      if (grub_errno)
++		return -1;
++	    }
++	  /* Without a read hook, merge consecutive blocks into one disk
++	     request so the disk driver can transfer them at once.  Every
++	     block but the first one starts at a block boundary, so the
++	     run ends at a block boundary and the next sector is exact.  */
++	  else if (run_len
++		   && run_sector + ((run_skip + run_len) >> GRUB_DISK_SECTOR_BITS)
++		      == blknr
++		   && run_len < GRUB_FSHELP_MAX_RUN)
++	    run_len += blockend;
++	  else
++	    {
++	      if (run_len
++		  && grub_disk_read (disk, run_sector, run_skip, run_len, run_buf))
++		return -1;
++
++	      run_sector = blknr;
++	      run_skip = skipfirst;
++	      run_len = blockend;
++	      run_buf = buf;
++	    }
+ 	}
+       else
+-	grub_memset (buf, 0, blockend);
++	{
++	  if (run_len
++	      && grub_disk_read (disk, run_sector, run_skip, run_len, run_buf))
++	    return -1;
++	  run_len = 0;
++	  grub_memset (buf, 0, blockend);
++	}
+ 
+       buf += blocksize - skipfirst;
+     }
+ 
++  if (run_len
++      && grub_disk_read (disk, run_sector, run_skip, run_len, run_buf))
++    return -1;
++
+   return len;
+ }

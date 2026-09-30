@@ -1,0 +1,176 @@
+From ceb21b44689d1b9f879e90337a3bbc13c7ec22a2 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 01:15:53 +0300
+Subject: [PATCH 15/16] nvme: real timeouts; pci: scan only existing buses;
+ memdisk site.cfg
+
+- nvme_wait() and nvme_wait_csts_rdy() give up after 5 s / CAP.TO instead of
+  spinning forever (a warm reboot hung here once).
+- grub_pci_iterate() scans bus 0 and the secondary bus of every bridge it
+  meets instead of all 256 buses: 65536 config reads, 28 ms per driver on
+  a Kaby Lake PCH, seven drivers = 200 ms per boot.
+- default_payload.elf takes EXTRA_PAYLOAD_FILES; coreboot.cfg sources
+  (memdisk)/boot/grub/site.cfg when present, the CBFS walk for etc/grub.cfg
+  cost ~140 ms.
+---
+ Makefile.am           |  2 +-
+ coreboot.cfg          |  8 +++++++-
+ grub-core/bus/pci.c   | 31 +++++++++++++++++++++++++------
+ grub-core/disk/nvme.c | 36 +++++++++++++++++++-----------------
+ 4 files changed, 52 insertions(+), 25 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 2c86dbbf6..402b90a36 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -434,7 +434,7 @@ if COND_i386_coreboot
+ FS_PAYLOAD_MODULES ?= $(shell cat grub-core/fs.lst)
+ default_payload.elf: grub-mkstandalone grub-mkimage FORCE
+ 	test -f $@ && rm $@ || true
+-	pkgdatadir=. ./grub-mkstandalone --grub-mkimage=./grub-mkimage -O i386-coreboot -o $@ --modules='ahci pata nvme ehci uhci ohci usb_keyboard usbms part_msdos ext2 fat at_keyboard part_gpt usbserial_usbdebug cbfs' --install-modules='ls linux search configfile normal cbtime cbls memrw iorw minicmd lsmmap lspci halt reboot hexdump pcidump regexp setpci lsacpi chain test serial multiboot cbmemc linux16 gzio echo help syslinuxcfg xnu $(FS_PAYLOAD_MODULES) password_pbkdf2 $(EXTRA_PAYLOAD_MODULES)' --fonts= --themes= --locales= -d grub-core/ /boot/grub/grub.cfg=$(srcdir)/coreboot.cfg
++	pkgdatadir=. ./grub-mkstandalone --grub-mkimage=./grub-mkimage -O i386-coreboot -o $@ --modules='ahci pata nvme ehci uhci ohci usb_keyboard usbms part_msdos ext2 fat at_keyboard part_gpt usbserial_usbdebug cbfs' --install-modules='ls linux search configfile normal cbtime cbls memrw iorw minicmd lsmmap lspci halt reboot hexdump pcidump regexp setpci lsacpi chain test serial multiboot cbmemc linux16 gzio echo help syslinuxcfg xnu $(FS_PAYLOAD_MODULES) password_pbkdf2 $(EXTRA_PAYLOAD_MODULES)' --fonts= --themes= --locales= -d grub-core/ /boot/grub/grub.cfg=$(srcdir)/coreboot.cfg $(EXTRA_PAYLOAD_FILES)
+ endif
+ 
+ endif
+diff --git a/coreboot.cfg b/coreboot.cfg
+index 0c5a504b5..d63031973 100644
+--- a/coreboot.cfg
++++ b/coreboot.cfg
+@@ -1 +1,7 @@
+-source (cbfsdisk)/etc/grub.cfg
++# The runtime configuration is read from the memdisk when coreboot put it
++# there (EXTRA_PAYLOAD_FILES); walking CBFS for etc/grub.cfg costs ~140 ms.
++if [ -f (memdisk)/boot/grub/site.cfg ]; then
++	source (memdisk)/boot/grub/site.cfg
++else
++	source (cbfsdisk)/etc/grub.cfg
++fi
+diff --git a/grub-core/bus/pci.c b/grub-core/bus/pci.c
+index c1ee9dc58..d73e6fdec 100644
+--- a/grub-core/bus/pci.c
++++ b/grub-core/bus/pci.c
+@@ -104,9 +104,16 @@ grub_pci_iterate (grub_pci_iteratefunc_t hook, void *hook_data)
+   grub_pci_address_t addr;
+   grub_pci_id_t id;
+   grub_uint32_t hdr;
++  /* Buses to scan: bus 0, and the secondary bus of every bridge found.
++     Reading all 256 buses costs 65536 configuration reads, ~28 ms on a
++     Kaby Lake PCH, and every driver that probes PCI paid it.  */
++  grub_uint8_t todo[GRUB_PCI_NUM_BUS / 8] = { 1 };
+ 
+   for (dev.bus = 0; dev.bus < GRUB_PCI_NUM_BUS; dev.bus++)
+     {
++      if (!(todo[dev.bus / 8] & (1 << (dev.bus % 8))))
++	continue;
++
+       for (dev.device = 0; dev.device < GRUB_PCI_NUM_DEVICES; dev.device++)
+ 	{
+ 	  for (dev.function = 0; dev.function < 8; dev.function++)
+@@ -128,14 +135,26 @@ grub_pci_iterate (grub_pci_iteratefunc_t hook, void *hook_data)
+ 	      if (hook (dev, id, hook_data))
+ 		return;
+ 
+-	      /* Probe only func = 0 if the device if not multifunction */
+-	      if (dev.function == 0)
++	      addr = grub_pci_make_address (dev, GRUB_PCI_REG_CACHELINE);
++	      hdr = grub_pci_read (addr);
++
++	      /* A PCI-to-PCI or CardBus bridge: its secondary bus number is
++		 at offset 0x19 in both header types.  */
++	      if ((((hdr >> 16) & 0x7f) == 1) || (((hdr >> 16) & 0x7f) == 2))
+ 		{
+-		  addr = grub_pci_make_address (dev, GRUB_PCI_REG_CACHELINE);
+-		  hdr = grub_pci_read (addr);
+-		  if (!(hdr & 0x800000))
+-		    break;
++		  grub_uint32_t buses;
++		  grub_uint8_t sec;
++
++		  addr = grub_pci_make_address (dev, GRUB_PCI_REG_ADDRESS_REG2);
++		  buses = grub_pci_read (addr);
++		  sec = (buses >> 8) & 0xff;
++		  if (sec > dev.bus)
++		    todo[sec / 8] |= 1 << (sec % 8);
+ 		}
++
++	      /* Probe only func = 0 if the device if not multifunction */
++	      if (dev.function == 0 && !(hdr & 0x800000))
++		break;
+ 	    }
+ 	}
+     }
+diff --git a/grub-core/disk/nvme.c b/grub-core/disk/nvme.c
+index 093237c70..59f361673 100644
+--- a/grub-core/disk/nvme.c
++++ b/grub-core/disk/nvme.c
+@@ -8,6 +8,7 @@
+ #include <grub/disk.h>
+ #include <grub/dl.h>
+ #include <grub/pci.h>
++#include <grub/time.h>
+ #include "nvme-int.h"
+ 
+ GRUB_MOD_LICENSE ("GPLv3"); /* LGPLv3 in reality but it is GPLv3 compatible */
+@@ -130,19 +131,19 @@ nvme_consume_cqe(struct nvme_sq *sq)
+     return *cqe;
+ }
+ 
++/* A command that does not complete within this time is treated as failed. */
++#define NVME_CMD_TIMEOUT_MS 5000
++
+ static struct nvme_cqe
+ nvme_wait(struct nvme_sq *sq)
+ {
+-    // static const unsigned nvme_timeout = 5000 /* ms */;
+-    // grub_uint32_t to = timer_calc(nvme_timeout);
+-    while (!nvme_poll_cq(sq->cq)) {
+-        /* FIXME
+-        yield();
++    grub_uint64_t deadline = grub_get_time_ms() + NVME_CMD_TIMEOUT_MS;
+ 
+-        if (timer_check(to)) {
+-            warn_timeout();
++    while (!nvme_poll_cq(sq->cq)) {
++        if (grub_get_time_ms() > deadline) {
++            grub_dprintf("nvme", "NVMe command timeout after %u ms\n", NVME_CMD_TIMEOUT_MS);
+             return nvme_error_cqe();
+-        }*/
++        }
+     }
+ 
+     return nvme_consume_cqe(sq);
+@@ -533,24 +534,25 @@ nvme_create_io_queues(struct nvme_ctrl *ctrl)
+ static int
+ nvme_wait_csts_rdy(struct nvme_ctrl *ctrl, unsigned rdy)
+ {
+-    // grub_uint32_t const max_to = 500 /* ms */ * ((ctrl->reg->cap >> 24) & 0xFFU);
+-    // grub_uint32_t to = timer_calc(max_to);
++    /* CAP.TO is the worst case in units of 500 ms; a zero means 500 ms. */
++    grub_uint32_t max_to = 500 * ((ctrl->reg->cap >> 24) & 0xFFU);
++    grub_uint64_t deadline;
+     grub_uint32_t csts;
+ 
+-    while (rdy != ((csts = ctrl->reg->csts) & NVME_CSTS_RDY)) {
+-        // FIXME
+-        //yield();
++    if (max_to == 0)
++        max_to = 500;
++    deadline = grub_get_time_ms() + max_to;
+ 
++    while (rdy != ((csts = ctrl->reg->csts) & NVME_CSTS_RDY)) {
+         if (csts & NVME_CSTS_FATAL) {
+             grub_dprintf("nvme", "NVMe fatal error during controller shutdown\n");
+             return -1;
+         }
+ 
+-        /*
+-        if (timer_check(to)) {
+-            warn_timeout();
++        if (grub_get_time_ms() > deadline) {
++            grub_dprintf("nvme", "NVMe CSTS.RDY timeout after %u ms\n", max_to);
+             return -1;
+-        }*/
++        }
+     }
+ 
+     return 0;

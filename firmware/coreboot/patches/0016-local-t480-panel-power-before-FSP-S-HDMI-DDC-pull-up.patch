@@ -1,0 +1,175 @@
+From 2f940e29f5d51a49f01afdd271bfeeaec52d8a9b Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 02:18:03 +0300
+Subject: [PATCH 16/16] [local] t480: panel power before FSP-S, HDMI DDC
+ pull-ups
+
+Request eDP panel power in ramstage before FSP-S so the 210 ms power-up
+delay overlaps FSP-S; libgfxinit then finds the panel already on
+(00:02.0 init 259 -> 13 ms, firmware ~300 ms shorter).
+
+GPP_E18/E19 are the HDMI DDC lines.  As unconnected pads the GMBUS probe
+timed out (65 ms, twice per boot and on every xrandr call); as native
+function without pull-ups it took 98 ms.  With the internal 20K pull-ups
+an empty port answers in 3 ms.
+---
+ .../lenovo/sklkbl_thinkpad/Makefile.mk        |  1 +
+ .../lenovo/sklkbl_thinkpad/panel_early.c      | 93 +++++++++++++++++++
+ .../lenovo/sklkbl_thinkpad/ramstage.c         |  3 +
+ .../lenovo/sklkbl_thinkpad/variant.h          |  1 +
+ .../sklkbl_thinkpad/variants/t480/gpio.c      |  4 +-
+ 5 files changed, 100 insertions(+), 2 deletions(-)
+ create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/panel_early.c
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+index 9d0351feff..a9821adc10 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+@@ -10,6 +10,7 @@ ramstage-$(CONFIG_VARIANT_HAS_DGPU) += dgpu.c
+ ramstage-y += variants/$(VARIANT_DIR)/gpio.c
+ ramstage-y += variants/$(VARIANT_DIR)/hda_verb.c
+ ramstage-y += ramstage.c
++ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += panel_early.c
+ ramstage-$(CONFIG_MAINBOARD_USE_LIBGFXINIT) += variants/$(VARIANT_DIR)/gma-mainboard.ads
+ 
+ smm-$(CONFIG_VARIANT_HAS_DGPU) += smihandler.c
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/panel_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/panel_early.c
+new file mode 100644
+index 0000000000..e3c19493b3
+--- /dev/null
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/panel_early.c
+@@ -0,0 +1,93 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#include <acpi/acpi.h>
++#include <bootmode.h>
++#include <console/console.h>
++#include <device/mmio.h>
++#include <device/pci_def.h>
++#include <device/pci_ids.h>
++#include <device/pci_ops.h>
++#include <types.h>
++
++#include "variant.h"
++
++/*
++ * The eDP panel needs its power-up delay (T1+T2, 210 ms by default) before
++ * the display can be trained, and libgfxinit waits for that in device init.
++ * Request panel power before FSP-S instead, so the delay overlaps FSP-S and
++ * the panel is already up when libgfxinit gets to it (00:02.0 init 259 -> 13 ms).
++ * The panel power sequencer is reachable without enabling display power wells;
++ * libgfxinit handles those itself.
++ */
++#define IGD_DEV			PCI_DEV(0, 2, 0)
++#define GTTMMADR_TEMP		0xdf000000
++
++#define PCH_PP_STATUS		0xc7200
++#define PCH_PP_CONTROL		0xc7204
++#define  PP_UNLOCK		(0xabcdu << 16)
++#define  PP_POWER_DOWN_ON_RESET	(1u << 1)
++#define  PP_TARGET_ON		(1u << 0)
++#define PCH_PP_ON_DELAYS	0xc7208
++#define  PP_PORT_SELECT_DP_A	(1u << 30)
++#define PCH_PP_OFF_DELAYS	0xc720c
++#define PCH_PP_DIVISOR		0xc7210
++
++/* Same defaults libgfxinit uses when the sequencer is unprogrammed */
++#define PP_ON_DELAYS_DEFAULT	(PP_PORT_SELECT_DP_A | (2100u << 16) | 1)	/* 210 ms, 100 us */
++#define PP_OFF_DELAYS_DEFAULT	((5000u << 16) | 500)				/* 500 ms, 50 ms */
++#define PP_CYCLE_DEFAULT	7						/* 510 ms -> 6 + 1 */
++
++void panel_early_on(void)
++{
++	const u32 bar = pci_s_read_config32(IGD_DEV, PCI_BASE_ADDRESS_0);
++	const u32 bar_hi = pci_s_read_config32(IGD_DEV, PCI_BASE_ADDRESS_1);
++	const u16 cmd = pci_s_read_config16(IGD_DEV, PCI_COMMAND);
++	uintptr_t mmio = bar & ~0xfu;
++	bool temp_bar = false;
++	u32 reg, ctl;
++
++	if (!display_init_required() || acpi_is_wakeup_s3())
++		return;
++	if (pci_s_read_config16(IGD_DEV, PCI_VENDOR_ID) != PCI_VID_INTEL)
++		return;
++
++	if (!mmio || bar_hi || !(cmd & PCI_COMMAND_MEMORY)) {
++		pci_s_write_config32(IGD_DEV, PCI_BASE_ADDRESS_1, 0);
++		pci_s_write_config32(IGD_DEV, PCI_BASE_ADDRESS_0, GTTMMADR_TEMP);
++		pci_s_write_config16(IGD_DEV, PCI_COMMAND, cmd | PCI_COMMAND_MEMORY);
++		mmio = GTTMMADR_TEMP;
++		temp_bar = true;
++	}
++	printk(BIOS_DEBUG, "panel: IGD BAR %08x:%08x cmd %04x, using %#lx%s\n",
++	       bar_hi, bar, cmd, mmio, temp_bar ? " (temporary)" : "");
++
++	if (read32p(mmio + PCH_PP_CONTROL) == 0xffffffff) {
++		printk(BIOS_WARNING, "panel: IGD MMIO not reachable\n");
++		goto out;
++	}
++
++	printk(BIOS_DEBUG, "panel: status %08x control %08x on %08x off %08x div %08x\n",
++	       read32p(mmio + PCH_PP_STATUS), read32p(mmio + PCH_PP_CONTROL),
++	       read32p(mmio + PCH_PP_ON_DELAYS), read32p(mmio + PCH_PP_OFF_DELAYS),
++	       read32p(mmio + PCH_PP_DIVISOR));
++
++	if (!(read32p(mmio + PCH_PP_ON_DELAYS) & 0x1fff0000))
++		write32p(mmio + PCH_PP_ON_DELAYS, PP_ON_DELAYS_DEFAULT);
++	if (!(read32p(mmio + PCH_PP_OFF_DELAYS) & 0x1fff0000))
++		write32p(mmio + PCH_PP_OFF_DELAYS, PP_OFF_DELAYS_DEFAULT);
++	reg = read32p(mmio + PCH_PP_DIVISOR);
++	if ((reg & 0x1f) <= 1)
++		write32p(mmio + PCH_PP_DIVISOR, (reg & ~0x1fu) | PP_CYCLE_DEFAULT);
++
++	ctl = read32p(mmio + PCH_PP_CONTROL) & 0xffff;
++	write32p(mmio + PCH_PP_CONTROL, PP_UNLOCK | ctl | PP_POWER_DOWN_ON_RESET | PP_TARGET_ON);
++	printk(BIOS_INFO, "panel: power requested, control %08x status %08x\n",
++	       read32p(mmio + PCH_PP_CONTROL), read32p(mmio + PCH_PP_STATUS));
++
++out:
++	if (temp_bar) {
++		pci_s_write_config16(IGD_DEV, PCI_COMMAND, cmd);
++		pci_s_write_config32(IGD_DEV, PCI_BASE_ADDRESS_0, bar);
++		pci_s_write_config32(IGD_DEV, PCI_BASE_ADDRESS_1, bar_hi);
++	}
++}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index fc006f862b..48fcc2fe76 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -37,6 +37,9 @@ static void boot_menu_request(void)
+ 
+ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
+ {
++	if (CONFIG(MAINBOARD_USE_LIBGFXINIT))
++		panel_early_on();
++
+ 	// Setup GPIOs
+ 	variant_config_gpios();
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index c13d15c3e7..452fd4ab41 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -4,6 +4,7 @@
+ #define _SKLKBL_THINKPAD_VARIANT_H_
+ 
+ void variant_config_gpios(void);
++void panel_early_on(void);
+ 
+ uint8_t variant_memory_sku(void);
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
+index 9c72703caa..e633736c9c 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/gpio.c
+@@ -135,8 +135,8 @@ static const struct pad_config gpio_table[] = {
+ 	PAD_NC(GPP_E15, NONE),
+ 	PAD_NC(GPP_E16, NONE),
+ 	PAD_CFG_NF(GPP_E17, NONE, DEEP, NF1),				/* EDP_HPD */
+-	PAD_NC(GPP_E18, NONE),
+-	PAD_NC(GPP_E19, NONE),
++	PAD_CFG_NF(GPP_E18, UP_20K, DEEP, NF1),				/* DDIP1_CTRLCLK (HDMI DDC) */
++	PAD_CFG_NF(GPP_E19, UP_20K, DEEP, NF1),				/* DDIP1_CTRLDATA (HDMI DDC) */
+ 	PAD_CFG_NF(GPP_E20, NONE, DEEP, NF1),				/* DDIP2_CTRLCLK */
+ 	PAD_CFG_NF(GPP_E21, NONE, DEEP, NF1),				/* DDIP2_CTRLDATA */
+ 	/* GPP_E22 -GPU_RST and GPP_E23 1R8VIDEO_AON_ON are set up in dgpu_early.c */

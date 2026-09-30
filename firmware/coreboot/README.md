@@ -23,6 +23,8 @@
 | 0012 | pass the whole option ROM to ACPI `_ROM` | patch 1 of `../upstream-dgpu-series` |
 | 0013 | MX150 support as flashed in C32, switched by CMOS 0x6f | local form of patches 2 and 3 of the series |
 | 0014 | wait up to 100 ms for the GPU link before FSP-S; check the image lengths of an option ROM against the size of the CBFS file | the review fixes of the series |
+| 0015 | put `grub.cfg` into the payload's memdisk (no CBFS walk at every GRUB start); after a reset without power loss trust the SPD cache without reading the DIMM serial numbers (130 ms) | local |
+| 0016 | request eDP panel power before FSP-S, so the panel's 210 ms power-up overlaps FSP-S (graphics init 259 -> 13 ms); pull-ups on the HDMI DDC pads, an empty HDMI port answers in 3 ms instead of a 65 ms timeout | could go upstream |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

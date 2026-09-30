@@ -39,3 +39,38 @@ There is no watchdog (`nowatchdog`, no `iTCO_wdt`), so a hang that is not a pani
 a hang. Do not test firmware when nobody can reach the power button.
 
 For a hang that leaves no trace, see "Debug build" in `coreboot/README.md`.
+
+## Boot time
+
+Measured on a warm reboot with `cbmem -t`, GRUB's `boottime` and the kernel log
+(`tools/tscmono.c` gives the offset between the reset and the kernel's clock).
+
+| Stage | Before (September 2026, C35) | Now (C42) |
+|---|---|---|
+| coreboot, reset to payload | 1,026 ms | 600-710 ms |
+| GRUB, start to kernel jump | 680 ms | 140 ms |
+| kernel, start to init | 570 ms | 410 ms |
+| Xorg starts | 1.06 s after kernel start | 0.9 s |
+| window manager up | 1.74 s after kernel start | 1.5 s |
+| reset to desktop | about 3.5 s | about 2.3 s |
+
+What made the difference, in order of size:
+
+- the panel gets its power request before FSP-S (coreboot patch 0016): its 210 ms
+  power-up delay used to be waited for in the graphics init, now it overlaps FSP-S
+- GRUB no longer scans 256 PCI buses per driver and no longer walks CBFS for the
+  config (GRUB patch 0015): module init 201 -> 12 ms, config 139 -> 0 ms
+- the HDMI DDC pads have pull-ups (0016): the kernel and Xorg probed an empty HDMI
+  port with a 65 ms I2C timeout, twice at boot and on every `xrandr`
+- after a reset without power loss the DIMM serial numbers are not read again
+  over SMBus (0015): 130 ms
+- GRUB reads a file in runs of consecutive blocks with 1 MiB NVMe transfers (GRUB
+  patch 0016), ramstage is LZ4 compressed (`t480.defconfig`)
+
+What is left, and why it stays: FSP-S takes 330-480 ms and varies from boot to boot;
+no setting of the Kaby Lake FSP was found that changes it without losing a device.
+libgfxinit's remaining 13 ms and the 50 ms of FSP-M are at the floor. The kernel's
+18 MB image loads in about 100 ms from the NVMe. A Linux payload in the flash was
+considered and dropped: the kernel image does not fit next to the firmware in 16 MB,
+and a small kexec kernel would add a second kernel start (about 400 ms) to save
+GRUB's 140 ms.
