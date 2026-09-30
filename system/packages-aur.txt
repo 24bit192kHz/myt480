@@ -13,6 +13,7 @@ linux-t480-headers
 modprobed-db
 open-fprintd
 orca-slicer-bin
+otf-stix
 python-validity
 rankmirrors
 rate-mirrors-bin

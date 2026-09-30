@@ -131,6 +131,7 @@ tree after a successful commit.
   and s6-rc changes only take effect at reboot. Stage them, document
   them, then ask the owner. Same for any flash operation.
 - **Secrets never in notes/git** — record secret *names and locations*
+  only (e.g. "the key file exists"), never contents,
   PSKs, or key material. No binary dumps (ROMs, images) into the corpus.
 - **Verify live state before claiming anything** — s6 service states,
   temps, fan levels, mount state: read them (`s6-svstat` via

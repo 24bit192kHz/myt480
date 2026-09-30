@@ -5,7 +5,7 @@
 
 pkgname=validity-rs
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc='Synaptics/Validity 06cb:009a (ThinkPad T480) match-on-chip fingerprint daemon for open-fprintd (Rust port of python-validity)'
 arch=('x86_64')
 url='https://github.com/uunicorn/python-validity'

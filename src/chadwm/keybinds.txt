@@ -78,7 +78,7 @@ MODKEY = Super.  Section names mirror the HyDE bind descriptions.
   Super+Ctrl+S             same OCR capture (HyDE lua-extra parity)
   Super+Alt+G              game mode (notify placeholder)
   Super+C                  centre the focused window (floats it if tiled)
-  Super+Shift+C            resize focused window to 30% of the work area, centred
+  Super+Shift+C            resize focused window to 50% of the work area, centred
   Super+Shift+F            pin window above the tiling layer (toggle)
   Super+Ctrl+Down          jump to the nearest empty workspace
   Super+Ctrl+Alt+Left/Right  move window to prev/next workspace (silent)
@@ -116,7 +116,7 @@ MODKEY = Super.  Section names mirror the HyDE bind descriptions.
   Super+Shift+Minus / Super+Alt+= / Super+Alt+0   border -1 / +1 / reset
 
 [Theming and Wallpaper]
-  Super+Shift+W            wallpaper picker (rofi over ~/Pictures/backgrounds)
+  Super+Shift+W            planet picker for the gxwc wallpaper (rofi, 4 previews, ←/→ or wheel)
   Super+Alt+Up / Down      previous / next bar theme (rebuilds + reloads the WM)
   Super+Shift+T            theme picker (dwm-titus themes.toml -> toolkit env)
   Super+Shift+Y / Super+Shift+U   animations / locker layouts (no X11 twin)
@@ -127,7 +127,7 @@ MODKEY = Super.  Section names mirror the HyDE bind descriptions.
 [Mouse]
   Super+drag B1 / B3       move / resize window (moveorplace / resizemouse)
   Super+B2 (on a window)   toggle floating
-  Ctrl+B1 / Ctrl+B3        drag mfact / drag cfact
+  Super+Ctrl+B1 / B3       drag mfact / drag cfact
   Super+scroll, scroll     prev / next tag (bar or root window)
   tag click / B3           view / toggleview tag;  Super+click / Super+B3 tag / toggletag
   layout symbol B1 / B3    toggle layout / monocle

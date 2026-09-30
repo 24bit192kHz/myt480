@@ -22,4 +22,5 @@ case $1:$2 in
 7:3) exec nm-connection-editor ;;
 8:1) exec notify-send -t 8000 "$(date '+%A %d %B %Y')" "$(cal | sed 1d)" ;;
 9:*) exec "$S/powermenu.sh" ;;
+10:1) exec "$S/caffeine.sh" toggle ;;
 esac

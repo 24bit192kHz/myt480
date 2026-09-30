@@ -69,6 +69,13 @@ plus all CUSTOM down-files above.
   python-validity's dbus-service runs, then `exec /usr/bin/validity-rs daemon` (stderr → catch-all log).
   Config `/etc/validity-rs.conf` pins the pairing identity (`hwkey = T480 123456789`, fallback
   `20L6S4VC00 PF0XXXXX`); state in `/var/lib/validity-rs` (calib-data.bin imported from python-validity).
+  2026-09-30: switched back to validity-rs (python3-validity disabled). `s6 live install` failed again
+  with the Broken-pipe `s6-rc-update` error even though the live db knew both services; after the
+  relink repair the live db was the new compiled set, so the boot db was switched by repointing
+  `/etc/s6/rc/compiled` at it by hand. The relink left svscan respawning `s6-supervise` every second
+  for 23 idle services ("another instance of s6-supervise is already running"); fixed per service with
+  `touch down; s6-svc -x` (all were down and not in `s6-rc -a list`).
+  python-validity enroll of an already-enrolled finger fails with `04c3`; `fprintd-delete` first.
   Switch-over/rollback: packaging/INSTALL.md in the source tree.
 - `/etc/s6/sv/open-fprintd/`: `type=longrun`, enabled. `run`: `exec /usr/lib/open-fprintd/open-fprintd --debug`.
   `run`: `export NO_COLOR=true` +

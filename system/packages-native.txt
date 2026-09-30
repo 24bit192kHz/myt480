@@ -2,6 +2,7 @@
 acpi
 acpica
 acpid-s6
+adobe-source-code-pro-fonts
 alacritty
 alsa-firmware
 alsa-utils
@@ -69,7 +70,9 @@ fzf
 gcc-ada
 git
 github-cli
+glfw
 gnome-keyring
+gnu-free-fonts
 grim
 grub
 gst-libav
@@ -104,7 +107,8 @@ libva-intel-driver
 linux
 linux-firmware
 linux-headers
-linux-rt
+linux-lts
+linux-lts-headers
 logrotate
 lsb-release
 lvm2-s6
@@ -146,7 +150,9 @@ network-manager-applet
 networkmanager-s6
 nfs-utils-s6
 noto-fonts
+noto-fonts-cjk
 noto-fonts-emoji
+noto-fonts-extra
 ntfs-3g
 nvidia-580xx-dkms
 nvidia-580xx-utils
@@ -195,11 +201,13 @@ terminus-font
 tesseract
 tesseract-data-ara
 tesseract-data-eng
+tex-gyre-fonts
 texinfo
 thermald
 tlp-rdw
 tmux
 ttf-carlito
+ttf-dejavu
 ttf-dejavu-nerd
 ttf-droid
 ttf-firacode-nerd
@@ -210,8 +218,10 @@ ttf-jetbrains-mono-nerd
 ttf-liberation
 ttf-meslo-nerd
 ttf-noto-nerd
+ttf-opensans
 ttf-roboto
 ttf-roboto-mono
+ttf-ubuntu-font-family
 tumbler
 unzip
 usbutils

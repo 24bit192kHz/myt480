@@ -193,6 +193,25 @@ pub fn process_calibration_results(calib: &mut Vec<u8>, cooked: &[u8]) {
     *calib = combined;
 }
 
+/// Deviation of a blank frame's pixels from mid-scale (0x80), which is what a
+/// perfectly calibrated sensor reads with nothing on it.
+pub fn residual_stats(frame: &[u8]) -> String {
+    let px: Vec<i32> = frame
+        .chunks(TYPE_199.bytes_per_line)
+        .flat_map(|l| l.iter().skip(8).map(|&x| x as i32 - 0x80))
+        .collect();
+    let n = px.len().max(1) as f64;
+    let mean = px.iter().sum::<i32>() as f64 / n;
+    let rms = (px.iter().map(|&x| (x * x) as f64).sum::<f64>() / n).sqrt();
+    let off = px.iter().filter(|&&x| x.abs() >= 8).count();
+    format!(
+        "mean {mean:+.2}, rms {rms:.2}, range {}..{}, {off} of {} pixels off by 8 or more",
+        px.iter().min().unwrap_or(&0),
+        px.iter().max().unwrap_or(&0),
+        px.len()
+    )
+}
+
 pub fn key_line(calib: &[u8]) -> Vec<u8> {
     let w = TYPE_199.line_width;
     if calib.is_empty() {
@@ -516,6 +535,52 @@ impl Device {
         self.write_flash_all(6, 0, &cs)
     }
 
+    /// One blank frame (nobody touching the sensor) with the current calibration applied.
+    fn blank_frame(&mut self) -> Result<Vec<u8>> {
+        let cmd = build_cmd_02(&self.capture, Mode::Calibrate)?;
+        check_status(&self.cmd(&cmd)?)?;
+        average(&self.usb.read_data()?, self.capture.lines_per_frame)
+    }
+
+    /// Measure how well the stored calibration still fits the sensor, without
+    /// writing anything: the residual of a blank frame under the stored
+    /// calibration, the same under a fresh in-memory calibration, and how far
+    /// the two calibrations are apart. Keep fingers off the sensor.
+    pub fn calib_check(&mut self) -> Result<()> {
+        let stored = self.capture.calib_data.clone();
+        ensure!(!stored.is_empty(), "no stored calibration to check");
+        let res = (|| {
+            for i in 0..3 {
+                println!("stored calibration, blank frame {i}: {}", residual_stats(&self.blank_frame()?));
+            }
+            self.capture.calib_data.clear();
+            for _ in 0..CALIBRATION_ITERATIONS {
+                let avg = self.blank_frame()?;
+                process_calibration_results(&mut self.capture.calib_data, &avg);
+            }
+            for i in 0..3 {
+                println!("fresh calibration,  blank frame {i}: {}", residual_stats(&self.blank_frame()?));
+            }
+            let bpl = TYPE_199.bytes_per_line;
+            let diffs: Vec<i32> = stored
+                .chunks(bpl)
+                .zip(self.capture.calib_data.chunks(bpl))
+                .flat_map(|(a, b)| a[8..].iter().zip(&b[8..]).map(|(&a, &b)| (a as i8 as i32 - b as i8 as i32).abs()))
+                .collect();
+            let n = diffs.len().max(1);
+            println!(
+                "stored vs fresh calibration: mean |diff| {:.2}, max {}, {} of {} values differ by 3 or more",
+                diffs.iter().sum::<i32>() as f64 / n as f64,
+                diffs.iter().max().unwrap_or(&0),
+                diffs.iter().filter(|&&d| d >= 3).count(),
+                diffs.len()
+            );
+            Ok(())
+        })();
+        self.capture.calib_data = stored;
+        res
+    }
+
     /// Wait for a finger and capture one image. `capture stop` always follows;
     /// after a failed or cancelled capture the sensor is also given time to wind
     /// the program down before the next one starts.
@@ -576,7 +641,7 @@ impl Device {
         check_status(&self.app(&cmd)?)?;
         let b = self.usb.wait_int_for(COMMITTED_TIMEOUT)?;
         if b.first() != Some(&3) {
-            debug!("finger not recognized: {}", hex::encode(&b));
+            info!("finger not recognized: {}", hex::encode(&b));
             return Ok(None);
         }
         let rsp = self.app(&unhex("6000000000"))?;
@@ -605,7 +670,11 @@ impl Device {
         loop {
             self.glow_start_scan().context("glow")?;
             match self.capture(Mode::Identify) {
-                Ok(_) => break,
+                Ok((x, y, w1, w2)) => {
+                    // The sensor's own report on the image it is about to match.
+                    info!("scan: x {x} y {y} w1 {w1} w2 {w2}");
+                    break;
+                }
                 Err(e) if is_cancelled(&e) => {
                     let _ = self.glow_end_scan();
                     return Err(e);

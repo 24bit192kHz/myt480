@@ -6,6 +6,7 @@
 static const unsigned int borderpx  = 2;        /* HyDE border_size 2 */        /* border pixel of windows */
 static const unsigned int default_border = 2;   /* to switch back to default border after dynamic border resizing via keybinds */
 static const unsigned int snap      = 32;       /* snap pixel */
+static const float dimspecial       = 0.5;      /* Hyprland dim_special: darken the tag under Super+S (0 = off) */
 static const unsigned int gappih    = 6;        /* HyDE gaps_in 3 (per side) */       /* horiz inner gap between windows */
 static const unsigned int gappiv    = 6;       /* vert inner gap between windows */
 static const unsigned int gappoh    = 8;        /* HyDE gaps_out 8 */       /* horiz outer gap between windows and screen edge */
@@ -39,7 +40,7 @@ static const int new_window_attach_on_end = 1; /* dwindle: older windows keep th
 #define ICONSIZE 19   /* icon size */
 #define ICONSPACING 8 /* space between icon and title */
 
-static const char *fonts[]          = {"JetBrainsMono Nerd Font:style:Medium:size=11" ,"JetBrainsMono Nerd Font Mono:style:medium:size=19" };
+static const char *fonts[]          = {"JetBrainsMono Nerd Font:style:Medium:size=11" ,"JetBrainsMono Nerd Font Mono:style:medium:size=19", "Noto Sans Arabic UI:style=Medium:size=11" };
 
 // theme
 #include "themes/grayscale.h"
@@ -144,9 +145,9 @@ static const Layout layouts[] = {
 
 /* Keymap ported 2026-09-20 from the owner's Hyprland map (HyDE,
  * https://github.com/24bit192kHz/HyDE, Configs/.local/share/hypr/lua/key_binds.lua).
- * Full combo list: ~/.config/chadwm/keybinds.txt. Unmappable HyDE binds (pin,
- * center/resize-30 moon scripts, hyprshaderd dimming, hyprlock layouts,
- * Super+Alt+N earth-native) are intentionally dropped. */
+ * Full combo list: ~/.config/chadwm/keybinds.txt. HyDE's center/resize scripts
+ * are native (centerwin, resizepct); unmappable HyDE binds (hyprshaderd
+ * dimming, hyprlock layouts, Super+Alt+N earth-native) are dropped. */
 static const Key keys[] = {
     /* modifier                         key         function        argument */
 
@@ -216,7 +217,7 @@ static const Key keys[] = {
     // HyDE [Launcher|Rofi menus]
     { MODKEY,                           XK_a,       spawn,          SHCMD("rofi -show drun")},
     { MODKEY,                           XK_c,       centerwin,      {0} },   /* HyDE Super+C centre window */
-    { MODKEY|ShiftMask,                 XK_c,       resizepct,      {.i = 30} }, /* HyDE Super+Shift+C resize to 30%% */
+    { MODKEY|ShiftMask,                 XK_c,       resizepct,      {.i = 50} }, /* HyDE Super+Shift+C resize to 50%% */
     { MODKEY|ShiftMask,                 XK_e,       spawn,          SHCMD("rofi -modes filebrowser -show filebrowser")}, /* HyDE file finder */
     { MODKEY,                           XK_slash,   spawn,          SHCMD("rofi -dmenu -i -p keybinds < ~/.config/chadwm/keybinds.txt")}, /* HyDE keybindings hint */
     { MODKEY,                           XK_comma,   spawn,          SHCMD("rofimoji --action type --selector rofi --clipboarder xclip --typer xdotool")}, /* HyDE emoji picker */
@@ -350,8 +351,8 @@ static const Button buttons[] = {
     { ClkClientWin,         MODKEY,         Button1,        moveorplace,    {.i = 0} },
     { ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
     { ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
-    { ClkClientWin,         ControlMask,    Button1,        dragmfact,      {0} },
-    { ClkClientWin,         ControlMask,    Button3,        dragcfact,      {0} },
+    { ClkClientWin,         MODKEY|ControlMask, Button1,    dragmfact,      {0} },
+    { ClkClientWin,         MODKEY|ControlMask, Button3,    dragcfact,      {0} },
     { ClkTagBar,            0,              Button1,        view,           {0} },
     { ClkTagBar,            0,              Button3,        toggleview,     {0} },
     { ClkTagBar,            MODKEY,         Button1,        tag,            {0} },

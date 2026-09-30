@@ -64,6 +64,7 @@ commands:
   enroll USER FINGER     enroll a finger (e.g. right-index-finger)
   delete USER            delete all of USER's fingers
   calibrate              recalibrate and store a new clean-slate image
+  calib-check            measure how well the stored calibration fits (writes nothing)
   led                    flash the sensor LED
   raw HEX                send a raw command over TLS and print the reply
   factory-reset --yes    wipe pairing, firmware and fingers on the sensor
@@ -212,6 +213,12 @@ fn run(cfg_path: &std::path::Path, args: &[String]) -> Result<()> {
                 std::fs::write(d.cfg.data_dir.join("calib-data.bin"), &d.capture.calib_data)?;
                 Ok(())
             });
+            d.close();
+            r
+        }
+        "calib-check" => {
+            let mut d = open(&cfg)?;
+            let r = d.calib_check();
             d.close();
             r
         }

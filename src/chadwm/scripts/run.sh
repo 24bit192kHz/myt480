@@ -15,21 +15,25 @@ xset s off; xset s noblank; xset -dpms
 # dwm-lock-watch is singleton; this start remains safe across WM restarts.
 /usr/local/bin/dwm-lock-watch >/dev/null 2>&1 &
 
-~/.local/bin/bright restore &
-# smooth Fn brightness ramping (polls the physical key state, immune to X repeat quirks)
-# (C port of brightd.py: 2 devices, kernel event mask, no idle wakeups; src scripts/brightd.c)
-pgrep -x brightd >/dev/null 2>&1 || setsid ~/.local/bin/brightd >/dev/null 2>&1 &
+# Fn brightness keys are handled in the kernel (blkeys); the level is restored
+# at boot and saved on every key change by udev (/usr/local/sbin/backlight-state).
+# brightd is only a fallback for a kernel without blkeys.
+[ -d /sys/module/blkeys ] ||
+	pgrep -x brightd >/dev/null 2>&1 || setsid ~/.local/bin/brightd >/dev/null 2>&1 &
 # Neutral root prevents the static image from flashing beneath the live Earth.
 xsetroot -solid black >/dev/null 2>&1
 picom &
-# live ASCII Earth background: the supervisor is the only renderer owner.
+# live ASCII planet background: the supervisor is the only renderer owner.
+# A random planet each session (never the last one; Super+Shift+W picks one).
 # Started in the background so the WM never waits for it.
 if [ -x "$HOME/.local/bin/gxwc-wallpaper" ]; then
-    { "$HOME/.local/bin/gxwc-wallpaper" start || echo "wallpaper: gxwc supervisor failed to start" >&2; } &
+    { "$HOME/.local/bin/gxwc-wallpaper" planet random || echo "wallpaper: gxwc supervisor failed to start" >&2; } &
 else
     echo "wallpaper: missing $HOME/.local/bin/gxwc-wallpaper" >&2
 fi
 xset r rate 200 50 &
+# clipboard history for Super+V (singleton via flock)
+rofi-clip.sh daemon >/dev/null 2>&1 &
 
 dash ~/.config/chadwm/scripts/bar.sh &
 while type chadwm >/dev/null; do chadwm && continue || break; done

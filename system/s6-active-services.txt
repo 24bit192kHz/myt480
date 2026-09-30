@@ -32,7 +32,6 @@ network-detection
 ntpd-log
 ntpd-srv
 open-fprintd
-python3-validity
 random-seed
 rc-local
 remount-root
@@ -51,3 +50,4 @@ tty1
 udevadm
 udevd-log
 udevd-srv
+validity-rs

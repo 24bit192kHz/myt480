@@ -2,8 +2,8 @@
 # chadwm status (xsetroot -name). Each module starts with ^kN^: chadwm
 # records its position and a click/scroll runs scripts/barclick.sh N BUTTON.
 #   1 updates  2 cpu  3 mem  4 battery  5 brightness  6 volume  7 wifi
-#   8 clock  9 power
-# Refresh: every 5 s (aligned so HH:MM flips on the minute), at once on
+#   8 clock  9 power  10 caffeine (cup filled = sleep inhibited, caffeine.sh)
+# Refresh: every 5 s (aligned so the clock flips on the minute), at once on
 # SIGUSR1 (`pkill -USR1 -x bar.sh` style: barclick.sh / volume keys send it).
 # Cost per tick: builtins + one `date`; pactl only on start, SIGUSR1 and
 # every 60 s; battery every 30 s (EC read); SSID when the link changes.
@@ -87,6 +87,17 @@ wifi() {
 	esac
 }
 
+caffeine() {
+	# on while caffeine.sh's elogind-inhibit process lives (builtins only)
+	if read -r cpid 2>/dev/null < "${XDG_RUNTIME_DIR:-/tmp}/caffeine.pid" &&
+		read -r ccomm 2>/dev/null < "/proc/$cpid/comm" &&
+		[ "$ccomm" = elogind-inhibit ]; then
+		printf "^k10^^c$black^^b$white^ 󰅶 ^b$black^ "
+	else
+		printf "^k10^^c$darkblue^^b$black^ 󰛊 "
+	fi
+}
+
 clock() {
 	printf "^k8^^c$black^^b$darkblue^ 󱑆 ^c$black^^b$blue^ $hm "
 }
@@ -100,7 +111,7 @@ trap 'wakeup=1; kill $sp 2>/dev/null' USR1
 
 interval=0 last=
 while :; do
-	set -- $(date '+%s %H:%M'); now=$1 hm=$2
+	set -- $(date '+%s %-I:%M %p'); now=$1 hm="$2 $3"
 	[ $interval = 0 ] || [ $((interval % 720)) = 0 ] && updates=$(pkg_updates)
 	[ $((interval % 6)) = 0 ] && bat=$(battery)
 	if [ $wakeup = 1 ] || [ $((interval % 12)) = 0 ]; then
@@ -110,7 +121,7 @@ while :; do
 	wakeup=0
 	interval=$((interval + 1))
 
-	line="$updates$(cpu) $(mem)$bat $(brightness)$vol$wifis$(clock)$(power)"
+	line="$updates$(cpu) $(mem)$bat $(brightness)$vol$wifis$(caffeine)$(clock)$(power)"
 	[ "$line" = "$last" ] || { xsetroot -name "$line"; last=$line; }
 	sleep $((5 - now % 5)) & sp=$!
 	wait $sp 2>/dev/null

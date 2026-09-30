@@ -159,3 +159,14 @@
   MSR image unflashed), `0x3A=0x40005`, `0x13A=0x0`; disk has no ESP,
   boots USB. MX150 under coreboot stays offload-only (needs
   RP01.PEGP ACPI + BAR work).
+
+## 2026-09-30: linux-rt replaced by linux-lts
+- `pacman -Syu` (98 pkgs; log /root/pacman-syu-2026-09-30.log), then `linux-lts` + `linux-lts-headers`
+  6.18.54-1 installed and `linux-rt` removed (log /root/pacman-lts-2026-09-30.log). nvidia 580 DKMS
+  built for lts. `linux-lts.preset` uses the default /etc/mkinitcpio.conf (udev), as rt did.
+- Disk `/boot/grub/grub.cfg`: `linux-rt` → `linux-lts` by sed (backup `grub.cfg.bak-pre-lts`), not
+  regenerated (disk GRUB core is still 2.14; package is 2.16).
+- Firmware menu: `site-local/grub.cfg` entry changed to `Artix Linux (linux-lts) [L]` in the source
+  only. NOT rebuilt or flashed: the flashed payload still has the `[R]` entry pointing at the removed
+  `/boot/vmlinuz-linux-rt`. Default `[t]` linux-t480 and `[l]` stock are unaffected.
+  (Rebuilt and flashed later that day: firmware C48 and up carry the `[L]` entry.)

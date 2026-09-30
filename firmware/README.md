@@ -45,7 +45,7 @@ For a hang that leaves no trace, see "Debug build" in `coreboot/README.md`.
 Measured on a warm reboot with `cbmem -t`, GRUB's `boottime` and the kernel log
 (`tools/tscmono.c` gives the offset between the reset and the kernel's clock).
 
-| Stage | Before (September 2026, C35) | Now (C42) |
+| Stage | Before (September 2026, C35) | Now (C42 and later, same boot path up to C49) |
 |---|---|---|
 | coreboot, reset to payload | 1,026 ms | 650-710 ms with the GPU, 450 ms without |
 | GRUB, start to kernel jump | 680 ms | 50 ms |

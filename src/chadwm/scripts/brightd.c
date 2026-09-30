@@ -8,7 +8,8 @@
  *   - hotplug via inotify on /dev/input (was a 5 s rescan);
  *   - ~100 KB RSS instead of 12.5 MB.
  * Env: BRIGHT_DEV (acpi_video0), BRIGHT_STEP (1 %), BRIGHT_HOLD (0.2 s),
- *      BRIGHT_STATE (~/.local/state/brightness-pct).
+ *      BRIGHT_STATE (~/.local/state/brightness-pct). Each save also goes to
+ *      /var/lib/backlight/level, which udev restores at boot.
  * Build: cc -O2 -s -o ~/.local/bin/brightd brightd.c
  */
 #define _GNU_SOURCE
@@ -39,6 +40,7 @@ static struct { int fd; char name[32]; } dev[MAXDEV];
 static int ndev;
 static int bfd, maxb, cur, step_units;
 static char bright_path[PATH_MAX], state_path[PATH_MAX];
+static const char *devname;
 
 static double now(void)
 {
@@ -61,6 +63,26 @@ static int read_int(const char *path, int def)
 	return atoi(b);
 }
 
+/* Also save to the state the boot restore reads (udev ->
+ * /usr/local/sbin/backlight-state add): "<dev> <brightness> <max>". Skipped
+ * while the lock screen forces 100 %, like backlight-state change. */
+#define SHARED_DIR "/var/lib/backlight"
+static void write_shared(void)
+{
+	char b[64];
+	int fd, n;
+	if (access(SHARED_DIR "/locked", F_OK) == 0)
+		return;
+	n = snprintf(b, sizeof b, "%s %d %d\n", devname, cur, maxb);
+	if ((fd = open(SHARED_DIR "/.level.brightd", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0664)) < 0)
+		return;
+	fchmod(fd, 0664);
+	if (write(fd, b, n) == n && close(fd) == 0)
+		rename(SHARED_DIR "/.level.brightd", SHARED_DIR "/level");
+	else
+		unlink(SHARED_DIR "/.level.brightd");
+}
+
 static void write_state(void)
 {
 	char tmp[PATH_MAX + 8], b[16], *s;
@@ -78,6 +100,7 @@ static void write_state(void)
 		rename(tmp, state_path);
 	else
 		unlink(tmp);
+	write_shared();
 }
 
 static int step(int dir)
@@ -157,7 +180,7 @@ static void drop(int i)
 
 int main(void)
 {
-	const char *devname = getenv("BRIGHT_DEV"), *e;
+	const char *e;
 	double step_pct = (e = getenv("BRIGHT_STEP")) ? atof(e) : 1.0;
 	double hold = (e = getenv("BRIGHT_HOLD")) ? atof(e) : 0.2;
 	double gaps[8], credit = 0, last_press = 0, ramp_at = 0, last_step = 0, last_t, t;
@@ -165,7 +188,7 @@ int main(void)
 	char path[PATH_MAX];
 	struct pollfd pfd[MAXDEV + 1];
 
-	if (!devname)
+	if (!(devname = getenv("BRIGHT_DEV")))
 		devname = "acpi_video0";
 	snprintf(path, sizeof path, "/sys/class/backlight/%s/max_brightness", devname);
 	snprintf(bright_path, sizeof bright_path, "/sys/class/backlight/%s/brightness", devname);

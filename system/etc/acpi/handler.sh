@@ -56,7 +56,11 @@ case "$1" in
             *)  logger "ACPI action undefined: $2" ;;
         esac
         ;;
-    video)
+    # Stock BIOS reports these as video/brightnessup BRTUP ... and leaves the
+    # change to the OS. coreboot changes the brightness itself, so skip there
+    # or every press would step twice.
+    video|video/*)
+        [ "$(cat /sys/class/dmi/id/bios_vendor 2>/dev/null)" = coreboot ] && exit 0
         case "$2" in
             brightnessdown|BRTDN)
                 brightnessctl set 5%- 2>/dev/null

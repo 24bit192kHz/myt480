@@ -13,13 +13,13 @@ if [ -z "$choice" ]; then
 		"󰌾  Lock" "󰍃  Logout" "󰤄  Suspend" "󰒲  Hibernate" \
 		"󰜉  Reboot" "󰐥  Shutdown" |
 		rofi -dmenu -i -p power -no-custom -theme-str \
-		'window {width: 260px;} listview {columns: 1; lines: 6;} inputbar {enabled: false;}' |
+		'window {width: 312px;} listview {columns: 1; lines: 6;} inputbar {enabled: false;}' |
 		awk '{print tolower($2)}')
 fi
 
 confirm() {
 	[ "$(printf 'No\nYes\n' | rofi -dmenu -p "$1?" -no-custom -theme-str \
-		'window {width: 220px;} listview {columns: 1; lines: 2;}')" = Yes ]
+		'window {width: 264px;} listview {columns: 1; lines: 2;}')" = Yes ]
 }
 
 case $choice in

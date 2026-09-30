@@ -13,7 +13,8 @@ when a program needs it. This repository has everything to build the same laptop
 | Desktop | X11, chadwm, picom, st, rofi, slock-ly |
 | Graphics | Intel UHD 620 for everything; MX150 on demand through `prime-run` |
 
-Results on this machine: firmware hands over to GRUB after about 1.2 s, the laptop
+Results on this machine: firmware hands over to GRUB about 0.6 s after power-on with the
+MX150 enabled (0.4 s without), the desktop is up about 2.6 s after a reset, the laptop
 idles at 6.7 W on battery with the MX150 off, and the MX150 is ready about 2 s after a
 program asks for it.
 
@@ -22,7 +23,7 @@ program asks for it.
 | Branch | Firmware | State |
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
-| `main` | C35: C32 plus a wait for the GPU link, a checked `_ROM` length, `panic=10`, a debug build, and the series for upstream after review | flashed and tested: warm reset, off and on, suspend with and without a GPU program, 20 on/off cycles |
+| `main` | C49: everything in `firmware/coreboot/README.md` up to patch 0021: link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi | flashed and tested: RTC-alarm cold boots, S3 with and without a GPU program, off/on cycles, 10-minute GPU load test |
 
 Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
 `main` is what runs on my laptop now; `speed` is the state before the review round.
@@ -127,14 +128,19 @@ starts X.
 - Driver: `nvidia-580xx-dkms`, the last branch that supports this GPU.
 - Details and history: `firmware/MX150-notes.md`.
 
-Different from Lenovo's firmware: no GC6, no Optimus `_DSM`, the EC is not told about
-the GPU, and the subsystem IDs of the GPU are empty. Rendering is not affected.
+Compared with Lenovo's firmware (its ACPI tables and hardware state were dumped and
+compared, see `firmware/MX150-notes.md`): the GPU port runs with the same link settings
+(ASPM off, 256-byte payloads), the EC reads the GPU temperature on both and thinkpad_acpi
+shows it as `temp2`, and the fan follows it. Missing on purpose: GC6, the Optimus and
+power-sharing `_DSM`s (Windows only) and the GPU's subsystem ID. Rendering is not affected.
+Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 works).
 
 ## Known limits
 
 - Tested on one T480. The firmware patches also build for the T480s and T580, untested.
-- The undervolt in `system/etc/thermald.conf` (-130 mV core) suits my CPU. Start lower
-  on yours and test.
+- `system/etc/thermald.conf` has the undervolt at 0. -130 mV on this CPU froze the machine
+  under GPU load (on Lenovo's firmware too); if you undervolt, step down slowly and test
+  under load.
 - The kernel only has the modules my hardware needs. For other hardware add the module
   to `kernel/extra-modules.txt` and rebuild.
 - No hardware watchdog: a hang stays a hang until someone holds the power button.

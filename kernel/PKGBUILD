@@ -183,7 +183,7 @@ _minor=8
 #_rcver=rc8
 pkgver=${_major}.${_minor}
 _tagrel=1
-pkgrel=1
+pkgrel=2
 _srcname=cachyos-${_major}.${_minor}-${_tagrel}
 pkgdesc='Linux EEVDF + LTO + AutoFDO + Propeller Cachy Sauce Kernel by CachyOS with other patches and improvements.'
 _kernver="$pkgver-$pkgrel"
@@ -530,6 +530,11 @@ prepare() {
         -d INTEL_IOMMU_DEFAULT_ON \
         -m BTRFS_FS -d ANDROID_BINDER_IPC -d ANDROID_BINDERFS -d ATA \
         -d KALLSYMS_ALL -d NUMA -d EFI -d FB_EFI -d FB_VESA -d VIRTIO_FS
+    ### GVT-g: mediated iGPU (mdev) for the WinApps Windows VM
+    scripts/config \
+        -m VFIO -e VFIO_GROUP -e VFIO_CONTAINER -m VFIO_IOMMU_TYPE1 -m VFIO_MDEV \
+        -m DRM_I915_GVT_KVMGT -e DRM_I915_GVT \
+        -e CMDLINE_BOOL --set-str CMDLINE "i915.enable_gvt=1" -d CMDLINE_OVERRIDE
     make "${BUILD_FLAGS[@]}" olddefconfig
 
     ### Rewrite configuration

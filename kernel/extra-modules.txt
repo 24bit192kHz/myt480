@@ -164,3 +164,9 @@ algif_skcipher
 af_alg
 gcm
 cmac
+
+# GVT-g mediated iGPU for the WinApps VM (2026-09-29)
+vfio
+vfio_iommu_type1
+mdev
+kvmgt

@@ -1,0 +1,12 @@
+#!/bin/sh
+export WINEPREFIX="$HOME/.wine-devcpp"
+export WINEDEBUG=-all
+INI="$WINEPREFIX/drive_c/users/$USER/AppData/Roaming/Embarcadero/Dev-Cpp/devcpp.ini"
+if [ -f "$INI" ] && ! pgrep -f 'C:\\Dev-Cpp\\devcpp.exe' >/dev/null; then
+  sed -i '/^\[Options\.WindowState\]/,/^\[/{s/^Left=.*/Left=100/;s/^Top=.*/Top=100/;s/^Right=.*/Right=1300/;s/^Bottom=.*/Bottom=900/;s/^ShowCmd=.*/ShowCmd=1/}' "$INI"
+fi
+cd "$WINEPREFIX/drive_c/Dev-Cpp" || exit 1
+if [ $# -gt 0 ]; then
+  exec wine devcpp.exe "$(winepath -w "$(realpath "$1")")"
+fi
+exec wine devcpp.exe

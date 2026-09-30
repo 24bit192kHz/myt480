@@ -10,4 +10,5 @@ Written while the system was built; they explain decisions, not commands.
 | `notes/thermal.md` | fan, undervolt, power limits |
 | `notes/dwm.md`, `notes/session-tools.md`, `notes/quickshell.md` | desktop |
 | `notes/syswork.md` | how `syswork` works |
-| `notes/2026-09-28-*.md`, `notes/2026-09-29-*.md` | what changed on those days |
+| `notes/mx150-freeze.md` | the GPU-load freezes: what was tested and that the undervolt was the cause |
+| `notes/2026-09-28-*.md`, `notes/2026-09-29-*.md`, `notes/2026-09-30-*.md` | what changed on those days |

@@ -27,6 +27,7 @@
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>   /* box patch: XkbKeycodeToKeysym for layout-independent binds */
+#include <X11/extensions/shape.h> /* box: click-through special-workspace dim */
 #include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
@@ -350,6 +351,7 @@ static void togglepin(const Arg *arg);
 static void viewempty(const Arg *arg);
 static void tagrel(const Arg *arg);
 static void scratchsend(const Arg *arg);
+static void updatedim(Monitor *m);
 static void scratchterm(const Arg *arg);
 static int isscratchclient(Client *c);
 static int isdropclient(Client *c);
@@ -440,6 +442,9 @@ static Client* hiddenWinStack[hiddenWinStackMax];
  * scratch terminal, Super+Shift+S sends the focused window in). */
 #define scratchtag (1u << LENGTH(tags))
 static int scratchshown = 0;
+/* box: Hyprland decoration:dim_special - a click-through black overlay
+ * between the current tag and the open special workspace */
+static Window dimwin;
 /* box: pyprland-style dropdown terminal (Super+Alt+T, class "dropterm") */
 #define droptag (1u << (LENGTH(tags) + 1))
 static int dropshown = 0;
@@ -786,6 +791,8 @@ void cleanup(void) {
     free(scheme[i]);
   free(scheme);
   XDestroyWindow(dpy, wmcheckwin);
+  if (dimwin)
+    XDestroyWindow(dpy, dimwin);
   drw_free(drw);
   XSync(dpy, False);
   XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
@@ -1606,7 +1613,9 @@ void drawbar(Monitor *m) {
 		x += w;
 	}
 
-  w = floatbar?mw + m->gappov * 2 - sw - stw - x:mw - sw - stw - x;
+  /* box: title ends where the status starts (the old floatbar branch added
+   * 2*gappov, so the title overdrew the first ~20px of the status) */
+  w = mw - sw - stw - x;
   if (w > bh_n) {
     if (m->sel) {
       drw_setscheme(drw, scheme[m == selmon ? SchemeTitle : SchemeNorm]);
@@ -1616,11 +1625,7 @@ void drawbar(Monitor *m) {
         drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
     } else {
       drw_setscheme(drw, scheme[SchemeNorm]);
-      if(floatbar){
-        drw_rect(drw, x, y, w - m->gappov * 2, bh_n, 1, 1);
-      }else{
-        drw_rect(drw, x, y, w, bh_n, 1, 1);
-      }
+      drw_rect(drw, x, y, w, bh_n, 1, 1);
     }
   }
   drw_map(drw, m->barwin, 0, 0, m->ww - stw, bh);
@@ -2202,7 +2207,7 @@ void manage(Window w, XWindowAttributes *wa) {
                    StructureNotifyMask);
   grabbuttons(c, 0);
   if (!c->isfloating)
-	  c->isfloating = c->oldstate = trans != None || c->isfixed;
+	  c->isfloating = c->oldstate = (t && !t->isfixed) || c->isfixed;
   if (c->isfloating)
     XRaiseWindow(dpy, c->win);
   attach(c);
@@ -2353,7 +2358,7 @@ void movemouse(const Arg *arg) {
   if (!getrootptr(&x, &y))
     return;
   do {
-    XMaskEvent(dpy, MOUSEMASK | KeyReleaseMask | ExposureMask | SubstructureRedirectMask, &ev);
+    XMaskEvent(dpy, MOUSEMASK | KeyPressMask | KeyReleaseMask | ExposureMask | SubstructureRedirectMask, &ev);
     switch (ev.type) {
     case ConfigureRequest:
     case Expose:
@@ -2382,7 +2387,7 @@ void movemouse(const Arg *arg) {
         resize(c, nx, ny, c->w, c->h, 1);
       break;
     }
-  } while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it */
+  } while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it; held-key repeats (KeyPress) are swallowed */
   XUngrabPointer(dpy, CurrentTime);
   if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) {
     sendmon(c, m);
@@ -2435,7 +2440,7 @@ placemouse(const Arg *arg)
 		return;
 
 	do {
-		XMaskEvent(dpy, MOUSEMASK | KeyReleaseMask|ExposureMask|SubstructureRedirectMask, &ev);
+		XMaskEvent(dpy, MOUSEMASK | KeyPressMask | KeyReleaseMask | ExposureMask|SubstructureRedirectMask, &ev);
 		switch (ev.type) {
 		case ConfigureRequest:
 		case Expose:
@@ -2510,7 +2515,7 @@ placemouse(const Arg *arg)
 			}
 			break;
 		}
-	} while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it */
+	} while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it; held-key repeats (KeyPress) are swallowed */
 	XUngrabPointer(dpy, CurrentTime);
 
 	if ((m = recttomon(ev.xmotion.x, ev.xmotion.y, 1, 1)) && m != c->mon) {
@@ -2540,7 +2545,7 @@ void pop(Client *c) {
 }
 
 void propertynotify(XEvent *e) {
-  Client *c;
+  Client *c, *t;
   Window trans;
   XPropertyEvent *ev = &e->xproperty;
 
@@ -2563,7 +2568,7 @@ void propertynotify(XEvent *e) {
       break;
     case XA_WM_TRANSIENT_FOR:
       if (!c->isfloating && (XGetTransientForHint(dpy, c->win, &trans)) &&
-          (c->isfloating = (wintoclient(trans)) != NULL))
+          (c->isfloating = (t = wintoclient(trans)) && !t->isfixed))
         arrange(c->mon);
       break;
     case XA_WM_NORMAL_HINTS:
@@ -2695,7 +2700,7 @@ void resizemouse(const Arg *arg) {
   XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1,
                c->h + c->bw - 1);
   do {
-    XMaskEvent(dpy, MOUSEMASK | KeyReleaseMask | ExposureMask | SubstructureRedirectMask, &ev);
+    XMaskEvent(dpy, MOUSEMASK | KeyPressMask | KeyReleaseMask | ExposureMask | SubstructureRedirectMask, &ev);
     switch (ev.type) {
     case ConfigureRequest:
     case Expose:
@@ -2721,7 +2726,7 @@ void resizemouse(const Arg *arg) {
         resize(c, c->x, c->y, nw, nh, 1);
       break;
     }
-  } while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it */
+  } while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it; held-key repeats (KeyPress) are swallowed */
   XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1,
                c->h + c->bw - 1);
   XUngrabPointer(dpy, CurrentTime);
@@ -2751,6 +2756,7 @@ void restack(Monitor *m) {
   XWindowChanges wc;
   drawbar(m);
   drawtab(m);
+  updatedim(m);
   if (!m->sel)
     return;
   if (m->sel->isfloating || !m->lt[m->sellt]->arrange)
@@ -2767,10 +2773,13 @@ void restack(Monitor *m) {
   XSync(dpy, False);
   /* box: keep the special-workspace overlay above the tiled layer after any
    * restack (focus changes, tag switches, new clients). */
-  if (scratchshown)
+  if (scratchshown) {
+    if (dimwin && m == selmon)
+      XRaiseWindow(dpy, dimwin);
     for (c = m->clients; c; c = c->next)
       if (c->tags & scratchtag)
         XRaiseWindow(dpy, c->win);
+  }
   if (dropshown)
     for (c = m->clients; c; c = c->next)
       if (c->tags & droptag)
@@ -3373,8 +3382,8 @@ void hidewin(const Arg *arg) {
 
 
 void centerwin(const Arg *arg) {
-	/* HyDE Super+C (`~/.mhm/scripts/center.sh`): centre the focused window,
-	 * floating it first if it is currently tiled. */
+	/* HyDE Super+C: centre the focused window, floating it first if it is
+	 * currently tiled. */
 	Client *c = selmon->sel;
 	if (!c || c->isfullscreen)
 		return;
@@ -3389,8 +3398,8 @@ void centerwin(const Arg *arg) {
 }
 
 void resizepct(const Arg *arg) {
-	/* HyDE Super+Shift+C (`resize-30.sh`): size the focused window to arg->i
-	 * percent of the work area, keeping it centred. */
+	/* HyDE Super+Shift+C: size the focused window to arg->i percent of the
+	 * work area, keeping it centred. */
 	Client *c = selmon->sel;
 	int w, h;
 	if (!c || arg->i <= 0 || c->isfullscreen)
@@ -3550,6 +3559,35 @@ void scratchsend(const Arg *arg) {
 	arrange(selmon);
 	focus(NULL);
 	updateclientlist();
+}
+
+void updatedim(Monitor *m) {
+	/* Hyprland `decoration:dim_special`: darken the tag under the open special
+	 * workspace. picom blends the overlay by _NET_WM_WINDOW_OPACITY; an empty
+	 * input shape lets clicks reach the windows underneath. */
+	XSetWindowAttributes wa = {.override_redirect = True, .background_pixel = 0};
+	XClassHint ch = {"dwm-dim", "dwm-dim"};
+	unsigned long op;
+
+	if (m != selmon)
+		return;
+	if (!scratchshown || dimspecial <= 0) {
+		if (dimwin)
+			XUnmapWindow(dpy, dimwin);
+		return;
+	}
+	if (!dimwin) {
+		dimwin = XCreateWindow(dpy, root, m->wx, m->wy, m->ww, m->wh, 0,
+		                       CopyFromParent, InputOutput, CopyFromParent,
+		                       CWOverrideRedirect | CWBackPixel, &wa);
+		XSetClassHint(dpy, dimwin, &ch);
+		op = (unsigned long)(dimspecial * 0xffffffffUL);
+		XChangeProperty(dpy, dimwin, XInternAtom(dpy, "_NET_WM_WINDOW_OPACITY", False),
+		                XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&op, 1);
+		XShapeCombineRectangles(dpy, dimwin, ShapeInput, 0, 0, NULL, 0, ShapeSet, YXBanded);
+	}
+	XMoveResizeWindow(dpy, dimwin, m->wx, m->wy, m->ww, m->wh);
+	XMapRaised(dpy, dimwin);
 }
 
 void scratchterm(const Arg *arg) {

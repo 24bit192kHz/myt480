@@ -5,6 +5,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 #include <Imlib2.h>
+#include <fribidi.h>
 
 #include "drw.h"
 #include "util.h"
@@ -304,6 +305,43 @@ drw_rect(Drw *drw, int x, int y, unsigned int w, unsigned int h, int filled, int
 		XDrawRectangle(drw->dpy, drw->drawable, drw->gc, x, y, w - 1, h - 1);
 }
 
+/* Xft draws codepoints as-is: reorder RTL runs and pick Arabic joining
+ * (presentation) forms so Arabic/Hebrew titles read correctly. */
+static const char *
+bidi_text(const char *text)
+{
+	static char *out;
+	static FriBidiChar *log, *vis;
+	static size_t cap;
+	FriBidiParType base = FRIBIDI_PAR_ON;
+	FriBidiStrIndex len, i, j;
+	const unsigned char *p;
+	size_t n;
+
+	for (p = (const unsigned char *)text; *p && *p < 0x80; p++)
+		;
+	if (!*p)
+		return text; /* pure ASCII: nothing to do */
+
+	n = strlen(text);
+	if (n + 1 > cap) {
+		cap = n + 1;
+		if (!(out = realloc(out, cap * 4)) ||
+		    !(log = realloc(log, cap * sizeof(FriBidiChar))) ||
+		    !(vis = realloc(vis, cap * sizeof(FriBidiChar))))
+			die("realloc:");
+	}
+	len = fribidi_charset_to_unicode(FRIBIDI_CHAR_SET_UTF8, text, n, log);
+	if (!fribidi_log2vis(log, len, &base, vis, NULL, NULL, NULL))
+		return text;
+	/* lam-alef ligatures leave a FRIBIDI_CHAR_FILL placeholder behind */
+	for (i = j = 0; i < len; i++)
+		if (vis[i] != FRIBIDI_CHAR_FILL)
+			vis[j++] = vis[i];
+	fribidi_unicode_to_charset(FRIBIDI_CHAR_SET_UTF8, vis, j, out);
+	return out;
+}
+
 int
 drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lpad, const char *text, int invert)
 {
@@ -326,6 +364,8 @@ drw_text(Drw *drw, int x, int y, unsigned int w, unsigned int h, unsigned int lp
 
 	if (!drw || (render && (!drw->scheme || !w)) || !text || !drw->fonts)
 		return 0;
+
+	text = bidi_text(text);
 
 	if (!render) {
 		w = invert ? invert : ~invert;

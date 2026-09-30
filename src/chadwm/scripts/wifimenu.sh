@@ -18,7 +18,7 @@ list=$(nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID dev wifi list --rescan auto 2>/de
 			(sec != "" ? "  " : ""), ssid, sec}')
 choice=$(printf '%s\n%s\n%s\n' "$radio${tab}radio" "󰑐  Rescan${tab}rescan" "$list" |
 	rofi -dmenu -i -p wifi -no-custom -display-columns 1 -display-column-separator '\t' \
-		-theme-str 'window {width: 480px;} listview {columns: 1; lines: 10;}')
+		-theme-str 'window {width: 576px;} listview {columns: 1; lines: 10;}')
 [ -n "$choice" ] || exit 0
 
 ssid=$(printf '%s' "$choice" | cut -f2)
@@ -37,7 +37,7 @@ if nmcli -t -f NAME con show | grep -qxF "$ssid"; then
 	out=$(nmcli con up id "$ssid" 2>&1)
 elif [ -n "$sec" ]; then
 	pass=$(rofi -dmenu -password -p "password for $ssid" \
-		-theme-str 'window {width: 420px;} listview {lines: 0;}' < /dev/null)
+		-theme-str 'window {width: 504px;} listview {lines: 0;}' < /dev/null)
 	[ -n "$pass" ] || exit 0
 	out=$(nmcli dev wifi connect "$ssid" password "$pass" 2>&1)
 else

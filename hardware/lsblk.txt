@@ -1,6 +1,6 @@
 NAME          SIZE TYPE FSTYPE MOUNTPOINTS
 sda             0B disk        
 nvme0n1     238.5G disk        
-|-nvme0n1p1 204.1G part ext4   /var/lib/docker
-|                              /
-`-nvme0n1p2  34.4G part swap   [SWAP]
+├─nvme0n1p1 204.1G part ext4   /var/lib/docker
+│                              /
+└─nvme0n1p2  34.4G part swap   [SWAP]

@@ -101,6 +101,7 @@ iwlmvm
 iwlwifi
 joydev
 kvm
+kvmgt
 kvm_intel
 libarc4
 libcurve25519
@@ -112,6 +113,7 @@ mac_hid
 macvlan
 macvtap
 mc
+mdev
 memconsole
 memconsole_coreboot
 mii
@@ -242,6 +244,8 @@ uvc
 uvcvideo
 veth
 vfat
+vfio
+vfio_iommu_type1
 vhost
 vhost_iotlb
 vhost_net
