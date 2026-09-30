@@ -29,6 +29,7 @@
 | 0018 | no PCIe L1 substates on the GPU's root port (ASPM L1 stays). Linux is not given ASPM control here, so the port ran with FSP's L1.1/L1.2; the machine once hung without a trace right after a GPU benchmark, the signature of a failed L1.2 exit | belongs in the series |
 | 0019 | no ASPM at all on the GPU's root port, as on the vendor firmware (its FADT declares ASPM unsupported and root port 1 advertises none) | belongs in the series |
 | 0020 | 256-byte PCIe payloads on the GPU, Wi-Fi and SSD root ports, the vendor firmware's values (the Thunderbolt port stays at 128) | belongs in the series |
+| 0021 | SMBIOS BIOS version `CBET4000 <version>`: thinkpad_acpi only reads the EC version (and only then enables the EC thermal sensors, GPU temperature included) when the BIOS version has Lenovo's form | belongs in the series |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

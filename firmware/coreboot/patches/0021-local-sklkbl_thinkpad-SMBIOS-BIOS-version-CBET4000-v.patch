@@ -1,0 +1,47 @@
+From 164675037caa268e519ddc06b15ad3daf08247cc Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 16:43:15 +0300
+Subject: [PATCH] [local] sklkbl_thinkpad: SMBIOS BIOS version "CBET4000
+ <version>"
+
+thinkpad_acpi parses the BIOS version before it looks at the EC version
+string, and gives up on the EC when the BIOS version does not have Lenovo's
+xxyTkkWW form ("ThinkPad BIOS t480, EC unknown"). Without a known EC it
+never enables the EC thermal sensors, so the GPU temperature the EC reads
+into register 0x79 was invisible to hwmon and to the fan daemon. Report
+"CBET4000 <version>" as the other coreboot ThinkPads do.
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index 48fcc2fe76..4e90b49ca0 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -1,8 +1,10 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
++#include <build.h>
+ #include <console/console.h>
+ #include <intelblocks/pmclib.h>
+ #include <pc80/mc146818rtc.h>
++#include <smbios.h>
+ #include <soc/pm.h>
+ #include <soc/ramstage.h>
+ #include "variant.h"
+@@ -60,3 +62,15 @@ static void mainboard_enable(struct device *dev)
+ struct chip_operations mainboard_ops = {
+ 	.enable_dev = mainboard_enable,
+ };
++
++/*
++ * thinkpad_acpi reads the EC firmware version, and with it enables the EC
++ * thermal sensors, only when the BIOS version has Lenovo's xxyTkkWW form.
++ * "CBET4000" is what other coreboot ThinkPads report.
++ */
++const char *smbios_mainboard_bios_version(void)
++{
++	if (CONFIG_LOCALVERSION[0] != '\0')
++		return "CBET4000 " CONFIG_LOCALVERSION;
++	return "CBET4000 " COREBOOT_VERSION;
++}

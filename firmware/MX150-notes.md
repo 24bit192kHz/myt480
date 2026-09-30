@@ -106,3 +106,11 @@ The sections above describe C19-C23 and are history. Current state:
   when the port is off), and `off` sets the GPU's runtime PM control to `auto`. PCI devices
   start with it `on`, and then the root port never suspends, so after a fresh boot the
   ACPI power resource never cut the rail after `gpu-power off`.
+- Firmware C49 (patch 0021): the SMBIOS BIOS version is now `CBET4000 <version>`. Before,
+  thinkpad_acpi stopped at "ThinkPad BIOS t480, EC unknown" and never enabled its thermal
+  sensors; now it reports the EC (`EC N24HT37W-3.36`) and the `thinkpad` hwmon has
+  temp1 CPU and temp2 GPU (the EC's own reading of the MX150, -128 while the GPU is off),
+  and `/proc/acpi/ibm/thermal` exists.
+- thermald-t480 (`src/thermald-t480`): the fan curve now follows the hotter of the CPU
+  package and that GPU sensor (`gpu_temp_path auto|off|<file>`, default auto), so a GPU
+  load raises the fan even while the CPU stays cool.

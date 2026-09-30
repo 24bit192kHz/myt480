@@ -83,7 +83,7 @@ static void loge(const char *a) { ls_(a); ls_(": errno "); li_(errno); lend(); }
 /* ---------------- config (milli-units) ---------------- */
 struct profile { long long pl1_w, pl1_s, pl2_w, pl2_s, trip, interval, icc[3]; };
 struct conf {
-    char temp_path[128], ac_glob[128];
+    char temp_path[128], ac_glob[128], gpu_temp_path[128];
     long long poll_s;
     struct profile ac, batt;
     long long uv[5];
@@ -95,6 +95,7 @@ static void conf_defaults(struct conf *c)
 {
     memset(c, 0, sizeof *c);
     strcpy(c->temp_path, "auto");
+    strcpy(c->gpu_temp_path, "auto");
     strcpy(c->ac_glob, "/sys/class/power_supply/AC*/online");
     c->poll_s = 3 * K;
     c->ac   = (struct profile){ 35*K, 28*K, 60*K, 2, 90*K, 3*K, { 64*K, 31*K, 6*K } };
@@ -139,6 +140,7 @@ static void set_key(struct conf *c, const char *k, const char *v)
     for (i = 0; i < sizeof num / sizeof *num; i++)
         if (!strcmp(k, num[i].k)) { *(long long *)((char *)c + num[i].off) = milli(v, 0); return; }
     if (!strcmp(k, "temp_path")) copy(c->temp_path, sizeof c->temp_path, v);
+    else if (!strcmp(k, "gpu_temp_path")) copy(c->gpu_temp_path, sizeof c->gpu_temp_path, v);
     else if (!strcmp(k, "ac_glob")) copy(c->ac_glob, sizeof c->ac_glob, v);
     else if (!strcmp(k, "fan_levels")) {
         /* "2:0:44,4:42:54,5:52:64,7:62:32767"; malformed triples skipped */
@@ -194,19 +196,13 @@ static int read_long(int fd, long *out)
     *out = milli(b, 0) / K;
     return 0;
 }
-static int temp_fd = -1, ac_fd = -1;
-/* coretemp hwmon id shifts across boots and may appear after we start;
-   resolved lazily, dropped and re-resolved on any read failure */
-static int temp_open(const struct conf *c)
+static int temp_fd = -1, ac_fd = -1, gpu_fd = -1;
+/* /sys/class/hwmon/hwmonN/<file> of the hwmon called <name>: the ids shift across
+   boots and may appear after we start; resolved lazily, dropped on any read failure */
+static int hwmon_open(const char *name, const char *file)
 {
     char p[64];
     int i;
-    if (temp_fd >= 0) return 0;
-    if (strcmp(c->temp_path, "auto")) {
-        temp_fd = open(c->temp_path, O_RDONLY | O_CLOEXEC);
-        if (temp_fd >= 0) logs("temp ", c->temp_path);
-        return temp_fd < 0 ? -1 : 0;
-    }
     for (i = 0; i < 32; i++) {
         char nm[16] = { 0 };
         int fd;
@@ -215,16 +211,41 @@ static int temp_open(const struct conf *c)
         strcpy(p + 22 + (i > 9 ? 2 : 1), "/name");
         fd = open(p, O_RDONLY | O_CLOEXEC);
         if (fd < 0) continue;
-        if (read(fd, nm, sizeof nm - 1) > 0 && !strncmp(nm, "coretemp", 8)) {
+        if (read(fd, nm, sizeof nm - 1) > 0 && !strncmp(nm, name, strlen(name))) {
             close(fd);
-            strcpy(strrchr(p, '/'), "/temp1_input");
-            temp_fd = open(p, O_RDONLY | O_CLOEXEC);
-            if (temp_fd >= 0) { logs("temp ", p); return 0; }
-            return -1;
+            strcpy(strrchr(p, '/'), file);
+            fd = open(p, O_RDONLY | O_CLOEXEC);
+            if (fd >= 0) logs("temp ", p);
+            return fd;
         }
         close(fd);
     }
     return -1;
+}
+static int temp_open(const struct conf *c)
+{
+    if (temp_fd >= 0) return 0;
+    if (strcmp(c->temp_path, "auto")) {
+        temp_fd = open(c->temp_path, O_RDONLY | O_CLOEXEC);
+        if (temp_fd >= 0) logs("temp ", c->temp_path);
+        return temp_fd < 0 ? -1 : 0;
+    }
+    temp_fd = hwmon_open("coretemp", "/temp1_input");
+    return temp_fd < 0 ? -1 : 0;
+}
+/* The discrete GPU as the EC reads it: thinkpad hwmon temp2 (-128 C while the GPU
+   is off). gpu_temp_path auto | off | <file>; the hotter of CPU and GPU drives the fan. */
+static int gpu_open(const struct conf *c)
+{
+    if (gpu_fd >= 0) return 0;
+    if (!strcmp(c->gpu_temp_path, "off")) return -1;
+    if (strcmp(c->gpu_temp_path, "auto")) {
+        gpu_fd = open(c->gpu_temp_path, O_RDONLY | O_CLOEXEC);
+        if (gpu_fd >= 0) logs("gpu temp ", c->gpu_temp_path);
+        return gpu_fd < 0 ? -1 : 0;
+    }
+    gpu_fd = hwmon_open("thinkpad", "/temp2_input");
+    return gpu_fd < 0 ? -1 : 0;
 }
 /* ac_glob "<dir>/<prefix>*<suffix>": first matching entry wins.
    getdents64 directly: opendir() would drag malloc into the binary. */
@@ -466,6 +487,7 @@ int main(int argc, char **argv)
                 fan_idx = -1;
                 need_power = 1;
                 if (temp_fd >= 0) { close(temp_fd); temp_fd = -1; }
+                if (gpu_fd >= 0) { close(gpu_fd); gpu_fd = -1; }
                 if (ac_fd >= 0) { close(ac_fd); ac_fd = -1; }
                 logs("conf reloaded", 0);
                 continue;
@@ -477,8 +499,14 @@ int main(int argc, char **argv)
             logs("temp read fail, re-resolving", 0);
             close(temp_fd); temp_fd = -1;
         } else {
+            long g;
             warned = 0;
-            fan_apply(&c, raw / 1000, now);
+            raw /= 1000;
+            if (!gpu_open(&c)) {
+                if (read_long(gpu_fd, &g)) { close(gpu_fd); gpu_fd = -1; }
+                else if (g > 0 && g < 120000 && g / 1000 > raw) raw = g / 1000;
+            }
+            fan_apply(&c, raw, now);
         }
         if (src != last_src || need_power) {
             apply_power(p, c.uv, src ? "BATT" : "AC");
