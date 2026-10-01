@@ -24,7 +24,7 @@ program asks for it, hibernate resumes 5 s after power-on, and a tested undervol
 | Branch | Firmware | State |
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
-| `main` | C49: everything in `firmware/coreboot/README.md` up to patch 0021: link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi | flashed and tested: RTC-alarm cold boots, S3 with and without a GPU program, off/on cycles, 10-minute GPU load test |
+| `main` | C51: all patches in `firmware/coreboot/README.md` (0001 to 0025): link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi, and the vendor platform setup (radios, wake sources, subsystem IDs, GMM) | flashed and tested: RTC-alarm cold boots, S3 with the watchdog armed, GPU off/on cycles; hibernate, a watchdog hang test and a 10-minute GPU load test on the builds before it |
 
 Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
 `main` is what runs on my laptop now; `speed` is the state before the review round.
@@ -142,9 +142,10 @@ Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 wor
 ## Known limits
 
 - Tested on one T480. The firmware patches also build for the T480s and T580, untested.
-- `system/etc/thermald.conf` has the undervolt at 0. -130 mV on this CPU froze the machine
-  under GPU load (on Lenovo's firmware too); if you undervolt, step down slowly and test
-  under load.
+- `system/etc/thermald.conf` undervolts per power source: -115 mV core and cache on AC,
+  -100 mV on battery, found on this CPU with the sweep kit in `firmware/tools/undervolt/`
+  (-124 mV gave machine-check errors on AC, -121 mV froze on battery). Every CPU differs:
+  set `ac_uv_*` and `batt_uv_*` to 0 on another machine and sweep it.
 - The kernel only has the modules my hardware needs. For other hardware add the module
   to `kernel/extra-modules.txt` and rebuild.
 - The PCH TCO watchdog is armed at boot (`system/etc/local.d/watchdog.start`, 30 s, petted
@@ -153,7 +154,9 @@ Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 wor
 ## Licences
 
 Patches follow the licence of the project they are for; the programs in `src/` carry
-their own. The files in `firmware/coreboot/site-local/data/` and `firmware/stock-reference/` contain firmware from Lenovo and NVIDIA: the VBIOS of the MX150, which the driver
+their own. The files in `firmware/coreboot/site-local/data/` and `firmware/stock-reference/`
+contain firmware from Lenovo and NVIDIA: the VBIOS of the MX150, which the driver
 cannot work without, and Lenovo's ACPI tables as the reference for the power sequence.
-They remain the property of their owners. Nothing in this repository identifies a particular laptop: flash descriptor, Intel ME,
-MAC address, serial number and partition UUIDs are left for you to fill in.
+They remain the property of their owners. Nothing in this repository identifies a
+particular laptop: flash descriptor, Intel ME, MAC address, serial number and partition
+UUIDs are left for you to fill in.

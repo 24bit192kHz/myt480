@@ -67,7 +67,7 @@ QEMU harness one (`site-local/Makefile.mk` rebuilds the shared payload on every
 `make`; the check is the belt to those braces):
 
 ```sh
-sh ../../tools/romcheck.sh build/coreboot.rom     # prints "romcheck: OK"
+sh ../myt480/firmware/tools/romcheck.sh build/coreboot.rom   # prints "romcheck: OK"
 ```
 
 ## Debug build
@@ -88,5 +88,3 @@ The log is appended until the region is full, about two boots. Writing the debug
 again empties it. It costs boot time and wears the flash: go back to the normal build
 when the problem is found.
 
-coreboot only rebuilds the GRUB payload when `.config` changes: `touch .config` after a
-change to GRUB or `grub.cfg`.

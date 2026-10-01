@@ -29,7 +29,7 @@ on; `pgrep -af validity-rs` must print nothing.
 ## 1. Build the package
 
 ```sh
-$ cd ~/Projects/software/validity-rs/packaging
+$ cd validity-rs/packaging
 $ makepkg -f              # cargo build --release --locked, then cargo test
 ```
 
@@ -42,7 +42,7 @@ all tests).
 
 ```sh
 $ sudo syswork new validity-rs
-$ sudo install -m644 ~/Projects/software/validity-rs/packaging/validity-rs.conf.example \
+$ sudo install -m644 validity-rs/packaging/validity-rs.conf.example \
       /srv/work/validity-rs/etc/validity-rs.conf
 $ syswork diff validity-rs --full        # review: one new file, hwkey + hwkey_fallback active
 $ sudo syswork apply validity-rs --yes --drop
@@ -207,7 +207,7 @@ stays and keeps the sensor out of USB autosuspend.
 ## Upgrading
 
 ```sh
-$ cd ~/Projects/software/validity-rs/packaging && makepkg -f
+$ cd validity-rs/packaging && makepkg -f
 # pacman -U validity-rs-*.pkg.tar.zst
 # s6 live restart validity-rs
 ```
@@ -229,11 +229,3 @@ fails, then rescan:
 # s6-svscanctl -a /run/service
 # ls /run/service | wc -l
 ```
-
-## Paper trail (systemagent)
-
-After the switch, per `~/systemagent/AGENT.md`: snapshot
-`/etc/validity-rs.conf` and `/etc/s6/sv/validity-rs/` into
-`~/systemagent/corpus/configs/`, record the switch (date, verification output)
-in `corpus/notes/` (boot-services.md lists python3-validity as the fingerprint
-service), and flag the graph as stale.

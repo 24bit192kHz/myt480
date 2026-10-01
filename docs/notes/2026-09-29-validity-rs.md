@@ -17,5 +17,3 @@
   s6-svok fails, `s6-svscanctl -a`); no service restarted. Switched with `s6-rc -d/-u change`,
   persisted with `s6 set disable python3-validity`, `s6 set enable validity-rs`, `s6 set commit`
   (no `s6 live install`). /run/service = 74.
-- Config snapshots: corpus/configs/etc/validity-rs.conf, corpus/configs/etc/s6/sv/validity-rs/.
-- Graph/wiki (graphify-out) are stale for the fingerprint stack until regenerated.

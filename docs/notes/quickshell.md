@@ -1,5 +1,8 @@
 # quickshell Desktop Shell — Recon Notes
 
+> History: quickshell was the bar and shell of the dwm-titus desktop. The chadwm desktop
+> (since 2026-09-20) does not start it.
+
 Date: 2026-09-19 · Host: Artix ThinkPad T480 · quickshell 0.3.1 (Arch)
 Config: `~/.config/quickshell/` (~24k lines, 16 dirs) · Entry: `shell.qml` (1208 lines, 34.2K)
 

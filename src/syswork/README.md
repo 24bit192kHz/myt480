@@ -30,9 +30,9 @@ syswork diff wifi-test            # file list of the changeset
 syswork diff wifi-test --full     # unified diffs, review before apply
 
 # live-test a single file without applying the whole tree:
-sudo syswork shadow wifi-test /etc/NetworkManager/system-connections/QU-Student.nmconnection
+sudo syswork shadow wifi-test /etc/NetworkManager/system-connections/example.nmconnection
 nmcli connection reload           # exercise the change
-sudo syswork unshadow /etc/NetworkManager/system-connections/QU-Student.nmconnection
+sudo syswork unshadow /etc/NetworkManager/system-connections/example.nmconnection
 
 sudo syswork apply wifi-test --yes --drop   # commit to live + git, then drop tree
 ```

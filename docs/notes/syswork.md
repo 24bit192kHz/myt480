@@ -1,8 +1,7 @@
 # syswork — design rationale
 
 Date: 2026-09-19. Status: implemented (`syswork/syswork`, v0.1.0).
-User doc: `syswork/README.md`. Mirror for AST extraction:
-`corpus/sources/syswork.sh`.
+User doc: `src/syswork/README.md`.
 
 ## Why overlayfs + git on ext4
 
@@ -86,7 +85,7 @@ mounted — `syswork list` shows them, `drop` reclaims them.
 ## Open questions / non-goals
 
 - Upstream configs drift: apply commits capture *what* landed but not
-  *why* — substantive changes still need a notes entry per AGENT.md.
+  *why* — substantive changes still need a note.
 - No multi-machine story (single T480; NAS mirror is just a copy).
 - Shadow binds don't survive reboot (bind mounts, not fstab) — by
   design, so a bad single-file test can't brick the next boot.

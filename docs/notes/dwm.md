@@ -1,5 +1,8 @@
 # dwm setup — ThinkPad T480, Artix Linux (s6), dwm-titus fork
 
+> History: the dwm-titus desktop the laptop ran until 2026-09-20. Since then the desktop
+> is chadwm (`src/chadwm/`; see the section of 2026-09-20 below).
+
 ## Overview
 
 - Heavily patched dwm fork from ChrisTitusTech/dwm-titus (upstream is Fedora-only;
@@ -208,7 +211,7 @@
 
 ## 2026-09-20 — native-bar (suckless) migration reverted
 
-Owner asked for a full revert of the bar work + X restart.
+The bar work was reverted in full, with an X restart.
 
 What the bar work had landed (2026-09-19 19:45 → 2026-09-20 02:30, syswork
 worktrees `dwmbar`, `dwmbar2`, `slbar`; plan/surveys in
@@ -245,9 +248,9 @@ backup `dwm.c.bak-pre-nativebar-20260919`); `suckless/notes/*`.
 
 ## 2026-09-20 — chadwm is the live session (HyDE keymap port)
 
-Owner asked for `https://github.com/siduck/chadwm` and then "fully move to
-chadwm" + "make it use st" + "change all keybinds to match my pc hyprland
-(https://github.com/24bit192kHz/HyDE)". Executed the same day.
+Moved to `https://github.com/siduck/chadwm` in full, with st as the terminal and the
+keybinds of the author's Hyprland setup (https://github.com/24bit192kHz/HyDE). Done the
+same day.
 
 What chadwm is: dwm 6.5 fork (vanilla bar with status2d colours, tag preview,
 monocle tab bar, vanitygaps, fibonacci/gaplessgrid/grid layouts, movestack,
@@ -304,7 +307,7 @@ Keymap port (HyDE → chadwm), full list `~/.config/chadwm/keybinds.txt`:
    dead. Verified live 2026-09-20 with `ara,us` active: `Super+T` spawns st,
    `Super+Shift+B` hides/shows the bar, digits/arrows/shiftview work.
 3. Hyprland-style **special workspace** ("scratchpad") added. chadwm ships only
-   `hidewin`/`restorewin`, which is not what `Super+S` does on the owner's
+   `hidewin`/`restorewin`, which is not what `Super+S` does on that
    Hyprland: there it is `togglespecialworkspace` — a hidden workspace that
    floats *above* whatever workspace you are on and toggles from anywhere
    (Hyprland dispatchers doc: `togglespecialworkspace [name]` toggles a special
@@ -343,8 +346,7 @@ and quickshell/titus configs are intact. chadwm is not installed into
 
 ## 2026-09-20 — keybind audit + grayscale dark theme
 
-Owner asked for a full keybind audit (run via subagents) and then for a grayscale
-dark theme with no accent colour.
+A full keybind audit, then a grayscale dark theme with no accent colour.
 
 Audit (4 static scouts + 2 dynamic harnesses on throwaway Xvfb displays; live
 session untouched except for the final probes). Findings and fixes:
@@ -407,7 +409,7 @@ Cheat sheet (`~/.config/chadwm/keybinds.txt`) gained the missing Theming and
    Mouse sections plus the layout/gap/border variants the audit found undocumented.
 
 Theme — `grayscale` (nightly dark, no accent colour), replacing `tundra`.
-Two revisions after owner feedback: first mid-gray (rejected as "too dark some
+Two revisions: first mid-gray (rejected as "too dark some
 parts, too white other parts"), now proper nightly dark with higher contrast:
 - `themes/grayscale.h`: surfaces `#101010`, raised surface/panel `#1E1E1E`,
   unfocused border `#3A3A3A`, bar text `#E4E4E4`, selected text `#F0F0F0`,
@@ -420,8 +422,8 @@ parts, too white other parts"), now proper nightly dark with higher contrast:
 - Verified by screenshot on the live session and via root `WM_NAME` palette
   (`#101010 #1E1E1E #909090 #A8A8A8 #B8B8B8 #CFCFCF #E4E4E4`) — no hue anywhere.
 
-Rofi (launcher/run/window/filebrowser) now matches the session — the owner's
-complaint was "theme is not same as bar and no icons":
+Rofi (launcher/run/window/filebrowser) now matches the session (before: a theme
+different from the bar's, and no icons):
 - `~/.config/rofi/config.rasi` (new): `drun,run,window,filebrowser` modes, font
   `JetBrainsMono Nerd Font Mono 11` (the bar font family), `show-icons: true`,
   `icon-theme: matefaenzadark` (the session's GTK icon theme), 2 columns, 8
@@ -436,7 +438,7 @@ complaint was "theme is not same as bar and no icons":
 - Note: rofi reads `~/.config/rofi/config.rasi`; a `@theme` path is best given
   absolute or relative-to-config (the `~/` form resolves unpredictably).
 
-## 2026-09-20 — HyDE action parity (owner: "not using ocr and auto center etc shortcuts")
+## 2026-09-20 — HyDE action parity
 
 The keymap audit proved every combo *dispatches*; this pass made the actions
 behave like their Hyprland counterparts instead of placeholders:
@@ -461,20 +463,20 @@ behave like their Hyprland counterparts instead of placeholders:
 - **Super+Ctrl+Alt+Left/Right** move the focused window one tag back/forward
   silently (`tagrel()`); verified view unchanged while the client moved.
 - **Brightness: one step per tap, rate-adaptive ramp while held — read from the
-  kernel** (owner: "ultrasmooth not jittery", then "still very slow… takes like
-  10 s to go from 0 to 100"). Root cause found by emulating the key with a
+  kernel** (the goal: smooth, not jittery; a full sweep took about
+  10 s). Root cause found by emulating the key with a
   `uinput` virtual keyboard: this EC repeats the brightness keys as **discrete
   press/release pulses at ~10 Hz** (5 ms down), not as a continuous key-down.
   Every earlier design applied one step per detected press — i.e. 10 steps/s =
   ~10 s for a full sweep ✓ exactly the reported behaviour — and X-event designs
   additionally jittered because the server's own repeat also arrives as
   press/release pairs.
-  **Measured on the real key** (BRIGHT_DEBUG log, owner holding Fn+brightness):
+  **Measured on the real key** (BRIGHT_DEBUG log, Fn+brightness held):
   the EC emits press/release pairs with **0.26–0.52 s gaps and ~0.3 ms presses**
   — 2–4 pulses/s. That is why one-step-per-pulse was ~10 s per sweep, and it is
   why every fixed "same-hold" window failed for one side or the other.
-  Final behaviour (owner: "it should be exactly the exact time I hold the key and
-  release it"): the daemon tracks the pulse train, keeps the latch at
+  Final behaviour (brightness moves exactly as long as the key is held): the
+  daemon tracks the pulse train, keeps the latch at
   `1.2 × the widest of the last 3 gaps`, advances `STEPS_PER_PULSE` (20) steps
   per pulse period spread evenly, **tapers to 15 % as soon as a pulse is overdue**
   (`stale > max_recent_gap`) and ends within ~1.2 × the pulse gap after the last
@@ -525,4 +527,4 @@ behave like their Hyprland counterparts instead of placeholders:
 - The old light-locker/XDG/desktop-saver fallback cascade is removed from the canonical launcher. `dwm-lock-watch` is singleton-guarded with a trusted PATH and a fixed helper; sleep locking routes through the same helper.
 - The blue-on-typing behavior was the fullscreen `[INPUT] = "#005577"` state. The maintained source sets all four state backgrounds to black, so input feedback is only masked bullets and status text. Xvfb visual captures at 1920×1080 confirmed black outer edges in idle and typed states.
 - Password and fingerprint authentication are now separate transactions. Typed password uses `slock-password`; automatic biometric attempts use `slock-finger`; the setuid binary no longer accepts user-controlled PAM service overrides. Password PAM includes the GNOME Keyring token handoff, but an independently encrypted keyring cannot be unlocked by a fingerprint alone.
-- Verification: 100-agent read-only review completed; final C source compiled with `-Wall -Wextra`; shell syntax passed; rebuilt setuid binary started under Xvfb as eUID 0 without the earlier PAM response double-free crash. Real owner credential and biometric unlock remain acceptance tests, not agent-observed results.
+- Verification: read-only review completed; final C source compiled with `-Wall -Wextra`; shell syntax passed; rebuilt setuid binary started under Xvfb as eUID 0 without the earlier PAM response double-free crash. A real password and fingerprint unlock remain to be tested on the hardware.

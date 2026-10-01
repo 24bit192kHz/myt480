@@ -21,7 +21,7 @@
 - Live test also set `video.brightness_switch_enabled=N` at runtime (the kernel
   stepped acpi_video0 itself 100 ms after each key).
 - brightd: stopped; `run.sh` starts it only when /sys/module/blkeys is absent (fallback).
-- Pending (owner decision, reboot): build blkeys into linux-t480, builtin cmdline
+- Pending (needs a reboot): build blkeys into linux-t480, builtin cmdline
   `video.brightness_switch_enabled=0`, and try `acpi_backlight=native`
   (dmesg: "Skipping intel_backlight registration"; acpi_video0 = 101 levels,
   13-25 ms AML per write, dim range is levels 1-5).

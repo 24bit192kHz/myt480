@@ -50,7 +50,7 @@
   Next run: `WD=1 ./freeze-test.sh 600` (panic on hard/soft lockup and unknown NMI, panic=60).
 - 09:51 test with the lockup detectors on (readback 1 1 1, hardlockup_panic=1, thresh 5,
   panic=60, "NMI watchdog: Enabled"; i915 registers drm panic planes): froze 09:52:22, 5 s
-  into render 3. The owner saw **no panic screen** in ~75 s and held power. So no CPU could
+  into render 3. **No panic screen** appeared in ~75 s, and the power button was held. So no CPU could
   take an NMI or run the soft-lockup timer: the stall is below the kernel.
 - Read-only look at the chipset (GPU absent): SMI_EN=0x10000033 (global, EOS, SLP, APMC,
   eSPI; no TCO, no GPIO SMI), NMI_SC=0x24 (SERR NMI off), TCO timer halted, SMI count 4 since
@@ -96,18 +96,17 @@ cause, kept so later tests change one thing; remove to get runtime D3 back); tes
 
 ### 2026-09-30 10:45: stock firmware flashed for a control run
 
-Owner's call. `~/firmware/myt480/stock-deguarded-flashopen.bin` (stock N24ET74P + deguarded ME,
-as run on 2026-09-17, plus PchSetup BIOS Lock and FPRR cleared in the NVRAM store) written
-full-chip from coreboot C47, VERIFIED, readback identical. Live C47 chip saved before:
-`~/firmware/roms/backups/pre-stock-C47-live-20260930.rom`. Coreboot baseline dump (GPU off):
-`~/t480-build/probe/coreboot-C47-nogpu/`; same script for stock: `~/t480-build/probe/probe.sh`.
+Stock N24ET74P with the deguarded ME (as run on 2026-09-17, plus PchSetup BIOS Lock and FPRR
+cleared in the NVRAM store), written full-chip from coreboot C47, VERIFIED, readback
+identical; the C47 chip was saved before. A coreboot baseline dump (GPU off) was taken
+first, and the same probe script dumped the stock firmware.
 Disk GRUB (MBR) checked in QEMU before the flash. Machine shut down after the flash.
 
 ### 2026-09-30 11:05: it is not coreboot -- stock freezes too; CPU undervolt is the suspect
 
 - Control run on stock N24ET74P (flashopen image; flash is still locked, the two NVRAM bytes did
-  not take): same failure at 10:55:47, 6 s into render 4. With the detectors on, the owner saw
-  the Caps Lock LED blinking and a dark screen = kernel panic (rebooted by itself after 60 s).
+  not take): same failure at 10:55:47, 6 s into render 4. With the detectors on, the Caps Lock LED
+  blinked over a dark screen = kernel panic (rebooted by itself after 60 s).
   So the earlier "stall below the kernel" reading was wrong: the DRM panic screen does not
   show here; on coreboot the power button was held before the 60 s ran out.
 - The machine then crashed again at ~11:00 on stock with the NVIDIA driver not loaded, while
@@ -126,15 +125,14 @@ Disk GRUB (MBR) checked in QEMU before the flash. Machine shut down after the fl
   the nine runs with the undervolt failed within 2 minutes of rendering. Cause: CPU undervolt
   (-130 mV core/cache) from thermald-t480, not coreboot, not the MX150. C46/C47 (ASPM) and
   `nvidia-rtd3.conf` were never needed. Still to confirm under coreboot once it is flashed back.
-- 12:45: the crashes at 11:01 and 11:27 on stock are explained: both hit while an agent dump
+- 12:45: the crashes at 11:01 and 11:27 on stock are explained: both hit while a dump
   script was reading chipset sideband (PCR) ports raw through /dev/mem (partial output dirs
   ended at pcr-bd / pcr-ef). Not a hardware or undervolt problem. The complete dump was redone
-  with inteltool only: `~/t480-build/probe/stock-full-ac-gpuoff`, `stock-full-ac-gpuon`
-  (index in `~/t480-build/probe/README.md`). The 11:22 display freeze was `i915 GPU HANG in
+  with inteltool only (AC, GPU off and on). The 11:22 display freeze was `i915 GPU HANG in
   Xorg` from an uncapped off-screen NVIDIA benchmark; the system stayed up.
 - 12:45-12:55, stock, AC, undervolt 0: PASSED 600 s, 30 renders, GPU max 72 C, CPU up to 88 C,
   no AER, no panic. Battery and AC both pass without the undervolt.
-- 12:59: `/etc/modprobe.d/nvidia-rtd3.conf` removed (owner's call): runtime D3 is back to the
+- 12:59: `/etc/modprobe.d/nvidia-rtd3.conf` removed: runtime D3 is back to the
   driver default. syswork bug seen: deleting a file in an overlay and applying it copies the
   overlayfs whiteout (char device 0,0) to the live path instead of deleting the file; the node
   was removed by hand as root and the deletion committed in /etc.
@@ -157,10 +155,10 @@ Disk GRUB (MBR) checked in QEMU before the flash. Machine shut down after the fl
 
 ### 2026-09-30 15:47-17:00: back on coreboot, C48/C49 verified
 
-- The owner reflashed C35 with the SPI programmer; C48 (= C47 + Max_Payload_Size 256 on the
+- C35 was reflashed with the SPI programmer; C48 (= C47 + Max_Payload_Size 256 on the
   GPU, Wi-Fi and SSD root ports, the vendor firmware's values) and C49 (+ SMBIOS BIOS version
   "CBET4000 t480") were flashed internally and tested over RTC-alarm cold boots
-  (`~/t480-build/work/coldboot.sh`; RTC wake from S5 works: `PM1_STS: WAK RTC`).
+  (`firmware/tools/coldboot.sh`; RTC wake from S5 works: `PM1_STS: WAK RTC`).
 - Freeze test on coreboot with the undervolt at 0: PASSED 600 s, 47 renders, 0 Xid, 0 AER,
   GPU max 72 C. Same as on the Lenovo firmware: the undervolt was the whole story.
 - gpu-power: `off` now sets the GPU's runtime PM control to `auto` (PCI default `on` kept the

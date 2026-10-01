@@ -19,13 +19,12 @@ Artix Linux with s6.
 | `modprobe.d/nvidia-ondemand.conf` | nothing loads the NVIDIA driver except `gpu-power` |
 | `modprobe.d/nvidia-sleep.conf` | video memory is saved across suspend; without it a running GPU program breaks |
 | `X11/xorg.conf.d/20-intel-fast.conf` | modesetting on the Intel GPU; `AutoAddGPU false` keeps X away from the MX150 |
-| `elogind/system-sleep/` | hooks around suspend: lock, fingerprint reader, battery, WinApps |
+| `elogind/system-sleep/` | hooks around suspend: lock, fingerprint reader, battery |
 | `s6/sv/` | own services and changed dependencies |
-| `thermald.conf` | fan curve, undervolt and power limits for `thermald-t480` |
+| `thermald.conf` | fan curve, power limits and the undervolt per power source (`ac_uv_*`, `batt_uv_*`, see `docs/notes/2026-09-30-undervolt.md`) for `thermald-t480` |
 | `local.d/watchdog.start`, `modules-load.d/itco-watchdog.conf` | arm the TCO hardware watchdog at boot |
 | `local.d/bluetooth.start`, `bluetooth/main.conf` | bluetoothd at boot, adapter auto-enabled |
 | `local.d/hibernate-tune.start` | hibernate image size and compression threads |
-| `thermald.conf` `ac_uv_*` / `batt_uv_*` | undervolt per power source (see `docs/notes/2026-09-30-undervolt.md`) |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
 

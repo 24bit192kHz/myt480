@@ -1,15 +1,8 @@
 # MX150 (GP108, 10de:1d10) on coreboot — 2026-09-29
 
-Everything is on `mx150` branches; `master`/`t480` are the working C18 setup.
-
-| Where | mx150 branch has | Pre-MX150 |
-|---|---|---|
-| src/coreboot | 846db20e58 power dGPU before FSP (CMOS 0x6f), 0f49d14d54 power-button override cancels it | branch `t480` |
-| src/coreboot/site-local | 3648b3e VBIOS in CBFS (pci10de,1d10.rom -> ACPI _ROM) | branch `master` |
-| kernel (recipe) | 0078650 builds linux-t480-headers too | branch `master`, pkg linux-t480-7.2.8-1-pre-mx150.pkg.tar.zst |
-| /etc | modesetting X config, nvidia-sleep.conf override | branch `master` (intel/SNA) |
-| /usr/local | bin/dgpu, bin/prime-run | branch `master` |
-| roms | C19-mx150.rom | C18.rom |
+A log of the dGPU work, oldest first. The current state is in the main README (section
+"MX150") and in `upstream-dgpu-series/README.md`. The first sections describe the first
+working builds (C19 to C23).
 
 Packages added: linux-t480-headers, dkms, nvidia-580xx-dkms, nvidia-580xx-utils,
 egl-x11 (1.0.6, mirror no longer had 1.0.5), egl-gbm, egl-wayland, eglexternalplatform.
@@ -27,22 +20,20 @@ egl-x11 (1.0.6, mirror no longer had 1.0.5), egl-gbm, egl-wayland, eglexternalpl
 - \TBTS in acpi/sleep.asl stays disabled (the file was never in the DSDT upstream).
 
 ## Going back
-`sudo sh ~/t480-build/tools/mx150-revert.sh`, then reboot.
+`sudo sh firmware/tools/mx150-revert.sh`, then reboot.
 
 ## Update 2026-09-29 evening: working on C32
 
 The sections above describe C19-C23 and are history. Current state:
 
-- Firmware: roms/C32-mx150.rom, branch `c24` of src/coreboot (off `t480`). coreboot powers
+- Firmware: C32. coreboot powers
   the GPU in the bootblock; root port 1 is a normal port (no hotplug flag).
 - `dgpu on|off` still selects it (CMOS 0x6f). Switching from off to on makes the next
   boot do one extra full reset; that is intended.
 - Without a driver bound the GPU is powered off at runtime (ACPI power resource). With
   the NVIDIA driver loaded it stays on.
 - Tested: cold boot, warm reboot, S3 resume, dgpu off, off->on, `prime-run glxinfo`.
-- Upstream series: worktree src/coreboot-upstream (branch `dgpu-upstream`), patches in
-  patches-dgpu/. Needs your Signed-off-by before it goes to Gerrit.
-- Flash backup from before C24: /root/PRE-C24-backup.rom.
+- Upstream series: see `upstream-dgpu-series/`.
 - A boot that hangs with the GPU on: hold power 4 s (clears the request).
 
 ## Update 2026-09-29 21:30: GPU on demand
@@ -55,7 +46,7 @@ The sections above describe C19-C23 and are history. Current state:
   driver the kernel puts the GPU into D3cold through the ACPI power resource.
   /etc/modprobe.d/nvidia-ondemand.conf keeps everything else from loading the driver,
   Option "AutoAddGPU" "false" in /etc/X11/xorg.conf.d/20-intel-fast.conf keeps X from
-  holding the GPU. Source: ~/systemagent/src/gpu-power.
+  holding the GPU. Source: `src/gpu-power/`.
 - To go back to "driver always loaded": remove nvidia-ondemand.conf and the AutoAddGPU line.
 
 ## Update 2026-09-30: AC/battery policy, and a freeze
@@ -79,8 +70,9 @@ The sections above describe C19-C23 and are history. Current state:
 
 - The silent freezes under GPU load were the CPU undervolt (-130 mV core and cache in
   `thermald.conf`), not the firmware or the GPU: the Lenovo firmware froze the same way,
-  and with the undervolt at 0 the 10-minute GPU test passes on both. `system/etc/thermald.conf`
-  now has `uv_* 0`; step it down again only with a test like `freeze-test.sh`.
+  and with the undervolt at 0 the 10-minute GPU test passes on both. The undervolt was set
+  again later, per power source, after a stress-test sweep (`tools/undervolt/`,
+  `docs/notes/2026-09-30-undervolt.md`).
 - Vendor firmware versus coreboot, for the MX150 (dumps compared with inteltool, lspci,
   the EC RAM and the decompiled ACPI tables):
   - ASPM: Lenovo runs the GPU port with ASPM off and tells Linux in the FADT that ASPM is
@@ -161,8 +153,7 @@ removed: its log never saw a soft block, and Wi-Fi comes up unblocked on C50.
   that names the same device (unset IDs are -1, and the merge copies "non-zero" IDs).
   Every sklkbl variant re-declares the domain, so the IDs in `devicetree.cb` never
   reached a device. The T480 override tree now carries them (patch 0025, series 0017).
-- v4: 17 patches (the h8 and T480 patches split into one change each, the same AI
-  trailer on all), every patch built for the six variants, every board in the tree at
+- v4: 17 patches (the h8 and T480 patches split into one change each), every patch built for the six variants, every board in the tree at
   the top (966 configurations; 6 need Go and were not built), lint hooks from
   `make gitconfig`. Pushed with Matt DeVillier and Johann C. Rode as reviewers.
 - C51 = C50 with the subsystem IDs from the devicetree: cold boot from S5, S3 resume

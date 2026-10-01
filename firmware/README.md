@@ -34,9 +34,11 @@ Hold the power button for 4 s, then power on. coreboot sees the forced power-off
 clears the dGPU request and asks GRUB to show its menu. If that does not help, write
 your last good image, or the dump of the stock firmware, with the external programmer.
 
-The kernel command line has `panic=10`: after a kernel panic the machine restarts.
-There is no watchdog (`nowatchdog`, no `iTCO_wdt`), so a hang that is not a panic stays
-a hang. Do not test firmware when nobody can reach the power button.
+The kernel command line has `panic=10`: after a kernel panic the machine restarts. A hang
+that is not a panic is caught by the PCH TCO watchdog, which
+`system/etc/local.d/watchdog.start` arms at boot: 30 s without a keepalive and the machine
+resets. A firmware hang before Linux runs is not covered: do not test firmware when nobody
+can reach the power button.
 
 For a hang that leaves no trace, see "Debug build" in `coreboot/README.md`.
 
@@ -45,7 +47,7 @@ For a hang that leaves no trace, see "Debug build" in `coreboot/README.md`.
 Measured on a warm reboot with `cbmem -t`, GRUB's `boottime` and the kernel log
 (`tools/tscmono.c` gives the offset between the reset and the kernel's clock).
 
-| Stage | Before (September 2026, C35) | Now (C42 and later, same boot path up to C49) |
+| Stage | Before (September 2026, C35) | Now (C42 and later, same boot path up to C51) |
 |---|---|---|
 | coreboot, reset to payload | 1,026 ms | 650-710 ms with the GPU, 450 ms without |
 | GRUB, start to kernel jump | 680 ms | 50 ms |

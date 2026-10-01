@@ -1,6 +1,7 @@
 # T480 Firmware + Kernel Workspace Notes
 
 > **2026-09-28:** partly superseded, see [2026-09-28-overhaul.md](2026-09-28-overhaul.md).
+> History: the laptop on Lenovo's firmware (2026-09-19), before coreboot.
 
 - Recon date: 2026-09-19, READ-ONLY (no binaries read; sizes/hashes from
   text notes and `ls`/`stat` only).
@@ -33,7 +34,7 @@
   images); `patches.txt` (stock sample MSR set, legacy use only);
   `patches-misc.txt` (2 unrelated lines: Gemini Lake SGX, ASUS Z87);
   `deguard-dug9.{pdf,txt}` (3mdeb talk notes).
-- `~/firmware/t480-kernel/` (owner's spelling) — custom kernel build output:
+- `~/firmware/t480-kernel/` — custom kernel build output:
   `bzImage` (Linux 7.0.0-rc4, 15 MB), `.config` (148 KB), `System.map`
   (8 MB), all Mar 21 2026, one build session.
 - `~/firmware/linux-linuxboot/` — kernel source tree, 7.0.0-rc4 ("Baby Opossum
@@ -62,7 +63,7 @@
   Out-of-box on T480 + Dell OptiPlex 3050; enabled the T480(s) coreboot
   port. Flow: read SPI → `generatedelta.py` → donor ME 11.6.0 →
   `finalimage.py` + fake FPFs → `ifdtool` → flash back.
-- **Owner recipe** (`~/firmware/myt480/README.md`): Dell Inspiron 5468 donor
+- **Recipe used here** (`~/firmware/myt480/README.md`): Dell Inspiron 5468 donor
   `me.bin` (ME 11.6.0.1126 LP 2M, `/home/bup/ct` byte-exact, `eom=00`)
   via `ifdtool -p sklkbl -i ME:me.bin`, then `-M 1` (HAP bit,
   `0x102: 0x50→0x51`). Diff ≈ 838 KB ME-only; BIOS/GbE/FD identical.
