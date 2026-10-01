@@ -175,3 +175,5 @@ sddm, bluetoothd, cupsd, dhcpcd, avahi, haveged, mdadm, rpcbind/nfs.
   slew in progress — re-check with `ntpctl -s status` until `clock synced`).
 - Note: §8's "contents.d + recompile" description is the raw-s6 mechanism; the Artix-official
   wrapper is `artix-service enable|start <name>` (see `/usr/bin/artix-service`).
+
+- 2026-10-01: thinkfan and throttled removed. Boot db recompiled with `s6 set commit` and repointed by hand to `/etc/s6/rc/compiled-1790823936215054425` (no `s6 live install`); the live db keeps the two parked entries until the next boot.
