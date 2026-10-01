@@ -152,7 +152,6 @@ removed: its log never saw a soft block, and Wi-Fi comes up unblocked on C50.
 - v3 (12 patches) got Code-Review -2 on every change from a core developer: "Invalid
   sign-off". coreboot accepts an established alias since 2023 (a "known identity"); the
   alias here is the GitHub account of 2022 whose profile carries the sign-off address.
-  The author answered on 95872 in person.
 - Jenkins had found two real bugs: patch 1 broke the arm64 build (a helper outside the
   `HAVE_ACPI_TABLES` block it serves), and the last patch set `SUBSYSTEM_*_ID` in the
   board Kconfig, which lint-stable-024 forbids. A review of the whole series found a third:

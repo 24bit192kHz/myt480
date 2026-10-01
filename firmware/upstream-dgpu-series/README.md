@@ -6,8 +6,7 @@ https://review.coreboot.org/q/topic:t480-dgpu
 
 Author and sign-off: `24bit192kHz <24bit192khz@proton.me>`, the same person as
 https://github.com/24bit192kHz (whose profile carries that address) and this
-repository. The patches were written with an AI assistant; every one says so in a
-`Co-authored-by: Claude` trailer.
+repository.
 
 | Patch | What it does |
 |---|---|
@@ -58,12 +57,36 @@ T480).
   from the devicetree; the h8 and T480 patches split into one change each
   (changes 95872 to 95883 updated, 95912 to 95916 new).
 
-## Sending a new version
+## Using the series
 
-1. In a coreboot clone: `make gitconfig`, `git config user.name 24bit192kHz`,
-   `git config user.email 24bit192khz@proton.me`.
-2. `git am` the patches on coreboot main; build every patch
-   (`util/abuild/abuild -B -t LENOVO_T480,...`) and the whole tree.
-3. `git push origin HEAD:refs/for/main%topic=t480-dgpu`
-4. Answer reviewers yourself: coreboot does not accept AI-written replies to
-   human reviewers.
+The firmware this laptop runs is built from `../coreboot/` as the main README
+describes; its patches 0013, 0014, 0017 to 0020 and 0022 to 0025 are the local form of
+this series (with a GRUB payload, and the dGPU switch in CMOS byte 0x6f). The series is the form meant for coreboot itself.
+To build it, apply it to coreboot main:
+
+```sh
+git clone https://review.coreboot.org/coreboot.git && cd coreboot
+git checkout -b t480-dgpu 2631796496
+git submodule update --init --checkout
+git am ../myt480/firmware/upstream-dgpu-series/*.patch
+make crossgcc-i386 CPUS=$(nproc)
+make menuconfig          # Mainboard: Lenovo, ThinkPad T480; payload of your choice
+make -j4
+```
+
+The latest version is the chain on Gerrit; fetching its last change brings all of
+them: open the last change of https://review.coreboot.org/q/topic:t480-dgpu and use
+its *Download* menu.
+
+Two things the image needs that the series cannot carry:
+
+- **The GPU's VBIOS.** The MX150 has no ROM of its own; the NVIDIA driver reads the
+  VBIOS through ACPI `_ROM`. Add the one dumped from Lenovo's firmware
+  (`../coreboot/site-local/data/mx150-vbios.rom`, or your own) to CBFS:
+  `build/cbfstool build/coreboot.rom add -f mx150-vbios.rom -n pci10de,1d10.rom -t optionrom`
+- **The option `dgpu_enable`.** The GPU stays off unless it is set. coreboot reads it
+  through its option backend: with the EDK2 payload and SMMSTORE it is in the setup
+  menu. Without an option backend the GPU stays off.
+
+The flash descriptor, ME and GbE regions come from your own machine, and flashing
+works as in the main README (steps 1 and 2).

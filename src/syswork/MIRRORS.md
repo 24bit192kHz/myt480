@@ -42,7 +42,7 @@ To re-create a bare mirror from scratch (if ever deleted):
 
 ## 3. timeshift (NOT installed — absent on 2026-09-19)
 
-One-liner for the user (asks before any package install, so run this yourself):
+To install it (pacman asks before it installs anything):
 ```sh
 sudo pacman -S timeshift && sudo timeshift --create --comments "baseline" --tags D
 ```
