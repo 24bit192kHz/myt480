@@ -16,10 +16,16 @@
  *   release    a program ended: back to what the policy or the hand said
  *   status
  *
+ * Clock offsets: after the driver is loaded, the offsets of /etc/gpu-power.conf
+ * (ac_gpc_offset, ac_mem_offset, batt_gpc_offset, batt_mem_offset, MHz, default 0)
+ * are set through NVML for the current power source. They last until the driver
+ * is unloaded, so every load sets them again.
+ *
  * Installed setuid root: the only thing a user can make it do is run modprobe
  * with the fixed arguments below and a fixed environment.
  */
 #define _GNU_SOURCE
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -36,6 +42,8 @@
 #define LOCK     "/run/gpu-power.lock"	/* one gpu-power at a time */
 #define USERS    "/run/gpu-power.users"	/* prime-run holds a shared lock while a program runs */
 #define MANUAL   "/run/gpu-power.manual"	/* "on" or "off" set by hand */
+#define CONF     "/etc/gpu-power.conf"	/* clock offsets per power source */
+#define NVML     "/usr/lib/libnvidia-ml.so.1"
 
 static char *const envp[] = { "PATH=/usr/bin:/bin", NULL };
 
@@ -140,6 +148,55 @@ static int status(void)
 	return 0;
 }
 
+/* Offsets for the current power source from CONF; out-of-range values count as 0 */
+static void conf_offsets(int *gpc, int *mem)
+{
+	char line[96], key[48];
+	const char *src = on_ac() ? "ac_" : "batt_";
+	int v;
+	FILE *f = fopen(CONF, "r");
+
+	*gpc = *mem = 0;
+	if (!f)
+		return;
+	while (fgets(line, sizeof(line), f))
+		if (sscanf(line, "%47s %d", key, &v) == 2 && !strncmp(key, src, strlen(src))) {
+			const char *k = key + strlen(src);
+			if (!strcmp(k, "gpc_offset") && v >= -200 && v <= 300)
+				*gpc = v;
+			else if (!strcmp(k, "mem_offset") && v >= -1000 && v <= 2000)
+				*mem = v;
+		}
+	fclose(f);
+}
+
+/* Set the clock offsets through NVML (the driver must be loaded) */
+static void tune(int quiet)
+{
+	int (*init)(void), (*shutdown)(void), (*handle)(unsigned, void **), (*set_gpc)(void *, int),
+	    (*set_mem)(void *, int);
+	void *lib, *dev;
+	int gpc, mem;
+
+	if (!exists("/dev/nvidia0") || !exists(CONF))
+		return;
+	conf_offsets(&gpc, &mem);
+	lib = dlopen(NVML, RTLD_NOW | RTLD_LOCAL);
+	if (!lib)
+		return;
+	init = (int (*)(void))dlsym(lib, "nvmlInit_v2");
+	shutdown = (int (*)(void))dlsym(lib, "nvmlShutdown");
+	handle = (int (*)(unsigned, void **))dlsym(lib, "nvmlDeviceGetHandleByIndex_v2");
+	set_gpc = (int (*)(void *, int))dlsym(lib, "nvmlDeviceSetGpcClkVfOffset");
+	set_mem = (int (*)(void *, int))dlsym(lib, "nvmlDeviceSetMemClkVfOffset");
+	if (init && shutdown && handle && set_gpc && set_mem && !init()) {
+		if (!handle(0, &dev) && (set_gpc(dev, gpc) || set_mem(dev, mem)) && !quiet)
+			fprintf(stderr, "gpu-power: clock offsets %+d/%+d MHz not accepted\n", gpc, mem);
+		shutdown();
+	}
+	dlclose(lib);
+}
+
 static int on(int quiet)
 {
 	static const char *const mods[] = { "nvidia", "nvidia_modeset", "nvidia_drm", "nvidia_uvm" };
@@ -161,6 +218,7 @@ static int on(int quiet)
 	/* udev creates the device nodes */
 	for (i = 0; i < 60 && !exists("/dev/nvidia0"); i++)
 		nanosleep(&ts, NULL);
+	tune(quiet);
 	return 0;
 }
 
@@ -202,8 +260,10 @@ static int apply(int users_fd)
 	if (!strcmp(wanted(), "on"))
 		return on(1);
 	if (flock(users_fd, LOCK_EX | LOCK_NB)) {
-		if (errno == EWOULDBLOCK)
-			return 0;	/* a program is using it */
+		if (errno == EWOULDBLOCK) {
+			tune(1);	/* a program is using it: offsets of the new power source */
+			return 0;
+		}
 		return 1;
 	}
 	off(1);

@@ -11,5 +11,6 @@
 | `cmos6d.py` | shows CMOS 0x6d, the "GPU reset tried" flag of coreboot patch 0017 (0 after a good boot) |
 | `coldboot.sh [on\|off] [seconds]` | sets the `dgpu` request, arms an RTC alarm and powers off: a cold boot without touching the power button (root) |
 | `undervolt/` | the CPU undervolt sweep kit; its README explains the runs |
+| `gpu/` | the MX150 clock offset kit (sweeps, load and bandwidth tests); its README explains the runs |
 | `bench-all.sh` | the benchmark set used before and after the undervolt |
 | `hib-measure2.sh` | hibernate cycle timing |

@@ -13,4 +13,4 @@ author's machine; their sources are in this repository under `firmware/` and `sr
 | `notes/dwm.md`, `notes/session-tools.md`, `notes/quickshell.md` | the desktop before chadwm (dwm-titus, quickshell) and the session tools |
 | `notes/syswork.md` | how `syswork` works |
 | `notes/mx150-freeze.md` | the GPU-load freezes: what was tested and that the undervolt was the cause |
-| `notes/2026-09-28-*.md`, `notes/2026-09-29-*.md`, `notes/2026-09-30-*.md` | what changed on those days |
+| `notes/2026-09-28-*.md` to `notes/2026-10-01-*.md` | what changed on those days (the undervolt and the MX150 clock offsets have their own) |

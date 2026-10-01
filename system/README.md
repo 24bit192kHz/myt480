@@ -25,6 +25,7 @@ Artix Linux with s6.
 | `local.d/watchdog.start`, `modules-load.d/itco-watchdog.conf` | arm the TCO hardware watchdog at boot |
 | `local.d/bluetooth.start`, `bluetooth/main.conf` | bluetoothd at boot, adapter auto-enabled |
 | `local.d/hibernate-tune.start` | hibernate image size and compression threads |
+| `gpu-power.conf` | MX150 clock offsets per power source, set by `gpu-power` after each driver load |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
 

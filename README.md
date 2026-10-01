@@ -125,6 +125,9 @@ starts X.
 - The GPU is off (D3cold, power rail off) until a program uses it:
   `prime-run <program>` turns it on, runs the program on it and turns it off afterwards.
   `gpu-power on|off|status` does it by hand, for `nvidia-smi` and the like.
+- On AC `gpu-power` raises the clocks: graphics +150 MHz, memory +1000 MHz
+  (`system/etc/gpu-power.conf`): about +4 % in shader-bound and +16 % in memory-bound work,
+  tested in `docs/notes/2026-10-01-mx150-tuning.md`. On battery it runs at stock clocks.
 - On battery: 6.7 W idle with the GPU off, 7.7 W with it on and idle.
 - Driver: `nvidia-580xx-dkms`, the last branch that supports this GPU.
 - Details and history: `firmware/MX150-notes.md`.
