@@ -1,0 +1,46 @@
+From 6a9ede6cb48e8b3a7eb0855042a57ee5ef39e145 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Thu, 1 Oct 2026 16:06:07 +0300
+Subject: [PATCH 11/17] ec/lenovo/h8: Let the mainboard set the lid wake state
+
+The _PRW of the lid always names S3 as the deepest state it wakes from.
+Let the mainboard define H8_LID_WAKE_STATE before it includes the EC
+ASL; the default stays S3.
+
+TEST=T480 with H8_LID_WAKE_STATE 4: LID is listed for S4 in
+/proc/acpi/wakeup.
+
+Change-Id: I460bed6a235ac7fea4caeefea06408e227017308
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/ec/lenovo/h8/acpi/lid.asl | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/ec/lenovo/h8/acpi/lid.asl b/src/ec/lenovo/h8/acpi/lid.asl
+index 7695e4e5ab..6ee6d9b3ed 100644
+--- a/src/ec/lenovo/h8/acpi/lid.asl
++++ b/src/ec/lenovo/h8/acpi/lid.asl
+@@ -1,5 +1,10 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
++/* Deepest sleep state the lid wakes from; the mainboard may define it before including this */
++#ifndef H8_LID_WAKE_STATE
++#define H8_LID_WAKE_STATE 3
++#endif
++
+ Field(ERAM, ByteAcc, NoLock, Preserve)
+ {
+ 		Offset (0x32),
+@@ -21,7 +26,7 @@ Device(LID)
+ 
+ 	Method(_PRW, 0, NotSerialized)
+ 	{
+-		Return (Package() { 0x18, 0x03 })
++		Return (Package() { 0x18, H8_LID_WAKE_STATE })
+ 	}
+ 
+ 	Method(_PSW, 1, NotSerialized)
+-- 
+2.55.0
+

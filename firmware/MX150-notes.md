@@ -146,3 +146,27 @@ later and the next boot re-armed it and brought the GPU back through the one-tim
 path. Hibernate to the swap partition and resume by RTC alarm from S4 work with the GPU
 and the watchdog; the X session survives. The Wi-Fi rfkill unblock rule and script were
 removed: its log never saw a soft block, and Wi-Fi comes up unblocked on C50.
+
+## 2026-10-01: upstream review, series v4, firmware C51
+
+- v3 (12 patches) got Code-Review -2 on every change from a core developer: "Invalid
+  sign-off". coreboot accepts an established alias since 2023 (a "known identity"); the
+  alias here is the GitHub account of 2022 whose profile carries the sign-off address.
+  The author answered on 95872 in person.
+- Jenkins had found two real bugs: patch 1 broke the arm64 build (a helper outside the
+  `HAVE_ACPI_TABLES` block it serves), and the last patch set `SUBSYSTEM_*_ID` in the
+  board Kconfig, which lint-stable-024 forbids. A review of the whole series found a third:
+  the T480's "no tablet switch" option sat in the common Kconfig and would have removed
+  the X380 Yoga's tablet switch.
+- sconfig bug: a `subsystemid` in a base devicetree does not survive an override tree
+  that names the same device (unset IDs are -1, and the merge copies "non-zero" IDs).
+  Every sklkbl variant re-declares the domain, so the IDs in `devicetree.cb` never
+  reached a device. The T480 override tree now carries them (patch 0025, series 0017).
+- v4: 17 patches (the h8 and T480 patches split into one change each, the same AI
+  trailer on all), every patch built for the six variants, every board in the tree at
+  the top (966 configurations; 6 need Go and were not built), lint hooks from
+  `make gitconfig`. Pushed with Matt DeVillier and Johann C. Rode as reviewers.
+- C51 = C50 with the subsystem IDs from the devicetree: cold boot from S5, S3 resume
+  with the watchdog armed, 17aa:225d on all PCH and system agent devices, verify48
+  identical to C50 (MPS, ASPM, driver, GL/Vulkan, 5 D3cold cycles), DSDT and GRUB
+  payload byte-identical to C50.

@@ -1,0 +1,58 @@
+From 15011af125f8beb5a06f1550252fd0fe3acad3fd Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Thu, 1 Oct 2026 16:06:01 +0300
+Subject: [PATCH 10/17] ec/lenovo/h8: Add an option for boards without a tablet
+ switch
+
+thinkpad_acpi registers a tablet mode switch when HKEY has an MHKG
+method. With H8_NO_TABLET_MODE_SWITCH, leave MHKG out on boards that
+are no tablets.
+
+TEST=T480 with the option selected: thinkpad_acpi registers no tablet
+mode switch.
+
+Change-Id: I4db98acce5c2d1d19042623178196fdb9395e4ae
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/ec/lenovo/h8/Kconfig           | 7 +++++++
+ src/ec/lenovo/h8/acpi/thinkpad.asl | 2 ++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/src/ec/lenovo/h8/Kconfig b/src/ec/lenovo/h8/Kconfig
+index bca8dea938..aad2a861c5 100644
+--- a/src/ec/lenovo/h8/Kconfig
++++ b/src/ec/lenovo/h8/Kconfig
+@@ -104,4 +104,11 @@ config H8_NO_WIRELESS_SWITCH
+ 	  ACPI WLSW method then reports the radios as enabled, as the vendor
+ 	  firmware does, instead of a bit that reads 0 and hard-blocks them.
+ 
++config H8_NO_TABLET_MODE_SWITCH
++	bool
++	default n
++	help
++	  The board is no tablet: do not offer the MHKG method, which makes
++	  thinkpad_acpi register a tablet mode switch.
++
+ endif # EC_LENOVO_H8
+diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
+index 341fdb7f19..d18a2faa61 100644
+--- a/src/ec/lenovo/h8/acpi/thinkpad.asl
++++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
+@@ -118,11 +118,13 @@ Device (HKEY)
+ 		Return (0x07FFFFFF)
+ 	}
+ 
++#if !CONFIG(H8_NO_TABLET_MODE_SWITCH)
+ 	/* Report tablet mode switch state */
+ 	Method (MHKG, 0, NotSerialized)
+ 	{
+ 		Return (TBSW << 3)
+ 	}
++#endif
+ 
+ 	/* Mute audio */
+ 	Method (SSMS, 1, NotSerialized)
+-- 
+2.55.0
+

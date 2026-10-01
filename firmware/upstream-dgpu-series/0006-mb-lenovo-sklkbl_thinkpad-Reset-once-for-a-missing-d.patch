@@ -1,7 +1,7 @@
-From 22b08dabdaa1da145579ce313f033be33dd6c3e5 Mon Sep 17 00:00:00 2001
+From cf4efedb0bf54395d40ee632881d032be0de6476 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:38:00 +0300
-Subject: [PATCH 06/12] mb/lenovo/sklkbl_thinkpad: Reset once for a missing
+Subject: [PATCH 06/17] mb/lenovo/sklkbl_thinkpad: Reset once for a missing
  dGPU link
 
 FSP-S disables a root port whose link is down, and a disabled port stays
@@ -16,6 +16,7 @@ reset, GPU present, flag cleared. With the GPU held in reset the machine
 boots without it after a single reset.
 
 Change-Id: I973c22bd2994eeb264cff607c4d81b17a7761040
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c    | 13 +++++++++++--
@@ -23,17 +24,17 @@ Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
  2 files changed, 15 insertions(+), 2 deletions(-)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index a6eb6fc272..833dd54b3e 100644
+index a6eb6fc272..e71592d66e 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -4,6 +4,7 @@
- #include <acpi/acpigen.h>
- #include <cf9_reset.h>
- #include <console/console.h>
+@@ -11,6 +11,7 @@
+ #include <gpio.h>
+ #include <intelblocks/pmclib.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
 +#include <pc80/mc146818rtc.h>
- #include <delay.h>
- #include <device/device.h>
- #include <device/pci_def.h>
+ #include <soc/pm.h>
+ #include <soc/pmc.h>
+ #include <static.h>
 @@ -131,10 +132,18 @@ void dgpu_detect(void)
  		const struct chipset_power_state *ps = pmc_get_power_state();
  

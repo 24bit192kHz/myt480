@@ -1,0 +1,36 @@
+From b35b2359a7377afa688d1253809651da70b7d171 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Thu, 1 Oct 2026 16:06:32 +0300
+Subject: [PATCH 15/17] mb/lenovo/sklkbl_thinkpad/t480: Wake from S4 on lid
+ open
+
+The _PRW of the lid in the vendor firmware of the T480 names S4, so
+opening the lid may wake it from hibernation. Do the same.
+
+TEST=T480: LID is listed for S4 in /proc/acpi/wakeup. Not tested: an
+actual wake from S4 by opening the lid.
+
+Change-Id: Iecd7b052f62adef8b2eac2022a77a6400d9e8d24
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
+index 22be737e73..82bc186d59 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
+@@ -4,6 +4,9 @@
+ #define BRIGHTNESS_DOWN \_SB.PCI0.GFX0.DECB
+ #define EC_LENOVO_H8_EXTENDED_FN_LAYOUT 1
+ #define THINKPAD_EC_GPE 22
++#if CONFIG(BOARD_LENOVO_T480)
++#define H8_LID_WAKE_STATE 4	/* as the vendor firmware */
++#endif
+ 
+ Name(\TCRT, 100)
+ Name(\TPSV, 90)
+-- 
+2.55.0
+

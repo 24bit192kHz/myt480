@@ -1,55 +1,69 @@
 # MX150 series for upstream coreboot
 
-The dGPU support as five patches on coreboot main (e1207bdb84, 2026-09-27), meant for
-https://review.coreboot.org. coreboot takes patches through Gerrit, not pull requests.
+The dGPU work and the T480 platform fixes as 17 patches on coreboot main
+2631796496 (2026-09-30), on Gerrit as topic `t480-dgpu`:
+https://review.coreboot.org/q/topic:t480-dgpu
+
+Author and sign-off: `24bit192kHz <24bit192khz@proton.me>`, the same person as
+https://github.com/24bit192kHz (whose profile carries that address) and this
+repository. The patches were written with an AI assistant; every one says so in a
+`Co-authored-by: Claude` trailer.
 
 | Patch | What it does |
 |---|---|
 | 0001 | `_ROM` gets the whole option ROM, not only what the one-byte size field of its header describes; never more than the CBFS file holds |
 | 0002 | power the dGPU in the bootblock and wait for its link, so FSP-S finds it on root port 1; full reset on the first boot after enabling it; power off before sleep |
-| 0003 | ACPI power resource: the OS can turn the GPU off and on at runtime |
+| 0003 | ACPI power resource: the OS can turn the GPU off and on at runtime (D3cold) |
 | 0004 | keep the setup option visible after the dGPU was disabled |
 | 0005 | documentation of the board |
-
-The difference to the flashed build: this series reads the option `dgpu_enable`, the
-flashed build reads CMOS byte 0x6f (it has no option backend).
+| 0006 | the full reset of 0002 happens once (CMOS byte 0x6d), never a reset loop |
+| 0007 | T480: Max_Payload_Size 256 on the dGPU, WLAN and SSD ports, as the vendor firmware |
+| 0008 | T480: no ASPM on the dGPU root port, as the vendor firmware |
+| 0009 | ec/lenovo/h8: option for ECs without a radio switch (WLSW returns 1) |
+| 0010 | ec/lenovo/h8: option for boards without a tablet switch (no MHKG) |
+| 0011 | ec/lenovo/h8: the mainboard can set the deepest state the lid wakes from |
+| 0012 | soc/intel/skylake: the GbE ACPI device (Wake-on-LAN in /proc/acpi/wakeup) |
+| 0013 | soc/intel/skylake: FSP gets the board's subsystem IDs (Kconfig, else the devicetree) |
+| 0014 | T480: selects the options of 0009 and 0010 |
+| 0015 | T480: the lid wakes from S4 |
+| 0016 | T480: GMM device 00:08.0 on |
+| 0017 | T480: subsystem IDs 17aa:225d in the override tree |
 
 ## State
 
 | | |
 |---|---|
-| Builds | T480, T480s, T580, X280, T470s, X380 Yoga; every patch on its own for the T480; with the setup menu (CFR) for T480 and X280 |
-| `checkpatch` | clean, apart from the sign-off that you add |
-| Tested on hardware | the code of 0001 to 0003 in builds for this T480 (C35, and C36 with the option read from CBFS in the bootblock): warm reset, first boot after enabling, S3 resume with a program on the GPU, 20 on/off cycles; the link wait reported 0 ms on a warm boot and 2 ms on resume |
-| Not tested | this series as built from coreboot main (only on the branch this laptop runs, base 61483663b2); a cold boot with the final code; patch 0004; T480s and T580 |
+| Builds | every patch on its own for T480, T480s, T580, X280, X380 Yoga and T470s; at the top of the series: every board in the tree, 966 configurations (6 more need the Go compiler for helper tools and were not built) |
+| Lint | `make gitconfig` hooks (`check-style`, `lint-stable`, checkpatch on each commit); `lint-stable` and `lint-extended` clean |
+| Tested on hardware | T480 (C51 = the flashed build with 0013 and 0017 as here): cold boot from S5, S3 resume with the watchdog armed, all PCH and system agent devices at 17aa:225d, MPS 256 on the dGPU/SSD ports, no ASPM on root port 1, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold. Earlier builds of the same code (C35 to C50): first boot after enabling the GPU, 70 driver load/unload cycles, hibernate/resume |
+| Not tested | T480s, T580 and the other variants on hardware; the setup menu of 0004; an actual wake from S4 by opening the lid |
 
-## What reviewers will ask
+## Found on the way (not in the series)
 
-- **The full reset in 0002** rests on what this one machine does: root port 1 stays
-  disabled across warm resets and comes back after a reset with a power cycle, and
-  `MEM_SR` tells the two apart. The numbers are in the commit message. There is no
-  Intel document behind it.
-- **T480s and T580** share the code and the pins. Somebody with one has to test.
-- **`drivers/lenovo/hybrid_graphics`** is for the older ThinkPads with a display
-  switch and does not fit this design, but it is the precedent for powering a GPU
-  before the ramstage.
+sconfig drops the `subsystemid` of a base devicetree when an override tree names
+the same device: `alloc_dev()` sets unset IDs to -1, and the merge copies the
+override's IDs whenever they are "non-zero", which -1 is. Every sklkbl variant
+re-declares `device domain 0 on`, so the `subsystemid 0x17aa 0x225d inherit` in
+the common `devicetree.cb` never reached a device (0017 works around it for the
+T480).
 
-## Before sending
+## Gerrit history
 
-1. Boot the series as built from main, with the external programmer at hand.
-2. `make gitconfig` in the coreboot tree (commit hook for the Change-Id).
-3. Commit under your real name and sign off:
-   `git rebase origin/main --exec 'git commit --amend --no-edit --reset-author --signoff'`
-4. Make the TEST= lines say what you tested.
-5. `git push origin HEAD:refs/for/main%topic=t480-dgpu`
+- v3, 2026-09-30, changes 95872 to 95883 (12 patches): Code-Review -2 on all from a
+  core developer, "Invalid sign-off"; Jenkins: patch 1 broke the arm64 build
+  (GOOGLE_CHERRY, unused function), the last patch failed lint-stable-024 (board
+  Kconfig must not set SUBSYSTEM_*_ID).
+- v4, 2026-10-01: both failures fixed; the T480-only options no longer apply to the
+  other variants (the X380 Yoga kept its tablet switch); the subsystem IDs come
+  from the devicetree; the h8 and T480 patches split into one change each
+  (changes 95872 to 95883 updated, 95912 to 95916 new).
 
-Send 0001 first: it stands on its own.
+## Sending a new version
 
-## Gerrit
-
-v3, pushed 2026-09-30 on top of coreboot main d440ade0d9, topic `t480-dgpu`
-(https://review.coreboot.org/q/topic:t480-dgpu): changes 95872 to 95883, one per
-patch in this directory, in order. The four commits with `[local]` prefixes in
-`../coreboot/patches` that are not in the series are local to this laptop's build
-(GRUB payload, panel power before FSP-S, the SMBIOS version that upstream already
-had, and the Thunderbolt root port wake).
+1. In a coreboot clone: `make gitconfig`, `git config user.name 24bit192kHz`,
+   `git config user.email 24bit192khz@proton.me`.
+2. `git am` the patches on coreboot main; build every patch
+   (`util/abuild/abuild -B -t LENOVO_T480,...`) and the whole tree.
+3. `git push origin HEAD:refs/for/main%topic=t480-dgpu`
+4. Answer reviewers yourself: coreboot does not accept AI-written replies to
+   human reviewers.

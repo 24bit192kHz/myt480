@@ -1,7 +1,7 @@
-From cfb07321155253013f307779ba92e8e801d4d18f Mon Sep 17 00:00:00 2001
+From b711e6cba880ee9ad8877815be2c62e6b3b4cf35 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:39:01 +0300
-Subject: [PATCH 08/12] mb/lenovo/sklkbl_thinkpad/t480: No ASPM on the dGPU
+Subject: [PATCH 08/17] mb/lenovo/sklkbl_thinkpad/t480: No ASPM on the dGPU
  root port
 
 The vendor firmware runs root port 1 with ASPM disabled (its FADT also
@@ -16,6 +16,7 @@ TEST=T480: LnkCap of 00:1c.0 reports "ASPM not supported", no L1SubCap;
 pass.
 
 Change-Id: I668d6d746d621bcb5a7cac2267ae6c0fc994c511
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb       | 3 +++

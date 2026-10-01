@@ -1,7 +1,7 @@
-From cb084bcbda091eb840f9800bf2bb3760fe2193a5 Mon Sep 17 00:00:00 2001
+From b356594756b7a7897ef1fc1adebd341388694c52 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:38:33 +0300
-Subject: [PATCH 07/12] mb/lenovo/sklkbl_thinkpad/t480: Vendor PCIe payload
+Subject: [PATCH 07/17] mb/lenovo/sklkbl_thinkpad/t480: Vendor PCIe payload
  sizes
 
 The vendor firmware sets Max_Payload_Size 256 on root ports 1 (dGPU), 7
@@ -16,6 +16,7 @@ the NVMe drive, 128 on the WLAN port and card; GRUB and Linux boot from
 the NVMe drive, GPU load test passes.
 
 Change-Id: I68282d42df3d974371227be0c1bff042ee7c7406
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb     | 5 +++++

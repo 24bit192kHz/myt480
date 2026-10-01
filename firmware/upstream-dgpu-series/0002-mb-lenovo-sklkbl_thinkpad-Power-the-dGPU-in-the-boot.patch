@@ -1,7 +1,7 @@
-From 33ae3ed025cdce08f53e08f7f037e278619bb958 Mon Sep 17 00:00:00 2001
+From 4702fe72462f36c48b84bb5f48ed65d738f39e17 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 02/12] mb/lenovo/sklkbl_thinkpad: Power the dGPU in the
+Subject: [PATCH 02/17] mb/lenovo/sklkbl_thinkpad: Power the dGPU in the
  bootblock
 
 The dGPU sits behind PCIe root port 1, and FSP-S disables root ports
@@ -50,7 +50,7 @@ TEST=Lenovo ThinkPad T480 with GeForce MX150 (10de:1d10).
      only.
 
 Change-Id: I84264d1f3834204a5b8167ae348325697159020c
-Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/Makefile.mk        |   3 +

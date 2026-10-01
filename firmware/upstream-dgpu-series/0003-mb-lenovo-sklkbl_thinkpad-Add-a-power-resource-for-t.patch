@@ -1,7 +1,7 @@
-From 3f34b1a02317c391c19413596a59e5f2356d511f Mon Sep 17 00:00:00 2001
+From f04875770052e71de0889dc848d7085a44d524ed Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 03/12] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
+Subject: [PATCH 03/17] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
  dGPU
 
 Let the OS turn the dGPU off and on at runtime (D3cold) with an ACPI
@@ -22,7 +22,7 @@ TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2: without a
      the GPU (video memory preserved by the driver).
 
 Change-Id: I1e821855916e285123909cff581cccc6f48ca241
-Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 70 +++++++++++++++++++
@@ -110,17 +110,17 @@ index 0000000000..067a17a450
 +	}
 +}
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index c92325d5fe..143ba68a69 100644
+index c92325d5fe..e4763ca764 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -2,6 +2,7 @@
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
  
  #include <acpi/acpi.h>
- #include <cf9_reset.h>
 +#include <acpi/acpigen.h>
+ #include <cf9_reset.h>
  #include <console/console.h>
  #include <delay.h>
- #include <device/device.h>
 @@ -53,6 +54,44 @@ static void dgpu_power_off(void)
  	gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
  }

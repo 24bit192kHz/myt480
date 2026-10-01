@@ -1,7 +1,7 @@
-From 650346e7fc5e21bb44d12e4cee352a4dbee61a9e Mon Sep 17 00:00:00 2001
+From bce2a5f44bcb82ef08038dd99104bc558b964ffb Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 01/12] device/pci_rom: Pass the whole option ROM to _ROM
+Subject: [PATCH 01/17] device/pci_rom: Pass the whole option ROM to _ROM
 
 pci_rom_ssdt() takes the length of an option ROM from the size field of
 its header. That field is a single byte, so it cannot describe more than
@@ -24,18 +24,18 @@ TEST=Lenovo ThinkPad T480 with GeForce MX150, VBIOS (184320 byte
      Builds for qemu-q35 and the six sklkbl_thinkpad variants.
 
 Change-Id: I595d1620390c826acc43e7f3e2680d2a21a245ec
-Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  src/device/pci_rom.c | 59 +++++++++++++++++++++++++++++++++++++++++---
  1 file changed, 56 insertions(+), 3 deletions(-)
 
 diff --git a/src/device/pci_rom.c b/src/device/pci_rom.c
-index dc41ef14ce..59c404d0db 100644
+index dc41ef14ce..411a4cbbe3 100644
 --- a/src/device/pci_rom.c
 +++ b/src/device/pci_rom.c
-@@ -42,6 +42,15 @@ static void *cbfs_boot_map_optionrom(uint16_t vendor, uint16_t device)
- 	return cbfs_map(name, NULL);
+@@ -344,10 +344,56 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
+ 	return current;
  }
  
 +static size_t cbfs_boot_optionrom_size(uint16_t vendor, uint16_t device)
@@ -47,13 +47,6 @@ index dc41ef14ce..59c404d0db 100644
 +	return cbfs_get_size(name);
 +}
 +
- struct rom_header *pci_rom_probe(const struct device *dev)
- {
- 	struct rom_header *rom_header = NULL;
-@@ -344,10 +353,47 @@ pci_rom_write_acpi_tables(const struct device *device, unsigned long current,
- 	return current;
- }
- 
 +/*
 + * The size field of the ROM header is a single byte and cannot describe more
 + * than 127.5 KiB, and it only covers the first image. Add up the image

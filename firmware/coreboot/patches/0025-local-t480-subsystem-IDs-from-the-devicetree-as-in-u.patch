@@ -1,0 +1,74 @@
+From 1e56fb92ca0b8934149a452e1ef0192e0790786f Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 16:03:49 +0300
+Subject: [PATCH] [local] t480: subsystem IDs from the devicetree, as in
+ upstream series v4
+
+soc/intel/skylake hands FSP the system agent's devicetree IDs instead of
+CONFIG_SUBSYSTEM_*; the T480 override tree carries subsystemid 0x17aa
+0x225d inherit (sconfig drops the one in devicetree.cb); the Kconfig
+defaults are gone (lint-stable-024).
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/Kconfig      |  6 ------
+ .../sklkbl_thinkpad/variants/t480/overridetree.cb |  3 +++
+ src/soc/intel/skylake/chip.c                      | 15 ++++++++++-----
+ 3 files changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
+index ca15468a6b..be8b7043f9 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
+@@ -130,9 +130,3 @@ config VARIANT_HAS_DGPU
+ 	bool
+ 
+ endif
+-
+-config SUBSYSTEM_VENDOR_ID
+-	default 0x17aa if BOARD_LENOVO_T480
+-
+-config SUBSYSTEM_DEVICE_ID
+-	default 0x225d if BOARD_LENOVO_T480
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index 4eaf6da3c4..ad8f5532ca 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -10,6 +10,9 @@ chip soc/intel/skylake
+ 	}"
+ 
+ 	device domain 0 on
++		# The subsystemid of devicetree.cb does not survive this override of the
++		# domain in sconfig, so give it here.
++		subsystemid 0x17aa 0x225d inherit
+ 		device ref gmm on end	# Gaussian Mixture Model accelerator, as the vendor firmware
+ 		device ref south_xhci on
+ 			register "usb2_ports" = "{
+diff --git a/src/soc/intel/skylake/chip.c b/src/soc/intel/skylake/chip.c
+index bcac385936..6c2f25c381 100644
+--- a/src/soc/intel/skylake/chip.c
++++ b/src/soc/intel/skylake/chip.c
+@@ -414,12 +414,17 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
+ 	/*
+ 	 * The subsystem IDs are read/write-once. FSP writes those of the PCH
+ 	 * root ports and of some other devices before coreboot's drivers run,
+-	 * so give it the board's IDs; with none configured it leaves them alone.
++	 * so give it the board's IDs: from Kconfig if set, like
++	 * pci_dev_enable_resources() does, else the devicetree's subsystemid
++	 * of the system agent. Without either, they stay 0 as before.
+ 	 */
+-	params->DefaultSvid = CONFIG_SUBSYSTEM_VENDOR_ID;
+-	params->PchSubSystemVendorId = CONFIG_SUBSYSTEM_VENDOR_ID;
+-	params->DefaultSid = CONFIG_SUBSYSTEM_DEVICE_ID;
+-	params->PchSubSystemId = CONFIG_SUBSYSTEM_DEVICE_ID;
++	const struct device *sa = pcidev_path_on_root(SA_DEVFN_ROOT);
++	const u16 svid = CONFIG_SUBSYSTEM_VENDOR_ID ? : (sa ? sa->subsystem_vendor : 0);
++	const u16 ssid = CONFIG_SUBSYSTEM_DEVICE_ID ? : (sa ? sa->subsystem_device : 0);
++	params->DefaultSvid = svid;
++	params->PchSubSystemVendorId = svid;
++	params->DefaultSid = ssid;
++	params->PchSubSystemId = ssid;
+ 
+ 	params->PchPmWolEnableOverride = config->WakeConfigWolEnableOverride;
+ 	params->PchPmPcieWakeFromDeepSx = config->WakeConfigPcieWakeFromDeepSx;
+-- 
+2.55.0
+

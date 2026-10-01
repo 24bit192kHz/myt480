@@ -33,6 +33,7 @@
 | 0022 | ec/lenovo/h8: options for boards without a wireless switch (the T480 EC has no such bit; WLSW read 0 and thinkpad_acpi hard-blocked Bluetooth and WWAN) or a tablet switch, and a lid wake-state macro | belongs in the series |
 | 0023 | soc/intel/skylake: the GbE ACPI device with its wake entry (Wake-on-LAN in `/proc/acpi/wakeup`), PME wake on root port 9 (Thunderbolt), and the board's subsystem IDs handed to FSP for the read/write-once registers it programs first | belongs in the series |
 | 0024 | t480: radios never hard-blocked, no tablet switch, lid wakes from S4, GMM 00:08.0 on, subsystem IDs 17aa:225d on every PCH and system agent device, as on the vendor firmware | belongs in the series |
+| 0025 | t480: the subsystem IDs come from the devicetree (`subsystemid 0x17aa 0x225d inherit` in the T480 override tree; sconfig drops the one in `devicetree.cb`) and soc/intel/skylake hands the system agent's IDs to FSP, instead of `CONFIG_SUBSYSTEM_*`, which upstream's lint rejects in a board Kconfig. Flashed as C51 | in the series (v4) |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied
