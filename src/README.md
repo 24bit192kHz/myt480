@@ -12,3 +12,6 @@
 
 `thermald-t480` is the only daemon allowed to write the fan level or the undervolt MSRs;
 thinkfan and throttled were removed from the system on 2026-10-01.
+
+`chadwm/README.md` is upstream's README. This tree differs from upstream: the keymap of
+HyDE (`chadwm/keybinds.txt`), its own bar modules in `scripts/bar.sh`, and no eww widget.

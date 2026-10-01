@@ -44,9 +44,9 @@ More commands: `list` (all trees: mounted? size, changed files),
 /usr/local with binary excludes), `help`.
 
 Single-file live tests via `shadow` also work for quick thermal-curve
-experiments — but remember the thermal single-writer rule: parked
-thinkfan/throttled configs won't take effect while thermald-t480 runs
-(syswork warns you; switching owners is a deliberate manual step).
+experiments — but remember the thermal single-writer rule: thermald-t480
+is the only daemon that writes the fan level and the undervolt; another fan or
+undervolt daemon must not run beside it (syswork warns about their configs).
 
 Sensitive paths (boot images, `etc/shadow`, sudoers, ssh host keys,
 `root/.ssh/`) refuse to apply unless you pass `--allow-sensitive`.
