@@ -33,7 +33,7 @@ repository. The patches were written with an AI assistant; every one says so in 
 
 | | |
 |---|---|
-| Builds | every patch on its own for T480, T480s, T580, X280, X380 Yoga and T470s; at the top of the series: every board in the tree, 966 configurations (6 more need the Go compiler for helper tools and were not built) |
+| Builds | every patch on its own for T480, T480s, T580, X280, X380 Yoga and T470s, and with the setup menu (`CONFIG_DRIVERS_OPTION_CFR`) at 0004 and at the top; at the top of the series: every board in the tree, 966 configurations (6 more need the Go compiler for helper tools and were not built) |
 | Lint | `make gitconfig` hooks (`check-style`, `lint-stable`, checkpatch on each commit); `lint-stable` and `lint-extended` clean |
 | Tested on hardware | T480 (C51 = the flashed build with 0013 and 0017 as here): cold boot from S5, S3 resume with the watchdog armed, all PCH and system agent devices at 17aa:225d, MPS 256 on the dGPU/SSD ports, no ASPM on root port 1, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold. Earlier builds of the same code (C35 to C50): first boot after enabling the GPU, 70 driver load/unload cycles, hibernate/resume |
 | Not tested | T480s, T580 and the other variants on hardware; the setup menu of 0004; an actual wake from S4 by opening the lid |
