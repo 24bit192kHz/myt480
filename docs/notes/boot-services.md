@@ -28,9 +28,7 @@ PID1: `s6-svscan -X3 -- /run/service` (confirmed via `ps -p 1`). NOT systemd/run
 
 | Name | What | Stock/Custom | Boot state |
 |---|---|---|---|
-| thermald | thermal daemon (custom wrapper, see §3) | CUSTOM | up |
-| thinkfan | fan control `thinkfan -n -c /etc/thinkfan.yaml` | CUSTOM | down-file (manual) |
-| throttled | `throttled` (undervolt/power-limit) | CUSTOM | down-file (manual) |
+| thermald | thermal daemon (custom wrapper, see §3) | CUSTOM | up (thinkfan and throttled, formerly parked with down files, were removed 2026-10-01) |
 | validity-rs | Rust fingerprint daemon for the 06cb:009a (`/usr/bin/validity-rs daemon`, pkg validity-rs) | CUSTOM | up, deps: open-fprintd (since 2026-09-29) |
 | python3-validity | Validity fingerprint dbus-service + fw restore | CUSTOM | usable, disabled 2026-09-29 (rollback for validity-rs) |
 | open-fprintd | `/usr/lib/open-fprintd/open-fprintd --debug` | CUSTOM | up |
@@ -55,10 +53,6 @@ plus all CUSTOM down-files above.
 - `/etc/s6/sv/thermald/`: `type=longrun`, no deps file, NO down file (enabled).
   `run`: `#!/bin/sh` + `exec /usr/local/bin/thermald-t480 -c /etc/thermald.conf`
   (custom binary; owns TCC via MSR 0x1A2 trip 90 per modprobe comment).
-- `/etc/s6/sv/thinkfan/`: `type=longrun`, `down` present (disabled at boot).
-  `run`: `rm -f /var/run/thinkfan.pid` + `exec thinkfan -n -c /etc/thinkfan.yaml`.
-- `/etc/s6/sv/throttled/`: `type=longrun`, `down` present.
-  `run`: `exec /usr/bin/throttled`.
   `run`: `export HOME=/home/btw USER=btw LOGNAME=btw` +
 - `/etc/s6/sv/python3-validity/`: `type=longrun`, enabled, `dependencies.d/open-fprintd` (empty).
   `run`: `mkdir -p /var/run/python-validity /var/lib/python-validity`; copies persistent

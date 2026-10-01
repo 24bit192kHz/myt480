@@ -23,7 +23,7 @@ Subsystems you own knowledge of:
   Inventory: `corpus/configs/session/`, notes in `corpus/notes/quickshell.md`.
 - **thermald-t480 thermal stack** — custom C daemon, SOLE owner of fan
   (`/proc/acpi/ibm/fan`) + MSR 0x150 (undervolt) + MSR 0x1A2 (TCC).
-  thinkfan + throttled are parked (s6 `down`). See `corpus/notes/thermal.md`.
+  thinkfan and throttled were removed on 2026-10-01. See `corpus/notes/thermal.md`.
 - **s6 boot** — s6/s6-rc as PID1, service defs in `/etc/s6/sv/<name>/`
   (`type` + `run`), live state via `s6-svstat` (needs root).
   See `corpus/notes/boot-services.md`.
@@ -87,15 +87,15 @@ All live-system edits go through syswork (`src/syswork/syswork` source; installe
 overlayfs worktrees on ext4 — see `corpus/notes/syswork.md`).
 Never edit `/etc` or `/usr/local` in place from an agent session.
 
-Example — test a thinkfan curve without touching live:
+Example — test a fan curve without touching live:
 
 ```bash
 sudo syswork new fan-test
-# edit /srv/work/fan-test/etc/thinkfan.yaml (live untouched)
+# edit /srv/work/fan-test/etc/thermald.conf (live untouched)
 syswork diff fan-test --full
-sudo syswork shadow fan-test /etc/thinkfan.yaml  # live-test one file
-s6-svc -r /run/service/thinkfan 2>/dev/null || true
-sudo syswork unshadow /etc/thinkfan.yaml          # instant revert
+sudo syswork shadow fan-test /etc/thermald.conf   # live-test one file
+# thermald-t480 reloads the file by itself (log line "conf reloaded")
+sudo syswork unshadow /etc/thermald.conf           # instant revert
 sudo syswork apply fan-test --yes                 # commit to live + git
 sudo syswork drop fan-test --yes
 ```
@@ -122,7 +122,7 @@ tree after a successful commit.
   sudoers.d/,ssh/ssh_host_}`, `root/.ssh/` need `--allow-sensitive`
   on apply. Boot-image changes additionally need a reboot plan.
 - **Thermal single-writer** — thermald-t480 owns fan + MSR. Never
-  enable thinkfan or throttled alongside it (`s6-svc -u` on either
+  run another fan or undervolt daemon alongside it (thinkfan and throttled were removed 2026-10-01; `s6-svc -u` on any such service
   while thermald-t480 runs is forbidden). To switch control: stop
   thermald first (`s6-svc -d`), then bring up the replacement —
   never both. syswork warns on thinkfan.yaml/throttled.conf changes

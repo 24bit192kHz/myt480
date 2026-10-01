@@ -55,3 +55,25 @@ instants; a short RTC alarm makes the wake immediate after power-off):
 image_size 0 made the kernel shrink memory for 2-3 s before the snapshot; 40 % avoids
 that. LZ4 (kernel 7.2.8-4, `HIBERNATION_DEF_COMP=lz4`) cuts the resume by 1.5 s. The
 tune runs from `local.d/hibernate-tune.start` (the rc.local call did not run).
+
+## 2026-10-01: battery sweep
+
+`sweep-batt.sh -100` on battery (external battery draining first, charger out, PL1 15 W,
+package around 62 C, each candidate 180 s of the same verified stress plus MX150 renders;
+core = cache only, iGPU and uncore at 0 during the sweep):
+
+| core = cache | result |
+|---|---|
+| -100 to -120 | pass, 1 mV steps |
+| -121 | froze in the burst phase, TCO watchdog reset, no machine check logged |
+
+So the battery limit is 3 mV tighter than on AC and fails as a freeze instead of a logged
+machine check, which matches the old -130 freezing there within minutes. The installed
+battery set stays at -100/-100/-60/-50 for now; -110 for core/cache would keep the same
+margin as the AC set. thermald-t480 does not need to be stopped for a sweep: it rewrites
+the offsets only on a power-source change or when the power-limit registers drift, so
+after a sweep `touch /etc/thermald.conf` makes it re-apply its profile (the sweep leaves
+the offsets at 0). Note that `sweep-batt.sh` checks only BAT0 for its 20 % stop while
+BAT1 drains first.
+
+Also fixed: the kit scripts referred to `uvtest3.sh`, which is `uvtest.sh` here.

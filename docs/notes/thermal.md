@@ -1,6 +1,7 @@
 # T480 Thermal / Fan / Undervolt Stack
 
 > **2026-09-28:** partly superseded, see [2026-09-28-overhaul.md](2026-09-28-overhaul.md).
+> **2026-10-01:** thinkfan and throttled were removed from the system (packages uninstalled; s6 service dirs with their `down` files, `local.d/throttled.start`, `/etc/thinkfan.yaml` and `/etc/throttled.conf` deleted). thermald-t480 is the only thermal daemon. The thinkfan and throttled sections below stay as a record of the values they had.
 
 Recon date: 2026-09-19. Host: Artix Linux, ThinkPad T480, i7-8650U (4C/8T, TjMax 100C).
 Init: s6 (s6-rc). All service defs under `/etc/s6/sv/<name>/` (`type` + `run`).

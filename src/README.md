@@ -10,5 +10,5 @@
 | `chadwm/` | window manager with my configuration and scripts | `cd chadwm && make install`; `UPSTREAM.txt` names the upstream commit |
 | `third-party/` | programs from others | clone `upstream` at `commit` from `UPSTREAM.txt`, apply `local.patch` if there is one |
 
-Only one of `thermald-t480`, `thinkfan` and `throttled` may run: they all write the
-fan or the same MSRs.
+`thermald-t480` is the only daemon allowed to write the fan level or the undervolt MSRs;
+thinkfan and throttled were removed from the system on 2026-10-01.
