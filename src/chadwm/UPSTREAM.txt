@@ -16,4 +16,4 @@ ca0bdc6 HyDE behaviour: dwindle default layout with togglesplit/resize per node,
 a92e570 brightd in C (masked evdev, no idle wakeups); bar.sh: builtins over forks; bar font JetBrainsMono NF (Iosevka not installed)
 a5c0ddf bar.sh: 5 s aligned refresh, battery every 30 s (combined packs, energy_* or charge_*), xsetroot only on change
 dcad846 chadwm: _CHADWM_VIEW root message (view first empty tag / previous tagset, used by dwm-lock); run.sh: picom first, wallpaper start in background; grayscale theme, bar theme, brightd, keybinds
-working tree of 2026-09-30 on top (uncommitted): chadwm/bartip.c, chadwm/config.def.h, chadwm/dwm.c, keybinds.txt, scripts/bar.sh, scripts/barclick.sh, scripts/barhover.sh, scripts/calendar.sh, scripts/hijri.c, scripts/powermenu.sh, scripts/vol.sh
+working tree of 2026-09-30 on top (uncommitted): chadwm/bartip.c, chadwm/config.def.h, chadwm/dwm.c, keybinds.txt, scripts/bar.sh, scripts/barclick.sh, scripts/barhover.sh, scripts/calendar.sh, scripts/hijri.c, scripts/monitor.sh, scripts/powermenu.sh, scripts/run.sh, scripts/vol.sh

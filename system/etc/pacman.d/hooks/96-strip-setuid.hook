@@ -1,0 +1,13 @@
+# Setuid helpers nothing here uses (no ecryptfs, NFS is mounted by root): keep the bit off
+# after package updates.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/bin/mount.ecryptfs_private
+Target = usr/bin/mount.nfs
+
+[Action]
+Description = Removing the setuid bit from unused mount helpers...
+When = PostTransaction
+Exec = /usr/bin/chmod ug-s /usr/bin/mount.ecryptfs_private /usr/bin/mount.nfs

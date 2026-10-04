@@ -23,6 +23,9 @@ xset s off; xset s noblank; xset -dpms
 # brightd is only a fallback for a kernel without blkeys.
 [ -d /sys/module/blkeys ] ||
 	pgrep -x brightd >/dev/null 2>&1 || setsid ~/.local/bin/brightd >/dev/null 2>&1 &
+# External monitor: native mode, highest refresh, left of eDP-1; re-applied
+# on every hotplug (monitor.sh watch is a singleton).
+~/.config/chadwm/scripts/monitor.sh watch >/dev/null 2>&1 &
 # Neutral root prevents the static image from flashing beneath the live Earth.
 xsetroot -solid black >/dev/null 2>&1
 picom &

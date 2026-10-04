@@ -858,6 +858,9 @@ main(int argc, char **argv)
 		die("slock: unknown user %s\n", target);
 	if (pwd->pw_uid == 0)
 		die("slock: refusing to lock for root\n");
+	/* only the user themself or root (sleep hook) may lock for that user */
+	if (getuid() != 0 && getuid() != pwd->pw_uid)
+		die("slock: SLOCK_USER is not the calling user\n");
 	/* setuid hygiene: no user-controlled fontconfig paths as root */
 	setenv("HOME", pwd->pw_dir, 1);
 	unsetenv("FONTCONFIG_FILE");
@@ -873,6 +876,10 @@ main(int argc, char **argv)
 		die("slock: pipe: %s\n", strerror(errno));
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("slock: cannot open display\n");
+	/* The display is open (HOME was needed for ~/.Xauthority). From here on
+	 * fontconfig and Xft run as root: keep them away from the user's
+	 * ~/.config/fontconfig, ~/.fonts and font caches. */
+	setenv("HOME", "/var/empty", 1);
 	if (!XRRQueryExtension(dpy, &rrbase, &rrerr))
 		rrbase = -1;
 

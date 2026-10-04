@@ -35,6 +35,8 @@ Artix Linux with s6.
 | `local.d/t480-reseal.start`, `usr-local/sbin/t480-reseal` | TPM side of the disk encryption, see `kernel/early-init/README.md` |
 | `pacman.d/hooks/95-t480-sign.hook`, `usr-local/sbin/t480-sign-kernel` | sign the kernel for the GRUB in the firmware after every install |
 | `initcpio/` (`t480crypt`), `mkinitcpio*.conf` | the distro kernels ask the LUKS passphrase and open root and swap |
+| `X11/xorg.conf.d/10-serverflags.conf` | no VT switch and no server kill by key, so a locked X session cannot be left from the keyboard |
+| `pacman.d/hooks/96-strip-setuid.hook` | keeps the setuid bit off two mount helpers nothing here uses |
 | `usr-local/libexec/slock-keyring` | opens the login keyring after a fingerprint unlock with a key sealed in the TPM; must stay mode 0755 (slock checks it with the real uid) |
 
 `/etc` and `/usr/local` are git repositories on the laptop and are changed through
