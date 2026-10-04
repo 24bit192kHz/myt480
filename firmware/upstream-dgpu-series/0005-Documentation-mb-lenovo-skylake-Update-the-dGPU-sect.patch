@@ -1,12 +1,12 @@
-From 5c80b3d59ee6d307b3df0b4f090f3e203f0c4f49 Mon Sep 17 00:00:00 2001
+From 67aa0986560a9a5e74e4ae62f8ae0dd367dcaeea Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:55 +0300
-Subject: [PATCH 05/17] Documentation/mb/lenovo/skylake: Update the dGPU
+Subject: [PATCH 05/15] Documentation/mb/lenovo/skylake: Update the dGPU
  section
 
 The power sequence and the proprietary driver work now. Describe the
-option, the full reset on the first boot with the GPU and the power
-management.
+option, the hot-plug root port that keeps the GPU's port through FSP-S
+and the power management.
 
 Change-Id: I9cbbb7d22a0036c44c61f1d8f3820775a0a5e908
 Co-authored-by: Claude <noreply@anthropic.com>
@@ -16,7 +16,7 @@ Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
  1 file changed, 18 insertions(+), 4 deletions(-)
 
 diff --git a/Documentation/mainboard/lenovo/skylake.md b/Documentation/mainboard/lenovo/skylake.md
-index 672be9f4db..ae62f02ec5 100644
+index 672be9f4db..4e3db112e3 100644
 --- a/Documentation/mainboard/lenovo/skylake.md
 +++ b/Documentation/mainboard/lenovo/skylake.md
 @@ -193,11 +193,25 @@ binaries if only flashing the `bios` region.
@@ -36,10 +36,10 @@ index 672be9f4db..ae62f02ec5 100644
 +
 +### Nvidia dGPU
 +
-+The option `dgpu_enable` powers the GPU in the bootblock, so that it is on the PCIe
-+bus when FSP-S looks at root port 1. FSP-S disables a root port without a link, and the
-+port then stays disabled until the next power cycle. The first boot after the option
-+was turned on therefore does one full reset.
++With the option `dgpu_enable`, the GPU gets its power right before FSP-S. FSP-S
++disables a root port without a link, and the GPU has none yet at that point, so root
++port 1 is marked as hot-pluggable in the devicetree: FSP-S then keeps it, and the GPU
++is found in the PCI scan. The OS sees a hot-plug slot on that port.
 +
 +An ACPI power resource lets the OS turn the GPU off (D3cold) while no driver uses it.
 +The GPU is also turned off before the system enters S3, S4 or S5.
@@ -49,6 +49,3 @@ index 672be9f4db..ae62f02ec5 100644
  
  ## Verified Working
  
--- 
-2.55.0
-

@@ -1,0 +1,37 @@
+From 0583c15448e4092b237b5be5f18938c62df0e6b5 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Sun, 4 Oct 2026 15:48:40 +0300
+Subject: [PATCH 12/15] mb/lenovo/sklkbl_thinkpad/t480: No radio switch
+
+The T480 has no wireless switch: its EC reads 0 at the switch bit, and
+the vendor firmware has a constant WLSW. Say so in the T480 devicetree;
+the other variants were not tested.
+
+TEST=T480: Bluetooth is no longer hard-blocked, initialises and loads
+its firmware.
+
+Change-Id: I8ac9653faec9e77764e27dc3da4593eec458ad37
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb   | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index 5f837eba77..2a1cc612bf 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -2,6 +2,13 @@
+ 
+ chip soc/intel/skylake
+ 	device domain 0 on
++		device ref lpc_espi on
++			chip ec/lenovo/h8
++				# The EC bit of the wireless switch reads 0; the vendor WLSW is a constant
++				register "no_wireless_switch" = "true"
++				device ref lenovo_ec on end
++			end
++		end
+ 		device ref south_xhci on
+ 			register "usb2_ports" = "{
+ 				[0] = USB2_PORT_MID(OC1),		// USB-A

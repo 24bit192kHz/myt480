@@ -1,7 +1,7 @@
-From 27c070f6be2a03a1cfc942cc80d6458c1ee1df67 Mon Sep 17 00:00:00 2001
+From 6c8e32db29057ff805eeca126adc95d8b8c14dd3 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 04/17] mb/lenovo/sklkbl_thinkpad: Keep the option of a
+Subject: [PATCH 04/15] mb/lenovo/sklkbl_thinkpad: Keep the option of a
  disabled dGPU
 
 The setup menu hides the option "dgpu_enable" if the device of the dGPU
@@ -47,10 +47,10 @@ index 5585d1567b..103cc5dc42 100644
  
  /* dGPU */
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index e4763ca764..a6eb6fc272 100644
+index 8e8c8e80a6..1fedee19cc 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -92,6 +92,11 @@ void dgpu_fill_ssdt(const struct device *dev)
+@@ -137,6 +137,11 @@ void dgpu_fill_ssdt(const struct device *dev)
  	acpigen_write_scope_end();
  }
  
@@ -59,10 +59,10 @@ index e4763ca764..a6eb6fc272 100644
 +	return gpio_get(GPIO_DISCRETE_PRESENCE) == 0;	/* active low */
 +}
 +
- /* The GPU was powered in the bootblock, see dgpu_early.c */
+ /* Runs after FSP-S and before the PCI scan; the GPU was powered before FSP-S */
  void dgpu_detect(void)
  {
-@@ -100,7 +105,7 @@ void dgpu_detect(void)
+@@ -145,7 +150,7 @@ void dgpu_detect(void)
  	const struct device *rp = dgpu->upstream ? dgpu->upstream->dev : NULL;
  	int dgfx_vram_id;
  
@@ -72,17 +72,14 @@ index e4763ca764..a6eb6fc272 100644
  		dgpu->enabled = 0;
  		return;
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
-index 3723511824..a46f51eb2d 100644
+index 8789386167..9dd206c12a 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
-@@ -13,6 +13,7 @@ uint8_t variant_memory_sku(void);
+@@ -12,6 +12,7 @@ void variant_config_gpios(void);
+ uint8_t variant_memory_sku(void);
  
  void dgpu_power_on(void);
- void dgpu_wait_for_link(void);
 +bool dgpu_present(void);
  void dgpu_detect(void);
  void dgpu_fill_ssdt(const struct device *dev);
  
--- 
-2.55.0
-

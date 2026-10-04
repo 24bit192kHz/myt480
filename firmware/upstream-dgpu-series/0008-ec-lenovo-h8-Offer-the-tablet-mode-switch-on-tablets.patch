@@ -1,0 +1,178 @@
+From 80697927f655cc395d25c59fb9e9d691e7e89c06 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Sun, 4 Oct 2026 15:48:39 +0300
+Subject: [PATCH 08/15] ec/lenovo/h8: Offer the tablet mode switch on tablets
+ only
+
+thinkpad_acpi registers a tablet mode switch when HKEY has an MHKG
+method, and every board with this EC got one. Describe the switch in
+the devicetree instead: the SSDT carries MHKG when the register
+has_tablet_mode_switch is set.
+
+Set it where a tablet uses the devicetree: X60 (X60t), X200 (X200t),
+X201 (X201t), X220 (X220 Tablet), X230 (X230t, shared with the X230;
+the X230s clears it) and the X380 Yoga. All other ThinkPads lose the
+switch.
+
+TEST=T480: thinkpad_acpi registers no tablet mode switch. X380 Yoga
+and X230t builds: MHKG is in the SSDT code path (not run on hardware).
+
+Change-Id: I4db98acce5c2d1d19042623178196fdb9395e4ae
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/ec/lenovo/h8/acpi/thinkpad.asl                 |  6 ------
+ src/ec/lenovo/h8/chip.h                            |  2 ++
+ src/ec/lenovo/h8/ssdt.c                            | 14 ++++++++++++++
+ .../variants/x380_yoga/overridetree.cb             |  7 +++++++
+ src/mainboard/lenovo/x200/devicetree.cb            |  1 +
+ src/mainboard/lenovo/x201/devicetree.cb            |  1 +
+ .../lenovo/x220/variants/x220/overridetree.cb      |  1 +
+ src/mainboard/lenovo/x230/devicetree.cb            |  1 +
+ .../lenovo/x230/variants/x230s/overridetree.cb     |  1 +
+ src/mainboard/lenovo/x60/devicetree.cb             |  1 +
+ 10 files changed, 29 insertions(+), 6 deletions(-)
+
+diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
+index ac30f9339e..d805b3ee4e 100644
+--- a/src/ec/lenovo/h8/acpi/thinkpad.asl
++++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
+@@ -119,12 +119,6 @@ Device (HKEY)
+ 		Return (0x07FFFFFF)
+ 	}
+ 
+-	/* Report tablet mode switch state */
+-	Method (MHKG, 0, NotSerialized)
+-	{
+-		Return (TBSW << 3)
+-	}
+-
+ 	/* Mute audio */
+ 	Method (SSMS, 1, NotSerialized)
+ 	{
+diff --git a/src/ec/lenovo/h8/chip.h b/src/ec/lenovo/h8/chip.h
+index 0cd28514c5..975806cfc3 100644
+--- a/src/ec/lenovo/h8/chip.h
++++ b/src/ec/lenovo/h8/chip.h
+@@ -34,6 +34,8 @@ struct ec_lenovo_h8_config {
+ 	bool has_keyboard_backlight;
+ 	bool has_power_management_beeps;
+ 	bool has_uwb;
++	/* The board is, or shares this devicetree with, a tablet */
++	bool has_tablet_mode_switch;
+ 	/* The EC has no master wireless switch bit (0x48 reads 0) */
+ 	bool no_wireless_switch;
+ 
+diff --git a/src/ec/lenovo/h8/ssdt.c b/src/ec/lenovo/h8/ssdt.c
+index 4621959d8b..3214ab4261 100644
+--- a/src/ec/lenovo/h8/ssdt.c
++++ b/src/ec/lenovo/h8/ssdt.c
+@@ -42,5 +42,19 @@ void h8_ssdt_generator(const struct device *dev)
+ 	acpigen_write_name_byte("HUWB", h8_has_uwb() ? ONE_OP : ZERO_OP);
+ 	acpigen_write_name_byte("HWSW", conf->no_wireless_switch ? ZERO_OP : ONE_OP);
+ 
++	/*
++	 * thinkpad_acpi registers a tablet mode switch when MHKG exists, so
++	 * only tablets get it: Method (MHKG) { Return (TBSW << 3) }
++	 */
++	if (conf->has_tablet_mode_switch) {
++		acpigen_write_method("MHKG", 0);
++		acpigen_emit_byte(RETURN_OP);
++		acpigen_emit_byte(SHIFT_LEFT_OP);
++		acpigen_emit_namestring("TBSW");
++		acpigen_write_integer(3);
++		acpigen_emit_byte(ZERO_OP); /* no target */
++		acpigen_pop_len(); /* Method MHKG */
++	}
++
+ 	acpigen_pop_len(); /* Scope HKEY */
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/x380_yoga/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/x380_yoga/overridetree.cb
+index 4f4a66a8e9..19e786259e 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/x380_yoga/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/x380_yoga/overridetree.cb
+@@ -154,5 +154,12 @@ chip soc/intel/skylake
+ 				device pci 00.0 on end
+ 			end
+ 		end
++
++		device ref lpc_espi on
++			chip ec/lenovo/h8
++				register "has_tablet_mode_switch" = "true"
++				device ref lenovo_ec on end
++			end
++		end
+ 	end
+ end
+diff --git a/src/mainboard/lenovo/x200/devicetree.cb b/src/mainboard/lenovo/x200/devicetree.cb
+index cd35413e6b..f6cb87d95e 100644
+--- a/src/mainboard/lenovo/x200/devicetree.cb
++++ b/src/mainboard/lenovo/x200/devicetree.cb
+@@ -114,6 +114,7 @@ chip northbridge/intel/gm45
+ 				end
+ 
+ 				chip ec/lenovo/h8
++					register "has_tablet_mode_switch" = "true"	# X200t
+ 					device pnp 62.0 alias lenovo_ec on
+ 						io 0x60 = 0x62
+ 						io 0x62 = 0x66
+diff --git a/src/mainboard/lenovo/x201/devicetree.cb b/src/mainboard/lenovo/x201/devicetree.cb
+index 87893c5040..966e369fd7 100644
+--- a/src/mainboard/lenovo/x201/devicetree.cb
++++ b/src/mainboard/lenovo/x201/devicetree.cb
+@@ -111,6 +111,7 @@ chip northbridge/intel/ironlake
+ 				end
+ 
+ 				chip ec/lenovo/h8
++					register "has_tablet_mode_switch" = "true"	# X201t
+ 					device pnp 62.0 alias lenovo_ec on
+ 						io 0x60 = 0x62
+ 						io 0x62 = 0x66
+diff --git a/src/mainboard/lenovo/x220/variants/x220/overridetree.cb b/src/mainboard/lenovo/x220/variants/x220/overridetree.cb
+index e2402e9a20..1a4d757788 100644
+--- a/src/mainboard/lenovo/x220/variants/x220/overridetree.cb
++++ b/src/mainboard/lenovo/x220/variants/x220/overridetree.cb
+@@ -108,6 +108,7 @@ chip northbridge/intel/sandybridge
+ 				chip ec/lenovo/h8
+ 					device ref lenovo_ec on end
+ 					register "has_thinklight" = "true"
++					register "has_tablet_mode_switch" = "true"	# X220 Tablet
+ 					register "eventa_enable" = "0x01"
+ 					register "eventb_enable" = "0xf0"
+ 				end
+diff --git a/src/mainboard/lenovo/x230/devicetree.cb b/src/mainboard/lenovo/x230/devicetree.cb
+index 82b6098364..f9bfafdd3a 100644
+--- a/src/mainboard/lenovo/x230/devicetree.cb
++++ b/src/mainboard/lenovo/x230/devicetree.cb
+@@ -111,6 +111,7 @@ chip northbridge/intel/sandybridge
+ 				end
+ 
+ 				chip ec/lenovo/h8
++					register "has_tablet_mode_switch" = "true"	# X230t
+ 					device pnp 62.0 alias lenovo_ec on
+ 						io 0x60 = 0x62
+ 						io 0x62 = 0x66
+diff --git a/src/mainboard/lenovo/x230/variants/x230s/overridetree.cb b/src/mainboard/lenovo/x230/variants/x230s/overridetree.cb
+index e8f668c989..044b93bfe4 100644
+--- a/src/mainboard/lenovo/x230/variants/x230s/overridetree.cb
++++ b/src/mainboard/lenovo/x230/variants/x230s/overridetree.cb
+@@ -40,6 +40,7 @@ chip northbridge/intel/sandybridge
+ 			device ref pcie_rp3 off end
+ 			device ref lpc on
+ 				chip ec/lenovo/h8
++					register "has_tablet_mode_switch" = "false"
+ 					register "config1" = "0x05"
+ 					register "config3" = "0xc4"
+ 					register "event5_enable" = "0x3c"
+diff --git a/src/mainboard/lenovo/x60/devicetree.cb b/src/mainboard/lenovo/x60/devicetree.cb
+index 9ccf11869a..dcc34398ef 100644
+--- a/src/mainboard/lenovo/x60/devicetree.cb
++++ b/src/mainboard/lenovo/x60/devicetree.cb
+@@ -101,6 +101,7 @@ chip northbridge/intel/i945
+ 					register "dock_event_enable" = "true"
+ 				end
+ 				chip ec/lenovo/h8
++					register "has_tablet_mode_switch" = "true"	# X60t
+ 					device pnp 62.0 alias lenovo_ec on
+ 						io 0x60 = 0x62
+ 						io 0x62 = 0x66

@@ -1,7 +1,7 @@
-From fe332d060a7eba928809c76a904a906e731ac1cc Mon Sep 17 00:00:00 2001
+From 7d9b534108e4feae455f3dd1d6a7818b78828b9f Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Thu, 1 Oct 2026 16:06:47 +0300
-Subject: [PATCH 17/17] mb/lenovo/sklkbl_thinkpad/t480: Set the subsystem IDs
+Subject: [PATCH 15/15] mb/lenovo/sklkbl_thinkpad/t480: Set the subsystem IDs
 
 The vendor firmware gives the PCH and system agent devices of the T480
 the subsystem IDs 17aa:225d. The subsystemid in devicetree.cb does not
@@ -21,7 +21,7 @@ Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
  1 file changed, 3 insertions(+)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
-index 412bba3268..ee1e9ad808 100644
+index 5615b33f25..51892b9f27 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
 @@ -2,6 +2,9 @@
@@ -32,8 +32,5 @@ index 412bba3268..ee1e9ad808 100644
 +		# domain in sconfig, so give it here.
 +		subsystemid 0x17aa 0x225d inherit
  		device ref gmm on end	# Gaussian Mixture Model accelerator, as the vendor firmware
- 		device ref south_xhci on
- 			register "usb2_ports" = "{
--- 
-2.55.0
-
+ 		device ref lpc_espi on
+ 			chip ec/lenovo/h8

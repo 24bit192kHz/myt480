@@ -1,0 +1,88 @@
+From 49a752e03e1751159abca71c1ff70bcbc8c9cf83 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <24bit192khz@proton.me>
+Date: Sun, 4 Oct 2026 15:47:58 +0300
+Subject: [PATCH 07/15] ec/lenovo/h8: Add a devicetree option for boards
+ without a radio switch
+
+Newer ECs have no master wireless switch bit at 0x48. It reads 0, so
+thinkpad_acpi hard-blocks Bluetooth and WWAN on every boot, while the
+vendor firmware's WLSW is a constant.
+
+Describe that in the devicetree: with the register no_wireless_switch
+set, the SSDT says so (HWSW) and WLSW returns 1. Boards that do not
+set it behave as before.
+
+TEST=T480 with the register set: thinkpad_acpi reports "radio switch
+found; radios are enabled", the Bluetooth and WWAN rfkill switches are
+unblocked.
+
+Change-Id: Ia3ffeeb3951c4c42829c10e97db9d85c1efbdcac
+Co-authored-by: Claude <noreply@anthropic.com>
+Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
+---
+ src/ec/lenovo/h8/acpi/thinkpad.asl | 7 ++++++-
+ src/ec/lenovo/h8/chip.h            | 2 ++
+ src/ec/lenovo/h8/ssdt.c            | 5 ++++-
+ 3 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
+index f8f2dc0292..ac30f9339e 100644
+--- a/src/ec/lenovo/h8/acpi/thinkpad.asl
++++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
+@@ -8,6 +8,7 @@ Device (HKEY)
+ 	External (\HKLT, IntObj)
+ 	External (\HKBL, IntObj)
+ 	External (\HUWB, IntObj)
++	External (\HWSW, IntObj)
+ 
+ 	Name (_HID, EisaId (CONFIG_THINKPADEC_HKEY_EISAID))
+ 
+@@ -152,7 +153,11 @@ Device (HKEY)
+ 	/* Master wireless switch state */
+ 	Method (WLSW, 0, NotSerialized)
+ 	{
+-		Return (\_SB.PCI0.LPCB.EC.GSTS)
++		If (HWSW) {
++			Return (\_SB.PCI0.LPCB.EC.GSTS)
++		}
++		/* No switch: the radios are never blocked by it */
++		Return (1)
+ 	}
+ 
+ 	/* Set to one on first boot */
+diff --git a/src/ec/lenovo/h8/chip.h b/src/ec/lenovo/h8/chip.h
+index 4ac686ea2d..0cd28514c5 100644
+--- a/src/ec/lenovo/h8/chip.h
++++ b/src/ec/lenovo/h8/chip.h
+@@ -34,6 +34,8 @@ struct ec_lenovo_h8_config {
+ 	bool has_keyboard_backlight;
+ 	bool has_power_management_beeps;
+ 	bool has_uwb;
++	/* The EC has no master wireless switch bit (0x48 reads 0) */
++	bool no_wireless_switch;
+ 
+ 	u8 bdc_gpio_num;
+ 	u8 bdc_gpio_lvl;
+diff --git a/src/ec/lenovo/h8/ssdt.c b/src/ec/lenovo/h8/ssdt.c
+index fbe7070df0..4621959d8b 100644
+--- a/src/ec/lenovo/h8/ssdt.c
++++ b/src/ec/lenovo/h8/ssdt.c
+@@ -24,7 +24,9 @@ static char *h8_dsdt_scope(const struct device *dev, const char *scope)
+  */
+ void h8_ssdt_generator(const struct device *dev)
+ {
+-	if (!acpi_device_path(dev))
++	const struct ec_lenovo_h8_config *conf = dev->chip_info;
++
++	if (!acpi_device_path(dev) || !conf)
+ 		return;
+ 
+ 	printk(BIOS_INFO, "ACPI:    * H8\n");
+@@ -38,6 +40,7 @@ void h8_ssdt_generator(const struct device *dev)
+ 	acpigen_write_name_byte("HKLT", h8_thinklight_active() ? ONE_OP : ZERO_OP);
+ 	acpigen_write_name_byte("HKBL", h8_kb_backlight_active() ? ONE_OP : ZERO_OP);
+ 	acpigen_write_name_byte("HUWB", h8_has_uwb() ? ONE_OP : ZERO_OP);
++	acpigen_write_name_byte("HWSW", conf->no_wireless_switch ? ZERO_OP : ONE_OP);
+ 
+ 	acpigen_pop_len(); /* Scope HKEY */
+ }

@@ -39,7 +39,7 @@ Every directory has its own README.
 | `firmware/coreboot/` | base commit, patches, `.config` as built, `site-local/` (defconfig, `grub.cfg`, blobs, VBIOS) |
 | `firmware/libgfxinit/` | patches for the `3rdparty/libgfxinit` submodule |
 | `firmware/grub/` | base commit and patches for the GRUB payload |
-| `firmware/upstream-dgpu-series/` | the MX150 and T480 work as 17 patches on coreboot main, on Gerrit as topic `t480-dgpu` |
+| `firmware/upstream-dgpu-series/` | the MX150 and T480 work as 15 patches on coreboot main, on Gerrit as topic `t480-dgpu` |
 | `firmware/stock-reference/` | ACPI tables and VBIOS dumped from Lenovo's firmware |
 | `kernel/` | PKGBUILD, config, module database |
 | `system/` | package lists, s6 services, every `/etc` file that is not a package default, `/usr/local` scripts |

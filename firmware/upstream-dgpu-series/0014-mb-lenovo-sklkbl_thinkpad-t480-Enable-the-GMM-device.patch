@@ -1,7 +1,7 @@
-From 5a061de83e658a409921939711f390b336159318 Mon Sep 17 00:00:00 2001
+From bda11c260f12ca9b78a2a7602a9dd4d30df85bdb Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Thu, 1 Oct 2026 16:06:38 +0300
-Subject: [PATCH 16/17] mb/lenovo/sklkbl_thinkpad/t480: Enable the GMM device
+Subject: [PATCH 14/15] mb/lenovo/sklkbl_thinkpad/t480: Enable the GMM device
 
 The vendor firmware of the T480 enables the Gaussian Mixture Model
 accelerator at 00:08.0. Do the same.
@@ -16,7 +16,7 @@ Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
  1 file changed, 1 insertion(+)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
-index 17fec4cd26..412bba3268 100644
+index 2a1cc612bf..5615b33f25 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
 @@ -2,6 +2,7 @@
@@ -24,9 +24,6 @@ index 17fec4cd26..412bba3268 100644
  chip soc/intel/skylake
  	device domain 0 on
 +		device ref gmm on end	# Gaussian Mixture Model accelerator, as the vendor firmware
- 		device ref south_xhci on
- 			register "usb2_ports" = "{
- 				[0] = USB2_PORT_MID(OC1),		// USB-A
--- 
-2.55.0
-
+ 		device ref lpc_espi on
+ 			chip ec/lenovo/h8
+ 				# The EC bit of the wireless switch reads 0; the vendor WLSW is a constant

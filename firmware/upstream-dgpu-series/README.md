@@ -1,7 +1,7 @@
 # MX150 series for upstream coreboot
 
-The dGPU work and the T480 platform fixes as 17 patches on coreboot main
-2631796496 (2026-09-30), on Gerrit as topic `t480-dgpu`:
+The dGPU work and the T480 platform fixes as 15 patches on coreboot main
+6e7766c710 (2026-10-02), on Gerrit as topic `t480-dgpu`:
 https://review.coreboot.org/q/topic:t480-dgpu
 
 Author and sign-off: `24bit192kHz <24bit192khz@proton.me>`, the same person as
@@ -11,31 +11,29 @@ repository.
 | Patch | What it does |
 |---|---|
 | 0001 | `_ROM` gets the whole option ROM, not only what the one-byte size field of its header describes; never more than the CBFS file holds |
-| 0002 | power the dGPU in the bootblock and wait for its link, so FSP-S finds it on root port 1; full reset on the first boot after enabling it; power off before sleep |
+| 0002 | root port 1 is marked hot-pluggable, so FSP-S keeps it without a link; the dGPU gets its power right before FSP-S and is found in the PCI scan; power off before sleep |
 | 0003 | ACPI power resource: the OS can turn the GPU off and on at runtime (D3cold) |
 | 0004 | keep the setup option visible after the dGPU was disabled |
 | 0005 | documentation of the board |
-| 0006 | the full reset of 0002 happens once (CMOS byte 0x6d), never a reset loop |
-| 0007 | T480: Max_Payload_Size 256 on the dGPU, WLAN and SSD ports, as the vendor firmware |
-| 0008 | T480: no ASPM on the dGPU root port, as the vendor firmware |
-| 0009 | ec/lenovo/h8: option for ECs without a radio switch (WLSW returns 1) |
-| 0010 | ec/lenovo/h8: option for boards without a tablet switch (no MHKG) |
-| 0011 | ec/lenovo/h8: the mainboard can set the deepest state the lid wakes from |
-| 0012 | soc/intel/skylake: the GbE ACPI device (Wake-on-LAN in /proc/acpi/wakeup) |
-| 0013 | soc/intel/skylake: FSP gets the board's subsystem IDs (Kconfig, else the devicetree) |
-| 0014 | T480: selects the options of 0009 and 0010 |
-| 0015 | T480: the lid wakes from S4 |
-| 0016 | T480: GMM device 00:08.0 on |
-| 0017 | T480: subsystem IDs 17aa:225d in the override tree |
+| 0006 | T480: Max_Payload_Size 256 on the dGPU, WLAN and SSD ports, as the vendor firmware |
+| 0007 | ec/lenovo/h8: devicetree register `no_wireless_switch` for ECs without a radio switch (WLSW returns 1) |
+| 0008 | ec/lenovo/h8: the tablet mode switch (MHKG) only for boards with the register `has_tablet_mode_switch`; set for X60, X200, X201, X220, X230/X230t and X380 Yoga |
+| 0009 | ec/lenovo/h8: the mainboard can set the deepest state the lid wakes from |
+| 0010 | soc/intel/skylake: the GbE ACPI device (Wake-on-LAN in /proc/acpi/wakeup) |
+| 0011 | soc/intel/skylake: FSP gets the board's subsystem IDs (Kconfig, else the devicetree) |
+| 0012 | T480: sets `no_wireless_switch` |
+| 0013 | T480: the lid wakes from S4 |
+| 0014 | T480: GMM device 00:08.0 on |
+| 0015 | T480: subsystem IDs 17aa:225d in the override tree |
 
 ## State
 
 | | |
 |---|---|
-| Builds | every patch on its own for T480, T480s, T580, X280, X380 Yoga and T470s, and with the setup menu (`CONFIG_DRIVERS_OPTION_CFR`) at 0004 and at the top; at the top of the series: every board in the tree, 966 configurations (6 more need the Go compiler for helper tools and were not built) |
-| Lint | `make gitconfig` hooks (`check-style`, `lint-stable`, checkpatch on each commit); `lint-stable` and `lint-extended` clean |
-| Tested on hardware | T480 (C51 = the flashed build with 0013 and 0017 as here): cold boot from S5, S3 resume with the watchdog armed, all PCH and system agent devices at 17aa:225d, MPS 256 on the dGPU/SSD ports, no ASPM on root port 1, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold. Earlier builds of the same code (C35 to C50): first boot after enabling the GPU, 70 driver load/unload cycles, hibernate/resume |
-| Not tested | T480s, T580 and the other variants on hardware; the setup menu of 0004; an actual wake from S4 by opening the lid |
+| Builds | in the coreboot-sdk container (the toolchain of coreboot's Jenkins): every patch on its own for all sklkbl_thinkpad variants, X230 variants and X60; at the top of the series all 54 Lenovo configurations |
+| Lint | checkpatch on each commit, `lint-stable` clean |
+| Tested on hardware | T480, with the same code in the local tree (which reads a CMOS byte where 0002 reads the option): 0002: link down before FSP-S, port kept, link up before the PCI scan; cold boot, warm reset, first boot after enabling the GPU (no extra reset), GPU disabled, S3 resume; Linux binds pciehp to the port, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold. 0007, 0008, 0012: "radio switch found; radios are enabled", Bluetooth and WWAN unblocked, no tablet mode switch. Earlier builds: subsystem IDs 17aa:225d, MPS 256, hibernate/resume |
+| Not tested | this exact series booted on top of main; T480s, T580 and the other variants on hardware; the setup menu of 0004; an actual wake from S4 by opening the lid |
 
 ## Found on the way (not in the series)
 
@@ -43,7 +41,7 @@ sconfig drops the `subsystemid` of a base devicetree when an override tree names
 the same device: `alloc_dev()` sets unset IDs to -1, and the merge copies the
 override's IDs whenever they are "non-zero", which -1 is. Every sklkbl variant
 re-declares `device domain 0 on`, so the `subsystemid 0x17aa 0x225d inherit` in
-the common `devicetree.cb` never reached a device (0017 works around it for the
+the common `devicetree.cb` never reached a device (0015 works around it for the
 T480).
 
 ## Gerrit history
@@ -57,16 +55,25 @@ T480).
   from the devicetree; the h8 and T480 patches split into one change each
   (changes 95872 to 95883 updated, 95912 to 95916 new).
 
+- v5, 2026-10-04, after review by Patrick Rudolph: the h8 options moved from Kconfig
+  to devicetree registers, and the tablet switch is now opt-in for the tablets; the
+  dGPU's root port is marked hot-pluggable instead of powering the GPU in the
+  bootblock, which made the one-time full reset unnecessary (95877 abandoned);
+  "no ASPM on the dGPU root port" abandoned (95879): the port has CLKREQ0#, ASPM L1
+  with L1 substates passed a 10 minute load test and S3, and the hangs once blamed
+  on ASPM were a CPU undervolt. 95872 still carries a Code-Review -2 about the
+  provenance of AI-assisted patches.
+
 ## Using the series
 
 The firmware this laptop runs is built from `../coreboot/` as the main README
 describes; its patches 0013, 0014, 0017 to 0020 and 0022 to 0025 are the local form of
-this series (with a GRUB payload, and the dGPU switch in CMOS byte 0x6f). The series is the form meant for coreboot itself.
+an earlier version (v4) of this series (with a GRUB payload, the dGPU switch in CMOS byte 0x6f, and the GPU still powered in the bootblock). The series is the form meant for coreboot itself.
 To build it, apply it to coreboot main:
 
 ```sh
 git clone https://review.coreboot.org/coreboot.git && cd coreboot
-git checkout -b t480-dgpu 2631796496
+git checkout -b t480-dgpu 6e7766c710
 git submodule update --init --checkout
 git am ../myt480/firmware/upstream-dgpu-series/*.patch
 make crossgcc-i386 CPUS=$(nproc)

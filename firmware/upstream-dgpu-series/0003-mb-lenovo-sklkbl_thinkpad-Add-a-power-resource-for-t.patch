@@ -1,7 +1,7 @@
-From f04875770052e71de0889dc848d7085a44d524ed Mon Sep 17 00:00:00 2001
+From fa464461a78ce6c3a5a467b8a309669b2ee4a72a Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
-Subject: [PATCH 03/17] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
+Subject: [PATCH 03/15] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
  dGPU
 
 Let the OS turn the dGPU off and on at runtime (D3cold) with an ACPI
@@ -110,18 +110,17 @@ index 0000000000..067a17a450
 +	}
 +}
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index c92325d5fe..e4763ca764 100644
+index a1c5f30394..8e8c8e80a6 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -1,6 +1,7 @@
+@@ -1,5 +1,6 @@
  /* SPDX-License-Identifier: GPL-2.0-only */
  
- #include <acpi/acpi.h>
 +#include <acpi/acpigen.h>
- #include <cf9_reset.h>
  #include <console/console.h>
  #include <delay.h>
-@@ -53,6 +54,44 @@ static void dgpu_power_off(void)
+ #include <device/device.h>
+@@ -98,6 +99,44 @@ static void dgpu_power_off(void)
  	gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
  }
  
@@ -163,7 +162,7 @@ index c92325d5fe..e4763ca764 100644
 +	acpigen_write_scope_end();
 +}
 +
- /* The GPU was powered in the bootblock, see dgpu_early.c */
+ /* Runs after FSP-S and before the PCI scan; the GPU was powered before FSP-S */
  void dgpu_detect(void)
  {
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl b/src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl
@@ -181,7 +180,7 @@ index 801e0cb0d1..a356370a0f 100644
  	#include <southbridge/intel/common/acpi/sleepstates.asl>
  }
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-index 8b9fd6e35f..5edd4f0e56 100644
+index 46d7c64037..9c4b97ff3b 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
 @@ -26,8 +26,10 @@ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
@@ -197,10 +196,10 @@ index 8b9fd6e35f..5edd4f0e56 100644
  
  struct chip_operations mainboard_ops = {
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
-index f92ad7446c..3723511824 100644
+index 50be150f04..8789386167 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
-@@ -5,6 +5,8 @@
+@@ -5,11 +5,14 @@
  
  #include <types.h>
  
@@ -209,13 +208,9 @@ index f92ad7446c..3723511824 100644
  void variant_config_gpios(void);
  
  uint8_t variant_memory_sku(void);
-@@ -12,5 +14,6 @@ uint8_t variant_memory_sku(void);
+ 
  void dgpu_power_on(void);
- void dgpu_wait_for_link(void);
  void dgpu_detect(void);
 +void dgpu_fill_ssdt(const struct device *dev);
  
  #endif
--- 
-2.55.0
-

@@ -1,7 +1,7 @@
-From 6a9ede6cb48e8b3a7eb0855042a57ee5ef39e145 Mon Sep 17 00:00:00 2001
+From 483225b301e1b9dfd51276661db1f0c9ea6f3f86 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Thu, 1 Oct 2026 16:06:07 +0300
-Subject: [PATCH 11/17] ec/lenovo/h8: Let the mainboard set the lid wake state
+Subject: [PATCH 09/15] ec/lenovo/h8: Let the mainboard set the lid wake state
 
 The _PRW of the lid always names S3 as the deepest state it wakes from.
 Let the mainboard define H8_LID_WAKE_STATE before it includes the EC
@@ -41,6 +41,3 @@ index 7695e4e5ab..6ee6d9b3ed 100644
  	}
  
  	Method(_PSW, 1, NotSerialized)
--- 
-2.55.0
-
