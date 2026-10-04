@@ -1,0 +1,26 @@
+#!/usr/bin/ash
+# One passphrase opens root and swap, so the resume hook after this one can find (and
+# thereby consume) a hibernation image instead of leaving a stale one behind.
+run_hook() {
+    local pass i=0
+    # -i: /etc/modprobe.d/ keeps dm_mod from loading in the normal system (install /bin/false)
+    modprobe -a -i dm-mod dm-crypt || echo "t480crypt: cannot load dm-crypt"
+    while [ ! -b /dev/nvme0n1p1 ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    cryptsetup isLuks /dev/nvme0n1p1 >/dev/null 2>&1 || return 0
+    echo
+    echo "T480 fallback kernel: the disk needs the LUKS recovery passphrase."
+    while :; do
+        printf 'LUKS passphrase: '
+        read -rs pass
+        echo
+        if printf %s "$pass" | cryptsetup open --key-file - --allow-discards /dev/nvme0n1p1 root; then
+            break
+        fi
+        echo "That did not open the disk."
+    done
+    if cryptsetup isLuks /dev/nvme0n1p2 >/dev/null 2>&1; then
+        printf %s "$pass" | cryptsetup open --key-file - --allow-discards /dev/nvme0n1p2 swap ||
+            echo "swap not opened (different passphrase?)"
+    fi
+    unset pass
+}

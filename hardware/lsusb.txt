@@ -2,7 +2,7 @@ Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
 Bus 001 Device 002: ID 8087:0a2b Intel Corp. Bluetooth wireless interface
 Bus 001 Device 003: ID 13d3:56a6 IMC Networks Integrated Camera
 Bus 001 Device 005: ID 04f3:2398 Elan Microelectronics Corp. Touchscreen
-Bus 001 Device 006: ID 06cb:009a Synaptics, Inc. Metallica MIS Touch Fingerprint Reader
+Bus 001 Device 007: ID 06cb:009a Synaptics, Inc. Metallica MIS Touch Fingerprint Reader
 Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
 Bus 002 Device 002: ID 0bda:0316 Realtek Semiconductor Corp. Card Reader
 Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub

@@ -1,0 +1,3 @@
+#!/bin/sh
+# The s6 mount-tmpfs service mounts /tmp without the fstab options.
+/usr/bin/mount -o remount,nosuid,nodev,noatime /tmp

@@ -12,7 +12,7 @@
 window { width: 768px; border: 2px; border-color: @border-col; border-radius: 10px; background-color: @bg-col; padding: 15px; }
 mainbox { background-color: @bg-col; spacing: 10px; }
 inputbar { children: [ prompt, entry ]; background-color: @bg-col-light; border-radius: 7px; padding: 8px; }
-prompt { background-color: @fg-col; text-color: @bg-col; padding: 8px 12px; border-radius: 5px; }
+prompt { background-color: @selected-col; text-color: @fg-col; padding: 8px 12px; border-radius: 5px; }
 textbox-prompt-colon { expand: false; str: ""; }
 entry { padding: 8px 12px; text-color: @fg-col; background-color: @bg-col-light; }
 listview { background-color: @bg-col; padding: 8px 0px 0px; columns: 2; spacing: 8px; lines: 8; }

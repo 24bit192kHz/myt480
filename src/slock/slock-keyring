@@ -1,0 +1,235 @@
+#!/usr/bin/python3 -I
+"""slock-keyring MODE USER  (root only; run by slock after a successful unlock)
+
+The user's GNOME login keyring is locked with a random key K (64 hex chars):
+  /var/lib/slock/USER.pub, USER.priv   K sealed in the TPM under 0x81000101
+  /var/lib/slock/USER.escrow           K encrypted with the login password
+                                       (openssl aes-256-cbc, pbkdf2 600k)
+No PCR policy: this T480 has no measured boot, so the seal binds K to this
+TPM, not to this OS. It never contains the login password.
+
+  finger          unseal K, unlock the keyring
+  password        stdin = login password (already verified by PAM). Recover K
+                  from the escrow, else the TPM; unlock; then repair whichever
+                  copy failed (reseal after a TPM reset, re-escrow after a
+                  password change)
+  init            stdin = K: seal it (setup; the escrow follows on the first
+                  password unlock)
+
+A marker in /run/slock-keyring remembers the daemon's control socket once unlocked,
+so only the first unlock per keyring daemon touches the TPM.
+"""
+import os
+import pwd
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+
+STATE = "/var/lib/slock"
+RUN = "/run/slock-keyring"
+PARENT = "0x81000101"  # ECC P-256 storage primary, owner hierarchy
+TOOLS = {"env": {"PATH": "/usr/bin:/bin"}, "stdout": subprocess.DEVNULL,
+         "stderr": subprocess.DEVNULL}
+KDF = ["-aes-256-cbc", "-pbkdf2", "-iter", "600000", "-md", "sha256"]
+
+
+def control_path(u):
+    return f"/run/user/{u.pw_uid}/keyring/control"
+
+
+def control_id(u):
+    try:
+        st = os.stat(control_path(u))
+    except OSError:
+        return None
+    return f"{st.st_ino}:{st.st_mtime_ns}"
+
+
+def marker(u):
+    return os.path.join(RUN, "keyring." + u.pw_name)
+
+
+def already_open(u):
+    cid = control_id(u)
+    try:
+        with open(marker(u)) as f:
+            return cid is not None and f.read().strip() == cid
+    except OSError:
+        return False
+
+
+def keyring_unlock(u, key):
+    """gnome-keyring control protocol (as pam_gnome_keyring speaks it):
+    op 1 = UNLOCK, which also creates the login keyring if it is missing.
+    The daemon checks SO_PEERCRED, so the client runs as the user."""
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(r)
+        code = 2
+        try:
+            os.setgroups([])
+            os.setresgid(u.pw_gid, u.pw_gid, u.pw_gid)
+            os.setresuid(u.pw_uid, u.pw_uid, u.pw_uid)
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(5)
+            s.connect(control_path(u))
+            s.sendall(b"\0")
+            arg = key.encode()
+            body = struct.pack(">II", 1, len(arg)) + arg
+            s.sendall(struct.pack(">I", 4 + len(body)) + body)
+            buf = b""
+            while len(buf) < 8:
+                c = s.recv(8 - len(buf))
+                if not c:
+                    break
+                buf += c
+            code = struct.unpack(">II", buf)[1] if len(buf) == 8 else 2
+        except Exception:
+            code = 2
+        os.write(w, bytes([min(code, 255)]))
+        os._exit(0)
+    os.close(w)
+    res = os.read(r, 1)
+    os.close(r)
+    os.waitpid(pid, 0)
+    ok = res == b"\0"
+    if ok:
+        cid = control_id(u)
+        if cid:
+            os.makedirs(RUN, mode=0o700, exist_ok=True)
+            tmp = marker(u) + ".new"
+            with open(tmp, "w") as f:
+                f.write(cid + "\n")
+            os.rename(tmp, marker(u))
+    return ok
+
+
+def tpm_unseal(u):
+    pub, priv = (os.path.join(STATE, u.pw_name + e) for e in (".pub", ".priv"))
+    if not (os.path.exists(pub) and os.path.exists(priv)):
+        return None
+    with tempfile.TemporaryDirectory(dir=RUN) as d:
+        ctx = os.path.join(d, "s.ctx")
+        try:
+            if subprocess.run(["tpm2_load", "-Q", "-C", PARENT, "-u", pub, "-r", priv,
+                               "-c", ctx], **TOOLS).returncode:
+                return None
+            out = subprocess.run(["tpm2_unseal", "-c", ctx], env=TOOLS["env"],
+                                 capture_output=True)
+        finally:
+            subprocess.run(["tpm2_flushcontext", "-t"], **TOOLS)
+    key = out.stdout.decode(errors="replace").strip()
+    return key if out.returncode == 0 and len(key) == 64 else None
+
+
+def tpm_seal(u, key):
+    os.makedirs(STATE, mode=0o700, exist_ok=True)
+    if subprocess.run(["tpm2_readpublic", "-c", PARENT], **TOOLS).returncode:
+        with tempfile.TemporaryDirectory(dir=RUN) as d:
+            p = os.path.join(d, "p.ctx")
+            subprocess.run(["tpm2_createprimary", "-Q", "-C", "o", "-G", "ecc256:aes128cfb",
+                            "-c", p], check=True, **TOOLS)
+            subprocess.run(["tpm2_evictcontrol", "-Q", "-C", "o", "-c", p, PARENT],
+                           check=True, **TOOLS)
+            subprocess.run(["tpm2_flushcontext", "-t"], **TOOLS)
+    base = os.path.join(STATE, u.pw_name)
+    with tempfile.TemporaryDirectory(dir=RUN) as d:
+        kf = os.path.join(d, "k")
+        with open(os.open(kf, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
+            f.write(key)
+        subprocess.run(["tpm2_create", "-Q", "-C", PARENT, "-i", kf,
+                        "-u", base + ".pub.new", "-r", base + ".priv.new",
+                        "-a", "fixedtpm|fixedparent|userwithauth|noda"], check=True, **TOOLS)
+    for e in (".pub.new", ".priv.new"):
+        os.chmod(base + e, 0o600)
+    os.rename(base + ".pub.new", base + ".pub")
+    os.rename(base + ".priv.new", base + ".priv")
+
+
+def openssl(args, data, pw):
+    """password through an inherited pipe (fd:N), never argv"""
+    r, w = os.pipe()
+    os.write(w, pw.encode() + b"\n")
+    os.close(w)
+    try:
+        out = subprocess.run(["openssl", "enc"] + KDF + args + ["-pass", f"fd:{r}"],
+                             input=data, capture_output=True, pass_fds=(r,),
+                             env=TOOLS["env"])
+    finally:
+        os.close(r)
+    return out.stdout if out.returncode == 0 else None
+
+
+def escrow_read(u, pw):
+    try:
+        with open(os.path.join(STATE, u.pw_name + ".escrow"), "rb") as f:
+            blob = f.read()
+    except OSError:
+        return None
+    out = openssl(["-d"], blob, pw)
+    key = out.decode(errors="replace").strip() if out else ""
+    return key if len(key) == 64 else None
+
+
+def escrow_write(u, pw, key):
+    blob = openssl(["-salt"], key.encode(), pw)
+    if not blob:
+        return
+    p = os.path.join(STATE, u.pw_name + ".escrow")
+    with open(os.open(p + ".new", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        f.write(blob)
+    os.rename(p + ".new", p)
+
+
+def main():
+    if len(sys.argv) != 3 or os.geteuid() != 0:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    os.setresuid(0, 0, 0)
+    os.umask(0o077)
+    mode, name = sys.argv[1], sys.argv[2]
+    u = pwd.getpwnam(name)
+    if u.pw_uid == 0:
+        return 2
+    os.makedirs(RUN, mode=0o700, exist_ok=True)
+
+    if mode == "init":
+        key = sys.stdin.read().strip()
+        if len(key) != 64:
+            return 2
+        tpm_seal(u, key)
+        return 0 if tpm_unseal(u) == key else 1
+
+    if mode == "finger":
+        if already_open(u):
+            return 0
+        key = tpm_unseal(u)
+        return 0 if key and keyring_unlock(u, key) else 1
+
+    if mode == "password":
+        pw = sys.stdin.read()
+        if already_open(u):
+            return 0
+        key = escrow_read(u, pw)
+        sealed = tpm_unseal(u)
+        if key is None and sealed is None:
+            return 1
+        if key is None:          # first password unlock, or password changed
+            key = sealed
+            escrow_write(u, pw, key)
+        elif sealed != key:      # TPM cleared or blob lost: reseal
+            try:
+                tpm_seal(u, key)
+            except (subprocess.CalledProcessError, OSError):
+                pass
+        return 0 if keyring_unlock(u, key) else 1
+
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Sign the kernels GRUB may boot without a password (firmware grub.cfg:
+# check_signatures=enforce, key (memdisk)/boot/grub/boot.pub). Key: /var/lib/t480-boot.
+# Run after every linux-t480 install; the pacman hook 95-t480-sign.hook does it.
+set -eu
+H=/var/lib/t480-boot/gnupg
+for k in ${@:-/boot/vmlinuz-linux-t480}; do
+	[ -f "$k" ] || continue
+	gpg --homedir $H --batch --yes --digest-algo SHA256 --detach-sign -o "$k.sig.new" "$k"
+	mv -f "$k.sig.new" "$k.sig"
+	gpg --homedir $H --batch --verify "$k.sig" "$k" 2>/dev/null && echo "signed $k"
+done

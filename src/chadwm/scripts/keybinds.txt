@@ -1,2 +1,5 @@
 
 Bar module 11 (Bluetooth): left click = picker (power, scan, connect/disconnect/pair), right click = power toggle
+Bar module 12 (stealth VPN): left click = on/off toggle, right click = status
+Bar module 13 (MX150 GPU, only while on): left click = nvtop, right click = gpu-power status
+Bar module 8 (date, Hijri, clock): left click = Gregorian + Hijri calendar, middle click = next Arabic font, right click = both dates

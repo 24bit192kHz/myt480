@@ -16,6 +16,7 @@
  *    (poll_s is the fallback when a profile has no interval)
  *  - v2.1: MCHBAR power-limit mirror kept equal to MSR 0x610; fan level 8
  *    means \"full-speed\"
+ *  - v2.2: power plans auto|performance|balanced|powersave from plan_path
  *
  * Build: musl-gcc -Os -static -s -o thermald-t480 thermald.c  (see Makefile)
  * Run:   thermald [-c /etc/thermald.conf] [--once] [--test]
@@ -82,10 +83,22 @@ static void loge(const char *a) { ls_(a); ls_(": errno "); li_(errno); lend(); }
 
 /* ---------------- config (milli-units) ---------------- */
 struct profile { long long pl1_w, pl1_s, pl2_w, pl2_s, trip, interval, icc[3]; long long uv[5]; int uv_set; };
+/* Power plans (v2.2): a one-word file (plan_path, root:power 0664, so the
+   battwatch viewer can write it) picks auto | performance | balanced |
+   powersave. auto = the AC/battery profiles above, CPU knobs left to TLP.
+   A plan overrides PL1/PL2/trip of the current profile (undervolt, ICCMAX,
+   time windows and fan stay per power source) and sets governor/EPP,
+   turbo and the iGPU max clock; TLP re-sets those on AC/battery changes,
+   so they are checked every poll and re-applied. Back to auto runs
+   `tlp start` once to restore TLP's values. */
+enum { PLAN_AUTO, PLAN_PERF, PLAN_BAL, PLAN_SAVE, NPLAN };
+static const char *const plan_nm[NPLAN] = { "auto", "performance", "balanced", "powersave" };
+struct plan { long long pl1_w, pl2_w, trip, igpu_mhz, turbo; char epp[24]; };
 struct conf {
-    char temp_path[128], ac_glob[128], gpu_temp_path[128];
+    char temp_path[128], ac_glob[128], gpu_temp_path[128], plan_path[128];
     long long poll_s;
     struct profile ac, batt;
+    struct plan plan[NPLAN];
     long long uv[5];
     struct { int lvl, lo, hi; } fan[MAXLVL];
     int nfan;
@@ -100,6 +113,10 @@ static void conf_defaults(struct conf *c)
     c->poll_s = 3 * K;
     c->ac   = (struct profile){ 35*K, 28*K, 60*K, 2, 90*K, 3*K, { 64*K, 31*K, 6*K } };
     c->batt = (struct profile){ 29*K, 28*K, 44*K, 2, 85*K, 6*K, { 40*K, 24*K, 6*K } };
+    strcpy(c->plan_path, "/var/lib/thermald-t480/plan");
+    c->plan[PLAN_PERF] = (struct plan){ 64*K, 90*K, 95*K, 1150*K, 1*K, "performance" };
+    c->plan[PLAN_BAL]  = (struct plan){ 25*K, 44*K, 90*K, 1150*K, 1*K, "balance_performance" };
+    c->plan[PLAN_SAVE] = (struct plan){ 10*K, 20*K, 80*K,  700*K, 0,   "power" };
     c->uv[PL_CORE] = c->uv[PL_CACHE] = -100*K;
     c->uv[PL_GPU] = c->uv[PL_UNCORE] = -50*K;
     c->nfan = 4;
@@ -139,6 +156,10 @@ static void set_key(struct conf *c, const char *k, const char *v)
         P("batt_uv_uncore", batt.uv[PL_UNCORE]), P("batt_uv_analogio", batt.uv[PL_ANALOGIO]),
         P("icc_core_ac", ac.icc[0]), P("icc_gpu_ac", ac.icc[1]), P("icc_cache_ac", ac.icc[2]),
         P("icc_core_batt", batt.icc[0]), P("icc_gpu_batt", batt.icc[1]), P("icc_cache_batt", batt.icc[2]),
+#define PL(pre, i) P(pre "_pl1_w", plan[i].pl1_w), P(pre "_pl2_w", plan[i].pl2_w), P(pre "_trip", plan[i].trip), \
+        P(pre "_igpu_mhz", plan[i].igpu_mhz), P(pre "_turbo", plan[i].turbo)
+        PL("perf", PLAN_PERF), PL("bal", PLAN_BAL), PL("save", PLAN_SAVE),
+#undef PL
 #undef P
     };
     size_t i;
@@ -152,6 +173,10 @@ static void set_key(struct conf *c, const char *k, const char *v)
     if (!strcmp(k, "temp_path")) copy(c->temp_path, sizeof c->temp_path, v);
     else if (!strcmp(k, "gpu_temp_path")) copy(c->gpu_temp_path, sizeof c->gpu_temp_path, v);
     else if (!strcmp(k, "ac_glob")) copy(c->ac_glob, sizeof c->ac_glob, v);
+    else if (!strcmp(k, "plan_path")) copy(c->plan_path, sizeof c->plan_path, v);
+    else if (!strcmp(k, "perf_epp")) copy(c->plan[PLAN_PERF].epp, sizeof c->plan[0].epp, v);
+    else if (!strcmp(k, "bal_epp")) copy(c->plan[PLAN_BAL].epp, sizeof c->plan[0].epp, v);
+    else if (!strcmp(k, "save_epp")) copy(c->plan[PLAN_SAVE].epp, sizeof c->plan[0].epp, v);
     else if (!strcmp(k, "fan_levels")) {
         /* "2:0:44,4:42:54,5:52:64,7:62:32767"; malformed triples skipped */
         const char *p = v;
@@ -413,6 +438,150 @@ static int drifted(const struct profile *p)
     return mread(MSR_PKG_PLIMIT) != pl_reg(p) || (mch_pl && *mch_pl != pl_reg(p)) || (off >= 0 && ((tt >> 24) & 0x3F) != (uint64_t)off);
 }
 
+/* ---------------- power plans ---------------- */
+static int sys_write(const char *path, const char *s)
+{
+    int fd = open(path, O_WRONLY | O_CLOEXEC), r;
+    if (fd < 0) return -1;
+    r = write(fd, s, strlen(s)) < 0 ? -1 : 0;
+    close(fd);
+    return r;
+}
+static int sys_is(const char *path, const char *s)
+{
+    char b[64];
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    ssize_t n;
+    if (fd < 0) return 1; /* knob absent: nothing to enforce */
+    n = read(fd, b, sizeof b - 1);
+    close(fd);
+    if (n <= 0) return 1;
+    b[n] = 0;
+    b[strcspn(b, " \n")] = 0;
+    return !strcmp(b, s);
+}
+static void utoa_(char *d, unsigned long v)
+{
+    char t[24];
+    int n = 0;
+    do t[n++] = '0' + v % 10; while ((v /= 10));
+    while (n) *d++ = t[--n];
+    *d = 0;
+}
+static char *cpu_path(char *p, int cpu, const char *leaf)
+{
+    strcpy(p, "/sys/devices/system/cpu/cpu");
+    utoa_(p + strlen(p), cpu);
+    strcat(p, "/cpufreq/");
+    strcat(p, leaf);
+    return p;
+}
+#define NO_TURBO "/sys/devices/system/cpu/intel_pstate/no_turbo"
+#define GT_MAX "/sys/class/drm/card0/gt_max_freq_mhz"
+#define GT_BOOST "/sys/class/drm/card0/gt_boost_freq_mhz"
+/* intel_pstate: the performance governor pins EPP, so EPP "performance"
+   means that governor and everything else runs under powersave */
+static const char *plan_gov(const struct plan *pl)
+{
+    return strcmp(pl->epp, "performance") ? "powersave" : "performance";
+}
+static int knobs_ok(const struct plan *pl)
+{
+    char p[96], mhz[16];
+    const char *gov = plan_gov(pl);
+    utoa_(mhz, pl->igpu_mhz / K);
+    return sys_is(cpu_path(p, 0, "scaling_governor"), gov) &&
+           (strcmp(gov, "powersave") || sys_is(cpu_path(p, 0, "energy_performance_preference"), pl->epp)) &&
+           sys_is(NO_TURBO, pl->turbo ? "0" : "1") && sys_is(GT_MAX, mhz);
+}
+static void apply_knobs(const struct plan *pl)
+{
+    char p[96], mhz[16];
+    const char *gov = plan_gov(pl);
+    int cpu;
+    if (dry_run) { ls_("DRY plan knobs "); ls_(gov); ls_(" "); ls_(pl->epp); lend(); return; }
+    for (cpu = 0; cpu < 256; cpu++) {
+        if (sys_write(cpu_path(p, cpu, "scaling_governor"), gov) && errno == ENOENT) break;
+        if (!strcmp(gov, "powersave")) sys_write(cpu_path(p, cpu, "energy_performance_preference"), pl->epp);
+    }
+    sys_write(NO_TURBO, pl->turbo ? "0" : "1");
+    /* boost <= max: boost, max, boost works whether the clock goes up or down */
+    utoa_(mhz, pl->igpu_mhz / K);
+    sys_write(GT_BOOST, mhz);
+    sys_write(GT_MAX, mhz);
+    sys_write(GT_BOOST, mhz);
+    ls_("plan knobs: "); ls_(gov); ls_(" epp "); ls_(pl->epp); ls_(" turbo "); li_(pl->turbo / K);
+    ls_(" igpu "); ls_(mhz); ls_("MHz"); lend();
+}
+/* auto again: TLP owns the CPU knobs, let it put its own values back */
+static void tlp_restore(void)
+{
+    static char *const argv[] = { "/usr/bin/tlp", "start", 0 };
+    static char *const envp[] = { "PATH=/usr/bin:/bin:/usr/sbin:/sbin", 0 };
+    pid_t pid;
+    if (dry_run) { logs("DRY tlp start", 0); return; }
+    pid = fork();
+    if (pid == 0) { execve(argv[0], argv, envp); _exit(127); }
+    logs(pid < 0 ? "plan: fork for tlp failed" : "plan auto: tlp start", 0);
+}
+static int group_gid(const char *name)
+{
+    char b[4096], *p;
+    int fd = open("/etc/group", O_RDONLY | O_CLOEXEC);
+    ssize_t n;
+    size_t l = strlen(name);
+    if (fd < 0) return -1;
+    n = read(fd, b, sizeof b - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    b[n] = 0;
+    for (p = b; *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : p + strlen(p))
+        if (!strncmp(p, name, l) && p[l] == ':') {
+            const char *g = strchr(p + l + 1, ':');
+            return g ? (int)(milli(g + 1, 0) / K) : -1;
+        }
+    return -1;
+}
+/* create the plan file (auto) if missing; group power may write it */
+static void plan_init(const struct conf *c)
+{
+    char dir[128];
+    int fd, gid;
+    if (dry_run) return;
+    copy(dir, sizeof dir, c->plan_path);
+    if (strrchr(dir, '/') > dir) { *strrchr(dir, '/') = 0; mkdir(dir, 0755); }
+    fd = open(c->plan_path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0664);
+    if (fd < 0) { ls_("plan file "); ls_(c->plan_path); loge(""); return; }
+    if (lseek(fd, 0, SEEK_END) == 0 && write(fd, "auto\n", 5) < 0) loge("plan write");
+    gid = group_gid("power");
+    if (gid >= 0 && fchown(fd, 0, gid)) loge("plan chown");
+    if (fchmod(fd, 0664)) loge("plan chmod");
+    close(fd);
+}
+/* re-read only when the file changed; a half-written or unknown word
+   keeps the current plan and is read again next poll */
+static int plan_cur;
+static struct stat plan_st;
+static int plan_read(const struct conf *c)
+{
+    struct stat st;
+    char b[32];
+    ssize_t n;
+    int fd, i;
+    if (stat(c->plan_path, &st)) return plan_cur;
+    if (st.st_mtim.tv_sec == plan_st.st_mtim.tv_sec && st.st_mtim.tv_nsec == plan_st.st_mtim.tv_nsec &&
+        st.st_size == plan_st.st_size && st.st_ino == plan_st.st_ino) return plan_cur;
+    if ((fd = open(c->plan_path, O_RDONLY | O_CLOEXEC)) < 0) return plan_cur;
+    n = read(fd, b, sizeof b - 1);
+    close(fd);
+    b[n > 0 ? n : 0] = 0;
+    b[strcspn(b, " \t\r\n")] = 0;
+    for (i = 0; i < NPLAN; i++)
+        if (!strcmp(b, plan_nm[i])) { plan_st = st; return plan_cur = i; }
+    if (*b && st.st_size == (off_t)n) { plan_st = st; logs("plan: unknown word ", b); }
+    return plan_cur;
+}
+
 /* ---------------- fan (thinkfan-style hysteresis) ---------------- */
 static int fan_idx = -1;
 static time_t last_fan_write;
@@ -457,7 +626,7 @@ int main(int argc, char **argv)
     struct sigaction sa;
     struct stat st;
     time_t conf_mt = 0, next_drift = 0;
-    int once = 0, i, last_src = -1, need_power = 1, warned = 0;
+    int once = 0, i, last_src = -1, need_power = 1, warned = 0, last_plan = -1, knob_hold = 0;
 
     conf_defaults(&c);
     for (i = 1; i < argc; i++) {
@@ -479,13 +648,21 @@ int main(int argc, char **argv)
         return 1;
     }
     mch_open();
+    plan_init(&c);
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = SIG_DFL;
+    sa.sa_flags = SA_NOCLDWAIT; /* tlp children reap themselves */
+    sigaction(SIGCHLD, &sa, 0);
     if (!dry_run) { fan_cmd("watchdog 0"); logs("fan watchdog disarmed", 0); }
     ls_("start (pid "); li_(getpid()); ls_(")"); lend();
 
     while (!quit) {
         long raw;
-        int src = on_ac(&c) ? 0 : 1;
+        int src = on_ac(&c) ? 0 : 1, plan = plan_read(&c);
         const struct profile *p = src ? &c.batt : &c.ac;
+        const struct plan *pl = &c.plan[plan];
+        struct profile pp = *p;
+        char name[24];
         time_t now = time(0);
         long long per = p->interval > 0 ? p->interval : c.poll_s;
         struct timespec ts;
@@ -524,14 +701,37 @@ int main(int argc, char **argv)
             }
             fan_apply(&c, raw, now);
         }
+        if (plan != last_plan) {
+            logs("plan ", plan_nm[plan]);
+            if (plan == PLAN_AUTO && last_plan > PLAN_AUTO) tlp_restore();
+            last_plan = plan;
+            need_power = 1;
+        }
+        strcpy(name, src ? "BATT" : "AC");
+        if (plan) {
+            pp.pl1_w = pl->pl1_w; pp.pl2_w = pl->pl2_w; pp.trip = pl->trip;
+            strcat(name, "/"); strcat(name, plan_nm[plan]);
+        }
         if (src != last_src || need_power) {
-            apply_power(p, p->uv_set ? p->uv : c.uv, src ? "BATT" : "AC");
+            apply_power(&pp, p->uv_set ? p->uv : c.uv, name);
+            if (plan) apply_knobs(pl);
             last_src = src;
             need_power = 0;
+            knob_hold = 0;
             next_drift = now + DRIFT_S;
-        } else if (now >= next_drift) {
-            if (drifted(p)) { logs("drift detected, re-applying", 0); apply_power(p, p->uv_set ? p->uv : c.uv, src ? "BATT" : "AC"); }
-            next_drift = now + DRIFT_S;
+        } else {
+            if (now >= next_drift) {
+                if (drifted(&pp)) { logs("drift detected, re-applying", 0); apply_power(&pp, p->uv_set ? p->uv : c.uv, name); }
+                next_drift = now + DRIFT_S;
+                knob_hold = 0;
+            }
+            /* TLP re-sets governor/EPP/turbo/iGPU on AC changes: put the plan
+               back; a knob the kernel refuses is retried only every DRIFT_S */
+            if (plan && !knob_hold && !dry_run && !knobs_ok(pl)) {
+                logs("plan knobs changed under us, re-applying", 0);
+                apply_knobs(pl);
+                if (!knobs_ok(pl)) { logs("plan knobs not accepted, holding", 0); knob_hold = 1; }
+            }
         }
         if (once) break;
         if (per < 500) per = 500;

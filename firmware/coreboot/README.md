@@ -34,6 +34,8 @@
 | 0023 | soc/intel/skylake: the GbE ACPI device with its wake entry (Wake-on-LAN in `/proc/acpi/wakeup`), PME wake on root port 9 (Thunderbolt), and the board's subsystem IDs handed to FSP for the read/write-once registers it programs first | belongs in the series |
 | 0024 | t480: radios never hard-blocked, no tablet switch, lid wakes from S4, GMM 00:08.0 on, subsystem IDs 17aa:225d on every PCH and system agent device, as on the vendor firmware | belongs in the series |
 | 0025 | t480: the subsystem IDs come from the devicetree (`subsystemid 0x17aa 0x225d inherit` in the T480 override tree; sconfig drops the one in `devicetree.cb`) and soc/intel/skylake hands the system agent's IDs to FSP, instead of `CONFIG_SUBSYSTEM_*`, which upstream's lint rejects in a board Kconfig. Flashed as C51 | in the series (v4) |
+| 0026 | payloads/GRUB2: `site-local/data/boot.pub` and `auth.cfg`, when present, go into the GRUB memdisk next to the runtime config, so the signing key and the password hash are part of the payload that coreboot measures into PCR 2 | local |
+| 0027 | ec/lenovo/h8: the wireless and tablet switch come from devicetree registers (`no_wireless_switch`, `has_tablet_mode_switch`) instead of the Kconfig options of 0022; the T480 sets the first | patches 7, 8 and 12 of `../upstream-dgpu-series` |
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied
@@ -43,10 +45,11 @@ first, so that those commits exist.
 
 | File | Meaning |
 |---|---|
-| `t480.defconfig` | the configuration: board, blobs, libgfxinit, payloads |
+| `t480.defconfig` | the configuration: board, blobs, libgfxinit, payloads, TPM measured boot (PCR 2; the MX150 option ROM is listed as runtime data and goes to PCR 3, because it is only loaded while the GPU is on) |
 | `t480-debug.defconfig`, `t480-debug.fmd` | the same with coreboot's log written to the flash, see below |
-| `grub.cfg` | GRUB menu and the kernel command line |
+| `grub.cfg` | GRUB menu, the kernel command line and the boot policy: signature enforced on the default kernel, password on everything that can start something else |
 | `Makefile.mk` | adds the data files below to CBFS |
+| `data/boot.pub`, `data/auth.cfg` | public key the kernel is signed with, and GRUB superuser + password hash. Not included: make your own (main README, step 3a). Without them the build still works and GRUB checks nothing |
 | `data/ifd.bin`, `me.bin`, `gbe.bin` | flash descriptor, Intel ME and Ethernet configuration. Not included: they belong to one machine, see `site-local/data/README.md` |
 | `data/mx150-vbios.rom` | VBIOS of the MX150, from Lenovo's firmware. The driver reads it through ACPI `_ROM`; it is never executed |
 | `data/background.png`, `font.pf2` | GRUB menu |

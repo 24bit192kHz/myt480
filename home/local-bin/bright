@@ -74,6 +74,6 @@ unlock | restore)
 	;;
 *) echo "usage: bright up|down|set PCT|get|lock|unlock|restore" >&2; exit 2 ;;
 esac
-# the bar redraws on SIGUSR1 (sysfs writes raise no uevent)
+# the bar redraws volume/brightness on SIGUSR2 (sysfs writes raise no uevent)
 f=${XDG_RUNTIME_DIR:-/tmp}/chadwm-bar.pid
-[ -r "$f" ] && kill -USR1 "$(cat "$f")" 2>/dev/null || true
+[ -r "$f" ] && kill -USR2 "$(cat "$f")" 2>/dev/null || true

@@ -1,0 +1,6 @@
+#!/bin/sh
+# The boot set has no `mount -a`: mount /boot (p3; kernels, their signatures and the TPM
+# blobs in /boot/t480) and give the dm devices of the early init their /dev/mapper names.
+mountpoint -q /boot || /usr/bin/mount /boot
+/usr/bin/dmsetup mknodes
+exit 0

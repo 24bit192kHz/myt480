@@ -1,0 +1,19 @@
+#!/bin/sh
+# One-shot stand-in for /usr/local/sbin/t480-init (PID 1) during the disk conversion.
+# Armed by /var/lib/t480-convert/armed; otherwise it is the normal init wrapper.
+# Armed: copy the toolbox into RAM, leave the root file system and run convert.sh there.
+C=/var/lib/t480-convert
+if [ ! -e $C/armed ] || [ $$ != 1 ]; then
+	exec /usr/local/sbin/t480-init.real "$@"
+fi
+export PATH=/usr/bin:/usr/sbin:/bin:/sbin
+rm -f $C/armed; sync		# one attempt only: a reset from here on boots normally
+R=$C/ram
+back() { echo "t480-convert: $* - continuing the normal boot"; exec /usr/local/sbin/t480-init.real; }
+[ "$(du -sm /boot | cut -f1)" -lt 200 ] || back "/boot is too big for the 256 MiB partition"
+mkdir -p $R && mount -t tmpfs -o size=3G,mode=755 tmpfs $R || back "no tmpfs"
+cp -a $C/toolbox/. $R/ && mkdir -p $R/old $R/dev $R/proc $R/sys $R/run $R/c && cp -a $C/convert.sh $C/root.vk $C/swap.vk $C/pass $C/t480 $R/c/ || { umount $R; back "copy failed"; }
+mount --move /dev $R/dev || { umount $R; back "cannot move /dev"; }
+cd $R || back "cd"
+pivot_root . old || { mount --move $R/dev /dev; cd /; umount $R; back "pivot_root failed"; }
+exec chroot . /bin/sh /c/convert.sh < dev/console > dev/console 2>&1

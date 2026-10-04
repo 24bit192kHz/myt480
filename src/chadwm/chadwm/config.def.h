@@ -31,7 +31,7 @@ static const int scalepreview       = 4;
 static const int tag_preview        = 0;        /* 1 means enable, 0 is off */
 static const int colorfultag        = 1;        /* 0 means use SchemeSel for selected non vacant tag */
 /* volume via scripts/vol.sh: default sink, 5% steps capped at 100%, and an
- * immediate bar refresh (SIGUSR1 to bar.sh) */
+ * immediate bar refresh (SIGUSR2 to bar.sh: volume/brightness only) */
 static const char *upvol[]   = { "/bin/sh", "-c", "exec \"$HOME/.config/chadwm/scripts/vol.sh\" up",   NULL };
 static const char *downvol[] = { "/bin/sh", "-c", "exec \"$HOME/.config/chadwm/scripts/vol.sh\" down", NULL };
 static const char *mutevol[] = { "/bin/sh", "-c", "exec \"$HOME/.config/chadwm/scripts/vol.sh\" mute", NULL };
@@ -40,7 +40,7 @@ static const int new_window_attach_on_end = 1; /* dwindle: older windows keep th
 #define ICONSIZE 19   /* icon size */
 #define ICONSPACING 8 /* space between icon and title */
 
-static const char *fonts[]          = {"JetBrainsMono Nerd Font:style:Medium:size=11" ,"JetBrainsMono Nerd Font Mono:style:medium:size=19", "Noto Sans Arabic UI:style=Medium:size=11" };
+static const char *fonts[]          = {"JetBrainsMono Nerd Font:style:Medium:size=11" ,"JetBrainsMono Nerd Font Mono:style:medium:size=19", "Droid Arabic Kufi:size=11" };
 
 // theme
 #include "themes/grayscale.h"
@@ -131,163 +131,129 @@ static const Layout layouts[] = {
 /* key definitions */
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
-    { MODKEY,                       KEY,      view,           {.ui = 1 << TAG} }, \
-    { MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
-    { MODKEY|ShiftMask,             KEY,      tag,            {.ui = 1 << TAG} }, \
-    { MODKEY|ControlMask|ShiftMask, KEY,      toggletag,      {.ui = 1 << TAG} },
+    { MODKEY,                       KEY,      view,           {.ui = 1 << TAG}, "go to workspace" }, \
+    { MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG}, "show workspace alongside" }, \
+    { MODKEY|ShiftMask,             KEY,      tag,            {.ui = 1 << TAG}, "move window to workspace" }, \
+    { MODKEY|ControlMask|ShiftMask, KEY,      toggletag,      {.ui = 1 << TAG}, "also show window on workspace" },
 /* HyDE: Super+Alt+N moves the window to workspace N without following it
  * (dwm `tag` changes the client's tags only, so the view stays put) */
 #define SILENTTAG(KEY,TAG) \
-    { MODKEY|Mod1Mask,              KEY,      tag,            {.ui = 1 << TAG} },
+    { MODKEY|Mod1Mask,              KEY,      tag,            {.ui = 1 << TAG}, "move window to workspace" },
 
 /* helper for spawning shell commands in the pre dwm-5.0 fashion */
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 
+/* Super+? cheat sheet (keyhelp.c): the last field of every key and button is
+ * its description, KEYSECTION starts a group. Entries with the same modifiers
+ * and description are shown as one row (Super+arrows, Super+1..0), so give
+ * pairs one shared text ("previous / next ..."). Keep descriptions short;
+ * the sheet has four columns. */
+#define KEYSECTION(icon, name) { 0, NoSymbol, NULL, {0}, icon "\t" name },
+static const char keyhelpcmd[] = "exec \"$HOME/.config/chadwm/scripts/keyhelp.sh\"";
+
 /* Keymap ported 2026-09-20 from the owner's Hyprland map (HyDE,
  * https://github.com/24bit192kHz/HyDE, Configs/.local/share/hypr/lua/key_binds.lua).
- * Full combo list: ~/.config/chadwm/keybinds.txt. HyDE's center/resize scripts
+ * Full combo list: Super+? or `chadwm -k`. HyDE's center/resize scripts
  * are native (centerwin, resizepct); unmappable HyDE binds (hyprshaderd
  * dimming, hyprlock layouts, Super+Alt+N earth-native) are dropped. */
 static const Key keys[] = {
-    /* modifier                         key         function        argument */
+    /* modifier                         key         function        argument        description */
 
-    // HyDE [Hardware Controls]: audio / media / brightness
-    {0,             XF86XK_AudioLowerVolume,    spawn, {.v = downvol}},
-    {0,             XF86XK_AudioMute,           spawn, {.v = mutevol}},
-    {0,             XF86XK_AudioRaiseVolume,    spawn, {.v = upvol}},
-    {0,             XF86XK_AudioMicMute,        spawn, SHCMD("pactl set-source-mute @DEFAULT_SOURCE@ toggle")},
-    {0,             XF86XK_AudioPlay,           spawn, SHCMD("playerctl play-pause")},
-    {0,             XF86XK_AudioPause,          spawn, SHCMD("playerctl play-pause")},
-    {0,             XF86XK_AudioNext,           spawn, SHCMD("playerctl next")},
-    {0,             XF86XK_AudioPrev,           spawn, SHCMD("playerctl previous")},
-    {0,             XK_F10,                     spawn, {.v = mutevol}},  /* HyDE F10 toggle mute */
-    {0,             XK_F11,                     spawn, {.v = downvol}},  /* HyDE F11 volume down */
-    {0,             XK_F12,                     spawn, {.v = upvol}},    /* HyDE F12 volume up */
-    {0,             XK_F9,                      spawn, SHCMD("playerctl pause && pactl set-sink-mute 0 1")}, /* HyDE F9 */
-    {MODKEY,        XK_F1,                      spawn, SHCMD("notify-send \"$(playerctl metadata --format '{{artist}} - {{title}}')\"")}, /* HyDE songid */
-    {MODKEY|ControlMask, XK_m,                  spawn, SHCMD("active-audio mute")}, /* HyDE Super+Ctrl+M mute active window */
+    KEYSECTION("󰖲", "Windows")
+    { MODKEY,                           XK_q,       killclient,     {0},            "close window" },
+    { Mod1Mask,                         XK_F4,      killclient,     {0},            "close window" },   /* HyDE ALT+F4 */
+    { MODKEY,                           XK_w,       togglefloating, {0},            "toggle floating" },
+    { MODKEY|ShiftMask,                 XK_space,   togglefloating, {0},            "toggle floating" },
+    { MODKEY,                           XK_f,       togglefullscr,  {0},            "toggle fullscreen" },   /* HyDE Super+F */
+    { ShiftMask,                        XK_F11,     togglefullscr,  {0},            "toggle fullscreen" },   /* HyDE SHIFT+F11 */
+    { MODKEY|ShiftMask,                 XK_f,       togglepin,      {0},            "pin above tiled windows" },   /* HyDE Super+Shift+F pin window */
+    { MODKEY,                           XK_c,       centerwin,      {0},            "centre window (floats it)" },   /* HyDE Super+C centre window */
+    { MODKEY|ShiftMask,                 XK_c,       resizepct,      {.i = 90},      "float at 90% × 70%, centred" }, /* HyDE Super+Shift+C (resize-30.sh) */
+    { MODKEY,                           XK_g,       tabmode,        {.i = -1},      "toggle tab bar (group)" }, /* HyDE group toggle -> chadwm tab bar */
+    { MODKEY,                           XK_j,       togglesplit,    {0},            "flip split direction" },   /* HyDE Super+J toggle split */
+    { MODKEY|ShiftMask,                 XK_o,       setcfact,       {.f =  0.00},   "reset window size factor" },
 
-    // HyDE [Window Management]
-    { MODKEY,                           XK_q,       killclient,     {0} },
-    { Mod1Mask,                         XK_F4,      killclient,     {0} },   /* HyDE ALT+F4 */
-    { MODKEY,                           XK_Delete,  spawn,        SHCMD("killall bar.sh chadwm") }, /* HyDE Super+Delete kill session */
-    { MODKEY,                           XK_w,       togglefloating, {0} },
-    { MODKEY,                           XK_g,       tabmode,        {.i = -1} }, /* HyDE group toggle -> chadwm tab bar */
-    { ShiftMask,                        XK_F11,     togglefullscr,  {0} },   /* HyDE SHIFT+F11 */
-    { MODKEY,                           XK_f,       togglefullscr,  {0} },   /* HyDE Super+F */
-    { MODKEY,                           XK_l,       spawn,        SHCMD("dwm-lock") }, /* HyDE Super+L lock */
-    { MODKEY|ControlMask,               XK_q,       spawn,        SHCMD("killall bar.sh chadwm") }, /* chadwm-native quit */
-    { MODKEY|ShiftMask,                 XK_r,       restart,        {0} },   /* chadwm-native restart (HyDE Super+Shift+R wallbash: no twin) */
-    { MODKEY|ShiftMask,                 XK_f,       togglepin,      {0} },   /* HyDE Super+Shift+F pin window */
-    { Mod1Mask|ControlMask,             XK_Delete,  spawn,        SHCMD("~/.config/chadwm/scripts/powermenu.sh") }, /* HyDE Ctrl+Alt+Del logout menu */
-
-    // HyDE [Group Navigation] -> tab / stack order
-    { MODKEY|ControlMask,               XK_h,       focusstack,     {.i = -1} }, /* HyDE group prev */
-    { MODKEY|ControlMask,               XK_l,       focusstack,     {.i = +1} }, /* HyDE group next */
-
-    // HyDE [Change focus] / [Resize] / [Move active window]
-    { MODKEY,                           XK_Left,    focusdir,       {.i = 0} }, /* HyDE focus left */
-    { MODKEY,                           XK_Right,   focusdir,       {.i = 1} }, /* HyDE focus right */
-    { MODKEY,                           XK_Up,      focusdir,       {.i = 2} }, /* HyDE focus up */
-    { MODKEY,                           XK_Down,    focusdir,       {.i = 3} }, /* HyDE focus down */
-    { Mod1Mask,                         XK_Tab,     focusstack,     {.i = +1} }, /* HyDE ALT+TAB cycle focus */
-    { MODKEY,                           XK_Tab,     spawn,        SHCMD("rofi -show window") }, /* HyDE Super+TAB window switcher */
-    /* HyDE resizeactive +-30 px (dwindle: the focused window's split) */
-    { MODKEY|ShiftMask,                 XK_Left,    resizedir,      {.i = 0} },
-    { MODKEY|ShiftMask,                 XK_Right,   resizedir,      {.i = 1} },
-    { MODKEY|ShiftMask,                 XK_Up,      resizedir,      {.i = 2} },
-    { MODKEY|ShiftMask,                 XK_Down,    resizedir,      {.i = 3} },
-    /* HyDE movewindow: swap with the neighbour (floating: move 30 px) */
-    { MODKEY|ControlMask|ShiftMask,     XK_Left,    movedir,        {.i = 0} },
-    { MODKEY|ControlMask|ShiftMask,     XK_Right,   movedir,        {.i = 1} },
-    { MODKEY|ControlMask|ShiftMask,     XK_Up,      movedir,        {.i = 2} },
-    { MODKEY|ControlMask|ShiftMask,     XK_Down,    movedir,        {.i = 3} },
+    KEYSECTION("󰆾", "Focus & move")
+    { MODKEY,                           XK_Left,    focusdir,       {.i = 0},       "focus in that direction" }, /* HyDE focus left */
+    { MODKEY,                           XK_Right,   focusdir,       {.i = 1},       "focus in that direction" }, /* HyDE focus right */
+    { MODKEY,                           XK_Up,      focusdir,       {.i = 2},       "focus in that direction" }, /* HyDE focus up */
+    { MODKEY,                           XK_Down,    focusdir,       {.i = 3},       "focus in that direction" }, /* HyDE focus down */
+    { Mod1Mask,                         XK_Tab,     focusstack,     {.i = +1},      "cycle focus" }, /* HyDE ALT+TAB cycle focus */
+    /* HyDE [Group Navigation] -> tab / stack order */
+    { MODKEY|ControlMask,               XK_h,       focusstack,     {.i = -1},      "previous / next in group" }, /* HyDE group prev */
+    { MODKEY|ControlMask,               XK_l,       focusstack,     {.i = +1},      "previous / next in group" }, /* HyDE group next */
+    /* HyDE resizeactive +-30 px: tiled, the nearest divider moves that way;
+     * floating, the window grows / shrinks around its centre (hyde.c) */
+    { MODKEY|ShiftMask,                 XK_Left,    resizedir,      {.i = 0},       "resize: divider moves 30 px" },
+    { MODKEY|ShiftMask,                 XK_Right,   resizedir,      {.i = 1},       "resize: divider moves 30 px" },
+    { MODKEY|ShiftMask,                 XK_Up,      resizedir,      {.i = 2},       "resize: divider moves 30 px" },
+    { MODKEY|ShiftMask,                 XK_Down,    resizedir,      {.i = 3},       "resize: divider moves 30 px" },
+    /* HyDE movewindow: swap with the neighbour that way (floating: move 30 px) */
+    { MODKEY|ControlMask|ShiftMask,     XK_Left,    movedir,        {.i = 0},       "move window that way" },
+    { MODKEY|ControlMask|ShiftMask,     XK_Right,   movedir,        {.i = 1},       "move window that way" },
+    { MODKEY|ControlMask|ShiftMask,     XK_Up,      movedir,        {.i = 2},       "move window that way" },
+    { MODKEY|ControlMask|ShiftMask,     XK_Down,    movedir,        {.i = 3},       "move window that way" },
     /* HyDE Super+Z / Super+X: hold and move the mouse to drag / resize */
-    { MODKEY,                           XK_z,       moveorplace,    {.i = 0} },
-    { MODKEY,                           XK_x,       resizemouse,    {0} },
+    { MODKEY,                           XK_z,       moveorplace,    {.i = 0},       "hold + mouse: move window" },
+    { MODKEY,                           XK_x,       resizemouse,    {0},            "hold + mouse: resize window" },
 
     // HyDE [Launcher|Apps]
-    { MODKEY,                           XK_Return,  spawn,          SHCMD("st")},
-    { MODKEY,                           XK_t,       spawn,          SHCMD("st")},  /* HyDE Super+T */
-    { MODKEY|Mod1Mask,                  XK_t,       droptoggle,     {0} }, /* HyDE dropdown terminal (pypr console) */
-    { MODKEY,                           XK_e,       spawn,          SHCMD("pcmanfm-qt")},
-    { MODKEY,                           XK_b,       spawn,          SHCMD("firefox")},
-    { ControlMask|ShiftMask,            XK_Escape,  spawn,          SHCMD("st -e btop")},
-
+    KEYSECTION("󱓞", "Launch")
+    { MODKEY,                           XK_Return,  spawn,          SHCMD("st"),    "terminal (st)" },
+    { MODKEY,                           XK_t,       spawn,          SHCMD("st"),    "terminal (st)" },  /* HyDE Super+T */
+    { MODKEY|Mod1Mask,                  XK_t,       droptoggle,     {0},            "dropdown terminal" }, /* HyDE dropdown terminal (pypr console) */
+    { MODKEY,                           XK_e,       spawn,          SHCMD("pcmanfm-qt"), "file manager" },
+    { MODKEY,                           XK_b,       spawn,          SHCMD("firefox"), "browser (Firefox)" },
+    { ControlMask|ShiftMask,            XK_Escape,  spawn,          SHCMD("st -e btop"), "system monitor (btop)" },
     // HyDE [Launcher|Rofi menus]
-    { MODKEY,                           XK_a,       spawn,          SHCMD("rofi -show drun")},
-    { MODKEY,                           XK_c,       centerwin,      {0} },   /* HyDE Super+C centre window */
-    { MODKEY|ShiftMask,                 XK_c,       resizepct,      {.i = 50} }, /* HyDE Super+Shift+C resize to 50%% */
-    { MODKEY|ShiftMask,                 XK_e,       spawn,          SHCMD("rofi -modes filebrowser -show filebrowser")}, /* HyDE file finder */
-    { MODKEY,                           XK_slash,   spawn,          SHCMD("rofi -dmenu -i -p keybinds < ~/.config/chadwm/keybinds.txt")}, /* HyDE keybindings hint */
-    { MODKEY,                           XK_comma,   spawn,          SHCMD("rofimoji --action type --selector rofi --clipboarder xclip --typer xdotool")}, /* HyDE emoji picker */
-    { MODKEY,                           XK_period,  spawn,          SHCMD("~/.config/chadwm/scripts/glyph-picker.sh")}, /* HyDE glyph picker */
-    { MODKEY,                           XK_v,       spawn,          SHCMD("rofi-clip.sh pick")},   /* HyDE clipboard */
-    { MODKEY|ShiftMask,                 XK_v,       spawn,          SHCMD("rofi-clip.sh menu")},   /* HyDE clipboard manager */
-    { MODKEY|ShiftMask,                 XK_a,       spawn,          SHCMD("rofi -show combi")},    /* HyDE select rofi launcher */
-    // HyDE [Utilities|Screen Capture]
-    { MODKEY,                           XK_u,       spawn,          SHCMD("maim --select | xclip -selection clipboard -t image/png")}, /* chadwm-native */
-    { MODKEY|ControlMask,               XK_u,       spawn,          SHCMD("maim | xclip -selection clipboard -t image/png")},        /* chadwm-native */
-    { MODKEY,                           XK_p,       spawn,          SHCMD("dwm-screenshot gui")},    /* HyDE Super+P snip */
-    { MODKEY|ControlMask,               XK_p,       spawn,          SHCMD("dwm-screenshot clip")},   /* HyDE Super+Ctrl+P freeze+snip -> box clip */
-    { MODKEY|Mod1Mask,                  XK_p,       spawn,          SHCMD("dwm-screenshot screen")}, /* HyDE Super+Alt+P print monitor */
-    { 0,                                XK_Print,   spawn,          SHCMD("dwm-screenshot full")},   /* HyDE Print: all monitors */
-    { MODKEY,                           XK_o,       spawn,          SHCMD("~/.config/chadwm/scripts/ocr.sh")}, /* HyDE Super+O OCR */
-    { MODKEY|ControlMask,               XK_s,       spawn,          SHCMD("~/.config/chadwm/scripts/ocr.sh")}, /* HyDE Super+Ctrl+S OCR */
-    { MODKEY|ShiftMask,                 XK_p,       spawn,          SHCMD("~/.config/chadwm/scripts/colorpick.sh")}, /* HyDE Super+Shift+P color picker */
+    { MODKEY,                           XK_a,       spawn,          SHCMD("rofi -show drun"), "app launcher" },
+    { MODKEY|ShiftMask,                 XK_a,       spawn,          SHCMD("rofi -show combi"), "combined launcher" },    /* HyDE select rofi launcher */
+    { MODKEY|ShiftMask,                 XK_e,       spawn,          SHCMD("rofi -modes filebrowser -show filebrowser"), "file finder" }, /* HyDE file finder */
+    { MODKEY,                           XK_Tab,     spawn,          SHCMD("rofi -show window"), "window switcher" }, /* HyDE Super+TAB window switcher */
 
+    KEYSECTION("󰍜", "Tools")
+    { MODKEY,                           XK_slash,   keyhelp,        {.v = keyhelpcmd}, "this cheat sheet" }, /* HyDE keybindings hint */
+    { MODKEY|ShiftMask,                 XK_slash,   keyhelp,        {.v = keyhelpcmd}, "this cheat sheet" }, /* Super+? */
+    { MODKEY,                           XK_comma,   spawn,          SHCMD("rofimoji --action type --selector rofi --clipboarder xclip --typer xdotool"), "emoji picker" }, /* HyDE emoji picker */
+    { MODKEY,                           XK_period,  spawn,          SHCMD("~/.config/chadwm/scripts/glyph-picker.sh"), "Nerd Font glyph picker" }, /* HyDE glyph picker */
+    { MODKEY,                           XK_v,       spawn,          SHCMD("rofi-clip.sh pick"), "clipboard history" },   /* HyDE clipboard */
+    { MODKEY|ShiftMask,                 XK_v,       spawn,          SHCMD("rofi-clip.sh menu"), "clipboard manager" },   /* HyDE clipboard manager */
     // HyDE [Utilities]
-    { MODKEY,                           XK_k,       spawn,          SHCMD("kbd-lang.sh toggle")},    /* HyDE Super+K keyboard layout */
-    { MODKEY|Mod1Mask,                  XK_g,       spawn,          SHCMD("notify-send 'GameMode on'")}, /* HyDE Super+Alt+G (box: notify placeholder) */
-    { MODKEY,                           XK_d,       spawn,          SHCMD("notify-send Dictation 'no STT backend installed'")}, /* HyDE Super+D dictation (box: no STT) */
-    { MODKEY,                           XK_s,       togglescratch,  {0} },   /* HyDE Super+S special workspace toggle */
-    { MODKEY|ShiftMask,                 XK_s,       scratchsend,    {.i = 1} }, /* HyDE Super+Shift+S send to special workspace */
-    { MODKEY|Mod1Mask,                  XK_s,       scratchsend,    {.i = 0} }, /* HyDE Super+Alt+S send silently */
+    { MODKEY,                           XK_k,       spawn,          SHCMD("kbd-lang.sh toggle"), "switch keyboard layout" },    /* HyDE Super+K keyboard layout */
+    { MODKEY,                           XK_d,       spawn,          SHCMD("notify-send Dictation 'no STT backend installed'"), "dictation (no backend yet)" }, /* HyDE Super+D dictation (box: no STT) */
+    { MODKEY|Mod1Mask,                  XK_g,       spawn,          SHCMD("notify-send 'GameMode on'"), "game mode (placeholder)" }, /* HyDE Super+Alt+G (box: notify placeholder) */
 
-    // HyDE [Theming and Wallpaper]
-    { MODKEY|ShiftMask,                 XK_w,       spawn,          SHCMD("~/.config/chadwm/scripts/wallpaper-select.sh")}, /* HyDE Super+Shift+W global wallpaper */
-    { MODKEY|Mod1Mask,                  XK_Up,      spawn,          SHCMD("~/.config/chadwm/scripts/bar-theme.sh prev")},   /* HyDE Super+Alt+Up bar layout prev */
-    { MODKEY|Mod1Mask,                  XK_Down,    spawn,          SHCMD("~/.config/chadwm/scripts/bar-theme.sh next")},   /* HyDE Super+Alt+Down bar layout next */
-    { MODKEY|ShiftMask,                 XK_t,       spawn,          SHCMD("~/.config/chadwm/scripts/theme-select.sh")},     /* HyDE Super+Shift+T theme select */
-    { MODKEY|ShiftMask,                 XK_y,       spawn,          SHCMD("notify-send 'Animations: not available on X11'")}, /* HyDE Super+Shift+Y (no twin) */
-    { MODKEY|ShiftMask,                 XK_u,       spawn,          SHCMD("notify-send 'Locker layouts: not available on X11'")}, /* HyDE Super+Shift+U (no twin) */
+    // HyDE [Utilities|Screen Capture]
+    KEYSECTION("󰹑", "Capture")
+    { MODKEY,                           XK_p,       spawn,          SHCMD("dwm-screenshot gui"), "region → file + clipboard" },    /* HyDE Super+P snip */
+    { MODKEY|ControlMask,               XK_p,       spawn,          SHCMD("dwm-screenshot clip"), "region → clipboard" },   /* HyDE Super+Ctrl+P freeze+snip -> box clip */
+    { MODKEY|Mod1Mask,                  XK_p,       spawn,          SHCMD("dwm-screenshot screen"), "monitor → file + clipboard" }, /* HyDE Super+Alt+P print monitor */
+    { 0,                                XK_Print,   spawn,          SHCMD("dwm-screenshot full"), "all monitors → file + clipboard" },   /* HyDE Print: all monitors */
+    { MODKEY,                           XK_u,       spawn,          SHCMD("maim --select | xclip -selection clipboard -t image/png"), "region → clipboard (maim)" }, /* chadwm-native */
+    { MODKEY|ControlMask,               XK_u,       spawn,          SHCMD("maim | xclip -selection clipboard -t image/png"), "full screen → clipboard" },        /* chadwm-native */
+    { MODKEY,                           XK_o,       spawn,          SHCMD("~/.config/chadwm/scripts/ocr.sh"), "OCR region → clipboard" }, /* HyDE Super+O OCR */
+    { MODKEY|ControlMask,               XK_s,       spawn,          SHCMD("~/.config/chadwm/scripts/ocr.sh"), "OCR region → clipboard" }, /* HyDE Super+Ctrl+S OCR */
+    { MODKEY|ShiftMask,                 XK_p,       spawn,          SHCMD("~/.config/chadwm/scripts/colorpick.sh"), "colour picker → clipboard" }, /* HyDE Super+Shift+P color picker */
 
-    // chadwm-native layout / gap / border controls (keys free in the HyDE map)
-    { MODKEY,                           XK_j,       togglesplit,    {0} },   /* HyDE Super+J toggle split */
-    { MODKEY,                           XK_space,   setlayout,      {0} },
-    { MODKEY|ShiftMask,                 XK_space,   togglefloating, {0} },
-    { MODKEY,                           XK_m,       setlayout,      {.v = &layouts[2]} }, /* monocle */
-    { MODKEY|ControlMask,               XK_g,       setlayout,      {.v = &layouts[11]} },
-    { MODKEY|ControlMask|ShiftMask,     XK_t,       setlayout,      {.v = &layouts[14]} },
-    { MODKEY|ControlMask,               XK_comma,   cyclelayout,    {.i = -1} },
-    { MODKEY|ControlMask,               XK_period,  cyclelayout,    {.i = +1} },
-    { MODKEY,                           XK_i,       incnmaster,     {.i = +1} },
-    { MODKEY|Mod1Mask,                  XK_i,       incnmaster,     {.i = -1} }, /* was Super+D (taken by HyDE dictation) */
-    { MODKEY|ShiftMask,                 XK_o,       setcfact,       {.f =  0.00} },
-    { MODKEY|ControlMask,               XK_i,       incrgaps,       {.i = +1 } },
-    { MODKEY|ControlMask,               XK_d,       incrgaps,       {.i = -1 } },
-    { MODKEY|ShiftMask,                 XK_i,       incrigaps,      {.i = +1 } },
-    { MODKEY|ControlMask|ShiftMask,     XK_i,       incrigaps,      {.i = -1 } },
-    { MODKEY|ControlMask,               XK_o,       incrogaps,      {.i = +1 } },
-    { MODKEY|ControlMask|ShiftMask,     XK_o,       incrogaps,      {.i = -1 } },
-    { MODKEY|ControlMask|ShiftMask,     XK_d,       defaultgaps,    {0} },
-    /* inner/outer hori, vert gap trims — on Super+Ctrl+Alt+6..9 so Super+Alt+6..9
-       stays free for HyDE silent workspace moves */
-    { MODKEY|ControlMask|Mod1Mask,      XK_6,       incrihgaps,     {.i = +1 } },
-    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_6,  incrihgaps,     {.i = -1 } },
-    { MODKEY|ControlMask|Mod1Mask,      XK_7,       incrivgaps,     {.i = +1 } },
-    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_7,  incrivgaps,     {.i = -1 } },
-    { MODKEY|ControlMask|Mod1Mask,      XK_8,       incrohgaps,     {.i = +1 } },
-    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_8,  incrohgaps,     {.i = -1 } },
-    { MODKEY|ControlMask|Mod1Mask,      XK_9,       incrovgaps,     {.i = +1 } },
-    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_9,  incrovgaps,     {.i = -1 } },
-    { MODKEY|ControlMask,               XK_t,       togglegaps,     {0} },
-    { MODKEY|ShiftMask,                 XK_b,       togglebar,      {0} },  /* HyDE Super+Shift+B waybar toggle */
-    { MODKEY|ShiftMask,                 XK_minus,   setborderpx,    {.i = -1} },
-    { MODKEY|Mod1Mask,                  XK_equal,   setborderpx,    {.i = +1} },
-    { MODKEY|Mod1Mask|ShiftMask,        XK_0,       setborderpx,    {.i = 0} /* reset to default_border (Super+Alt+0 = HyDE silent move) */ },
+    // HyDE [Hardware Controls]: audio / media / brightness
+    KEYSECTION("󰕾", "Media")
+    {0,             XF86XK_AudioRaiseVolume,    spawn, {.v = upvol},   "volume up 5%" },
+    {0,             XK_F12,                     spawn, {.v = upvol},   "volume up 5%" },    /* HyDE F12 volume up */
+    {0,             XF86XK_AudioLowerVolume,    spawn, {.v = downvol}, "volume down 5%" },
+    {0,             XK_F11,                     spawn, {.v = downvol}, "volume down 5%" },  /* HyDE F11 volume down */
+    {0,             XF86XK_AudioMute,           spawn, {.v = mutevol}, "mute output" },
+    {0,             XK_F10,                     spawn, {.v = mutevol}, "mute output" },  /* HyDE F10 toggle mute */
+    {0,             XF86XK_AudioMicMute,        spawn, SHCMD("pactl set-source-mute @DEFAULT_SOURCE@ toggle"), "mute microphone" },
+    {0,             XK_F9,                      spawn, SHCMD("playerctl pause && pactl set-sink-mute 0 1"), "pause player + mute" }, /* HyDE F9 */
+    {0,             XF86XK_AudioPlay,           spawn, SHCMD("playerctl play-pause"), "play / pause" },
+    {0,             XF86XK_AudioPause,          spawn, SHCMD("playerctl play-pause"), "play / pause" },
+    {0,             XF86XK_AudioPrev,           spawn, SHCMD("playerctl previous"), "previous / next track" },
+    {0,             XF86XK_AudioNext,           spawn, SHCMD("playerctl next"), "previous / next track" },
+    {MODKEY,        XK_F1,                      spawn, SHCMD("notify-send \"$(playerctl metadata --format '{{artist}} - {{title}}')\""), "now playing" }, /* HyDE songid */
+    {MODKEY|ControlMask, XK_m,                  spawn, SHCMD("active-audio mute"), "mute the focused app" }, /* HyDE Super+Ctrl+M mute active window */
 
-    // HyDE [Workspaces] -- dwm tags 1..9
+    // HyDE [Workspaces] -- dwm tags 1..10
+    KEYSECTION("󱇙", "Workspaces")
     TAGKEYS(                            XK_1,                       0)
     TAGKEYS(                            XK_2,                       1)
     TAGKEYS(                            XK_3,                       2)
@@ -297,6 +263,7 @@ static const Key keys[] = {
     TAGKEYS(                            XK_7,                       6)
     TAGKEYS(                            XK_8,                       7)
     TAGKEYS(                            XK_9,                       8)
+    TAGKEYS(                            XK_0,                       9) /* HyDE workspace 10 */
     SILENTTAG(                          XK_1,                       0)
     SILENTTAG(                          XK_2,                       1)
     SILENTTAG(                          XK_3,                       2)
@@ -306,34 +273,89 @@ static const Key keys[] = {
     SILENTTAG(                          XK_7,                       6)
     SILENTTAG(                          XK_8,                       7)
     SILENTTAG(                          XK_9,                       8)
-    TAGKEYS(                            XK_0,                       9) /* HyDE workspace 10 */
     SILENTTAG(                          XK_0,                       9)
-    { MODKEY|ControlMask,               XK_Right,   shiftview,      {.i = +1} }, /* HyDE relative workspace forward (verified live 2026-09-20) */
-    { MODKEY|ControlMask,               XK_Left,    shiftview,      {.i = -1} },
-    { MODKEY|ControlMask,               XK_Down,    viewempty,      {0} },   /* HyDE nearest empty workspace */
-    { MODKEY|ControlMask|Mod1Mask,      XK_Left,    tagrel,         {.i = -1} }, /* HyDE move window to prev workspace */
-    { MODKEY|ControlMask|Mod1Mask,      XK_Right,   tagrel,         {.i = +1} }, /* HyDE move window to next workspace */
+    { MODKEY|ControlMask,               XK_Left,    shiftview,      {.i = -1},      "previous / next workspace" },
+    { MODKEY|ControlMask,               XK_Right,   shiftview,      {.i = +1},      "previous / next workspace" }, /* HyDE relative workspace forward (verified live 2026-09-20) */
+    { MODKEY|ControlMask,               XK_Down,    viewempty,      {0},            "first empty workspace" },   /* HyDE nearest empty workspace */
+    { MODKEY|ControlMask|Mod1Mask,      XK_Left,    tagrel,         {.i = -1},      "send window prev / next" }, /* HyDE move window to prev workspace */
+    { MODKEY|ControlMask|Mod1Mask,      XK_Right,   tagrel,         {.i = +1},      "send window prev / next" }, /* HyDE move window to next workspace */
+    { MODKEY,                           XK_s,       togglescratch,  {0},            "special workspace" },   /* HyDE Super+S special workspace toggle */
+    { MODKEY|ShiftMask,                 XK_s,       scratchsend,    {.i = 1},       "window → special, follow" }, /* HyDE Super+Shift+S send to special workspace */
+    { MODKEY|Mod1Mask,                  XK_s,       scratchsend,    {.i = 0},       "window → special, silent" }, /* HyDE Super+Alt+S send silently */
+
+    // chadwm-native layout / gap / border controls (keys free in the HyDE map)
+    KEYSECTION("󰕴", "Layout")
+    { MODKEY,                           XK_space,   setlayout,      {0},            "previous layout" },
+    { MODKEY|ControlMask,               XK_comma,   cyclelayout,    {.i = -1},      "cycle layouts" },
+    { MODKEY|ControlMask,               XK_period,  cyclelayout,    {.i = +1},      "cycle layouts" },
+    { MODKEY,                           XK_m,       setlayout,      {.v = &layouts[2]}, "monocle" },
+    { MODKEY|ControlMask,               XK_g,       setlayout,      {.v = &layouts[11]}, "gapless grid" },
+    { MODKEY|ControlMask|ShiftMask,     XK_t,       setlayout,      {.v = &layouts[14]}, "floating (no tiling)" },
+    { MODKEY,                           XK_i,       incnmaster,     {.i = +1},      "one more master window" },
+    { MODKEY|Mod1Mask,                  XK_i,       incnmaster,     {.i = -1},      "one fewer master window" }, /* was Super+D (taken by HyDE dictation) */
+    { MODKEY|ShiftMask,                 XK_b,       togglebar,      {0},            "toggle bar" },  /* HyDE Super+Shift+B waybar toggle */
+
+    KEYSECTION("󰃎", "Gaps & borders")
+    { MODKEY|ControlMask,               XK_i,       incrgaps,       {.i = +1 },     "all gaps +1" },
+    { MODKEY|ControlMask,               XK_d,       incrgaps,       {.i = -1 },     "all gaps −1" },
+    { MODKEY|ShiftMask,                 XK_i,       incrigaps,      {.i = +1 },     "inner gaps +1" },
+    { MODKEY|ControlMask|ShiftMask,     XK_i,       incrigaps,      {.i = -1 },     "inner gaps −1" },
+    { MODKEY|ControlMask,               XK_o,       incrogaps,      {.i = +1 },     "outer gaps +1" },
+    { MODKEY|ControlMask|ShiftMask,     XK_o,       incrogaps,      {.i = -1 },     "outer gaps −1" },
+    /* inner/outer hori, vert gap trims — on Super+Ctrl+Alt+6..9 so Super+Alt+6..9
+       stays free for HyDE silent workspace moves */
+    { MODKEY|ControlMask|Mod1Mask,      XK_6,       incrihgaps,     {.i = +1 },     "gap +1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask,      XK_7,       incrivgaps,     {.i = +1 },     "gap +1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask,      XK_8,       incrohgaps,     {.i = +1 },     "gap +1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask,      XK_9,       incrovgaps,     {.i = +1 },     "gap +1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_6,  incrihgaps,     {.i = -1 },     "gap −1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_7,  incrivgaps,     {.i = -1 },     "gap −1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_8,  incrohgaps,     {.i = -1 },     "gap −1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|Mod1Mask|ShiftMask, XK_9,  incrovgaps,     {.i = -1 },     "gap −1 (ih iv oh ov)" },
+    { MODKEY|ControlMask|ShiftMask,     XK_d,       defaultgaps,    {0},            "reset gaps" },
+    { MODKEY|ControlMask,               XK_t,       togglegaps,     {0},            "toggle gaps" },
+    { MODKEY|Mod1Mask,                  XK_equal,   setborderpx,    {.i = +1},      "border +1" },
+    { MODKEY|ShiftMask,                 XK_minus,   setborderpx,    {.i = -1},      "border −1" },
+    { MODKEY|Mod1Mask|ShiftMask,        XK_0,       setborderpx,    {.i = 0},       "reset border" }, /* reset to default_border (Super+Alt+0 = HyDE silent move) */
+
+    // HyDE [Theming and Wallpaper]
+    KEYSECTION("󰏘", "Theme")
+    { MODKEY|ShiftMask,                 XK_w,       spawn,          SHCMD("~/.config/chadwm/scripts/wallpaper-select.sh"), "wallpaper planet picker" }, /* HyDE Super+Shift+W global wallpaper */
+    { MODKEY|ShiftMask,                 XK_t,       spawn,          SHCMD("~/.config/chadwm/scripts/theme-select.sh"), "theme picker" },     /* HyDE Super+Shift+T theme select */
+    { MODKEY|Mod1Mask,                  XK_Up,      spawn,          SHCMD("~/.config/chadwm/scripts/bar-theme.sh prev"), "previous / next bar theme" },   /* HyDE Super+Alt+Up bar layout prev */
+    { MODKEY|Mod1Mask,                  XK_Down,    spawn,          SHCMD("~/.config/chadwm/scripts/bar-theme.sh next"), "previous / next bar theme" },   /* HyDE Super+Alt+Down bar layout next */
+    { MODKEY|ShiftMask,                 XK_y,       spawn,          SHCMD("notify-send 'Animations: not available on X11'"), "animations (none on X11)" }, /* HyDE Super+Shift+Y (no twin) */
+    { MODKEY|ShiftMask,                 XK_u,       spawn,          SHCMD("notify-send 'Locker layouts: not available on X11'"), "locker layouts (none on X11)" }, /* HyDE Super+Shift+U (no twin) */
+
+    // HyDE [Window Management]: session
+    KEYSECTION("󰐥", "Session")
+    { MODKEY,                           XK_l,       spawn,          SHCMD("dwm-lock"), "lock screen" }, /* HyDE Super+L lock */
+    { Mod1Mask|ControlMask,             XK_BackSpace, spawn,        SHCMD("chadpower || ~/.config/chadwm/scripts/powermenu.sh"), "session / power menu" }, /* chadpower (Rust popup) */
+    { Mod1Mask|ControlMask,             XK_Delete,  spawn,          SHCMD("chadpower || ~/.config/chadwm/scripts/powermenu.sh"), "session / power menu" }, /* HyDE Ctrl+Alt+Del logout menu */
+    { MODKEY|ShiftMask,                 XK_r,       restart,        {0},            "restart chadwm" },   /* chadwm-native restart (HyDE Super+Shift+R wallbash: no twin) */
+    { MODKEY,                           XK_Delete,  spawn,          SHCMD("killall bar.sh chadwm"), "end session" }, /* HyDE Super+Delete kill session */
+    { MODKEY|ControlMask,               XK_q,       spawn,          SHCMD("killall bar.sh chadwm"), "end session" }, /* chadwm-native quit */
 };
 
 /* button definitions */
 /* click can be ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle, ClkClientWin, or ClkRootWin */
 static const Button buttons[] = {
-    /* click                event mask      button          function        argument */
-    { ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
-    { ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[3]} },
-    { ClkWinTitle,          0,              Button2,        zoom,           {0} },
-    { ClkStatusText,        0,              Button2,        spawn,          SHCMD("st") },
+    /* click                event mask      button          function        argument        description */
+    { ClkLtSymbol,          0,              Button1,        setlayout,      {0},            "previous layout" },
+    { ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[3]}, "spiral layout" },
+    { ClkWinTitle,          0,              Button2,        zoom,           {0},            "make master" },
+    { ClkStatusText,        0,              Button2,        spawn,          SHCMD("st"),    "terminal (st)" },
 
     /* HyDE Super+scroll = prev/next workspace (scroll up = previous) */
-    { ClkRootWin,           0,              Button4,        shiftview,      {.i = -1} },
-    { ClkRootWin,           0,              Button5,        shiftview,      {.i = +1} },
-    { ClkTagBar,            0,              Button4,        shiftview,      {.i = -1} },
-    { ClkTagBar,            0,              Button5,        shiftview,      {.i = +1} },
+    { ClkRootWin,           0,              Button4,        shiftview,      {.i = -1},      "previous / next workspace" },
+    { ClkRootWin,           0,              Button5,        shiftview,      {.i = +1},      "previous / next workspace" },
+    { ClkTagBar,            0,              Button4,        shiftview,      {.i = -1},      "previous / next workspace" },
+    { ClkTagBar,            0,              Button5,        shiftview,      {.i = +1},      "previous / next workspace" },
     /* same with Super held, 1:1 with the HyDE map (MOD + mouse_down/up) */
-    { ClkRootWin,           MODKEY,         Button4,        shiftview,      {.i = -1} },
-    { ClkRootWin,           MODKEY,         Button5,        shiftview,      {.i = +1} },
-    { ClkTagBar,            MODKEY,         Button4,        shiftview,      {.i = -1} },
-    { ClkTagBar,            MODKEY,         Button5,        shiftview,      {.i = +1} },
+    { ClkRootWin,           MODKEY,         Button4,        shiftview,      {.i = -1},      "previous / next workspace" },
+    { ClkRootWin,           MODKEY,         Button5,        shiftview,      {.i = +1},      "previous / next workspace" },
+    { ClkTagBar,            MODKEY,         Button4,        shiftview,      {.i = -1},      "previous / next workspace" },
+    { ClkTagBar,            MODKEY,         Button5,        shiftview,      {.i = +1},      "previous / next workspace" },
 
     /* Keep movemouse? */
     /* { ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} }, */
@@ -348,17 +370,17 @@ static const Button buttons[] = {
     * to control these separately (i.e. to retain the feature to move a tiled window
     * into a floating position).
     */
-    { ClkClientWin,         MODKEY,         Button1,        moveorplace,    {.i = 0} },
-    { ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
-    { ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
-    { ClkClientWin,         MODKEY|ControlMask, Button1,    dragmfact,      {0} },
-    { ClkClientWin,         MODKEY|ControlMask, Button3,    dragcfact,      {0} },
-    { ClkTagBar,            0,              Button1,        view,           {0} },
-    { ClkTagBar,            0,              Button3,        toggleview,     {0} },
-    { ClkTagBar,            MODKEY,         Button1,        tag,            {0} },
-    { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
-    { ClkTabBar,            0,              Button1,        focuswin,       {0} },
-    { ClkTabPrev,           0,              Button1,        movestack,      { .i = -1 } },
-    { ClkTabNext,           0,              Button1,        movestack,      { .i = +1 } },
-    { ClkTabClose,          0,              Button1,        killclient,     {0} },
+    { ClkClientWin,         MODKEY,         Button1,        moveorplace,    {.i = 0},       "drag to move" },
+    { ClkClientWin,         MODKEY,         Button2,        togglefloating, {0},            "toggle floating" },
+    { ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0},            "drag corner to resize" },
+    { ClkClientWin,         MODKEY|ControlMask, Button1,    dragmfact,      {0},            "drag master area size" },
+    { ClkClientWin,         MODKEY|ControlMask, Button3,    dragcfact,      {0},            "drag window size factor" },
+    { ClkTagBar,            0,              Button1,        view,           {0},            "go to workspace" },
+    { ClkTagBar,            0,              Button3,        toggleview,     {0},            "show workspace alongside" },
+    { ClkTagBar,            MODKEY,         Button1,        tag,            {0},            "move window there" },
+    { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0},            "also show window there" },
+    { ClkTabBar,            0,              Button1,        focuswin,       {0},            "focus tab" },
+    { ClkTabPrev,           0,              Button1,        movestack,      { .i = -1 },    "move tab left" },
+    { ClkTabNext,           0,              Button1,        movestack,      { .i = +1 },    "move tab right" },
+    { ClkTabClose,          0,              Button1,        killclient,     {0},            "close tab" },
 };

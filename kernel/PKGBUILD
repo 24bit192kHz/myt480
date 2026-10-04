@@ -183,7 +183,7 @@ _minor=8
 #_rcver=rc8
 pkgver=${_major}.${_minor}
 _tagrel=1
-pkgrel=4
+pkgrel=7
 _srcname=cachyos-${_major}.${_minor}-${_tagrel}
 pkgdesc='Linux EEVDF + LTO + AutoFDO + Propeller Cachy Sauce Kernel by CachyOS with other patches and improvements.'
 _kernver="$pkgver-$pkgrel"
@@ -527,7 +527,6 @@ prepare() {
         -d KFENCE -d FTRACE -d AUDIT \
         -d SECURITY_SELINUX -d SECURITY_SMACK -d SECURITY_TOMOYO -d SECURITY_APPARMOR \
         -d INIT_ON_ALLOC_DEFAULT_ON -d INIT_ON_FREE_DEFAULT_ON \
-        -d INTEL_IOMMU_DEFAULT_ON \
         -m BTRFS_FS -d ANDROID_BINDER_IPC -d ANDROID_BINDERFS -d ATA \
         -d KALLSYMS_ALL -d NUMA -d EFI -d FB_EFI -d FB_VESA -d VIRTIO_FS
     ### GVT-g: mediated iGPU (mdev) for the WinApps Windows VM
@@ -535,11 +534,33 @@ prepare() {
         -m VFIO -e VFIO_GROUP -e VFIO_CONTAINER -m VFIO_IOMMU_TYPE1 -m VFIO_MDEV \
         -m DRM_I915_GVT_KVMGT -e DRM_I915_GVT \
         -e CMDLINE_BOOL --set-str CMDLINE "i915.enable_gvt=1" -d CMDLINE_OVERRIDE
+    ### MX150 passthrough to a Windows VM (VFIO + Looking Glass): the IOMMU on at boot,
+    ### host devices in passthrough mode (no translation cost), vfio-pci to claim the GPU
+    scripts/config \
+        -e INTEL_IOMMU_DEFAULT_ON \
+        -e IOMMU_DEFAULT_PASSTHROUGH -d IOMMU_DEFAULT_DMA_LAZY -d IOMMU_DEFAULT_DMA_STRICT \
+        -m VFIO_PCI_CORE -m VFIO_PCI
     ### TPM 2.0 (Infineon on LPC, tpm_tis; coreboot declares it as MSFT0101) and the
     ### PCH TCO hardware watchdog, so a hang can reset the machine
     scripts/config \
         -e TCG_TPM -e TCG_TIS_CORE -e TCG_TIS -e HW_RANDOM_TPM -e TCG_CRB -e SECURITYFS \
         -e WATCHDOG -e WATCHDOG_CORE -m ITCO_WDT -e ITCO_VENDOR_SUPPORT
+    ### Disk encryption without an initramfs on disk: dm-crypt and AES-NI built in; the
+    ### disk key is a kernel "encrypted" key under a TPM-sealed "trusted" key (the kernel
+    ### talks to the TPM over an encrypted session, TCG_TPM2_HMAC); AF_ALG for cryptsetup
+    scripts/config \
+        -e MD -e BLK_DEV_DM -e DM_CRYPT -e CRYPTO_AES_NI_INTEL -e CRYPTO_XTS \
+        -e KEYS -e TRUSTED_KEYS -e TRUSTED_KEYS_TPM -e ENCRYPTED_KEYS -e USER_DECRYPTED_DATA \
+        -e CRYPTO_USER_API_HASH -e CRYPTO_USER_API_SKCIPHER \
+        -e CRYPTO_SHA256 -e CRYPTO_SHA512 -e CRYPTO_SHA1
+    ### Early init built in (tools/early-init: TPM unseal, dm-crypt root + swap, resume,
+    ### switch_root; passphrase fallback with the static cryptsetup). Not compressed on its
+    ### own: the whole kernel image is LZ4 already.
+    scripts/config \
+        --set-str INITRAMFS_SOURCE "$startdir/early/root $startdir/early/nodes.list" \
+        --set-val INITRAMFS_ROOT_UID "$(id -u)" --set-val INITRAMFS_ROOT_GID "$(id -g)" \
+        -e INITRAMFS_COMPRESSION_NONE -d INITRAMFS_COMPRESSION_LZ4 -d INITRAMFS_COMPRESSION_ZSTD \
+        -d INITRAMFS_COMPRESSION_GZIP -d INITRAMFS_COMPRESSION_XZ
     ### hibernation image compressed with LZ4 (decompresses several times faster than LZO)
     scripts/config -e HIBERNATION_COMP_LZ4 -e HIBERNATION_COMP_LZO --set-str HIBERNATION_DEF_COMP "lz4"
     make "${BUILD_FLAGS[@]}" olddefconfig

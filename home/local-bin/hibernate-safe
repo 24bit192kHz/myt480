@@ -1,0 +1,28 @@
+#!/bin/sh
+# hibernate-safe: hibernate from the session (chadpower "Hibernate").
+# The kernel turns hibernation off while a program holds memfd_secret memory, and
+# Bitwarden desktop does (/sys/power/disk reads [disabled], elogind answers "na").
+# So: quit Bitwarden, wait until the kernel allows hibernation again, hibernate, and
+# start Bitwarden the way the session does (bw-screen boot: tray + unlock) after the resume.
+had=0
+if pgrep -x bitwarden-app >/dev/null; then
+	had=1
+	pkill -x bitwarden-app
+	i=0; while pgrep -x bitwarden-app >/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+	pkill -9 -x bitwarden-app 2>/dev/null
+fi
+back() { [ $had = 1 ] && setsid /usr/local/bin/bw-screen boot >/dev/null 2>&1 & }
+i=0; while ! grep -qw disk /sys/power/state && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+if ! grep -qw disk /sys/power/state; then
+	notify-send -u critical "Hibernate" "The kernel still refuses to hibernate (another program holds protected memory)." 2>/dev/null
+	back; exit 1
+fi
+loginctl hibernate || { notify-send -u critical "Hibernate" "loginctl hibernate failed." 2>/dev/null; back; exit 1; }
+# the resume shows as a jump of the wall clock; give up after a minute if nothing happened
+prev=$(date +%s); n=0
+while :; do
+	sleep 1; now=$(date +%s)
+	[ $((now - prev)) -gt 5 ] && break
+	prev=$now; n=$((n+1)); [ $n -gt 60 ] && break
+done
+back

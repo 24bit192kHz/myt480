@@ -15,7 +15,7 @@ export SLOCK_USER
 # and fingerprint services, a black input surface, and power actions.
 # Already locked (e.g. dwm-lock-watch on idle/suspend): leave it alone; the
 # brightness trap below must not restore the level behind a running lock.
-if pgrep -u "$(id -u)" -x slock-ly >/dev/null 2>&1; then
+if pgrep -u "$(id -u)" -x slock >/dev/null 2>&1; then
 	exit 0
 fi
 
@@ -46,8 +46,17 @@ if [ -x "$VIEW" ] && "$VIEW" empty >/dev/null 2>&1; then
 fi
 
 wrapper=/home/btw/.local/bin/dwm-lock-bright
+# bitwarden-slock: Bitwarden desktop follows the lock (bw-screen is a no-op
+# when it is not running): lock it now, and after slock authenticated ask
+# it to unlock; polkit grants that one unlock without a second fingerprint.
+/usr/local/bin/bw-screen lock >/dev/null 2>&1 &
+rc=0
 if [ -x "$wrapper" ]; then
-	"$wrapper" slock-ly
-	exit $?
+	"$wrapper" slock || rc=$?
+else
+	/usr/local/bin/slock || rc=$?
 fi
-/usr/local/bin/slock-ly
+if [ "$rc" -eq 0 ]; then
+	/usr/local/bin/bw-screen unlock >/dev/null 2>&1 &
+fi
+exit "$rc"

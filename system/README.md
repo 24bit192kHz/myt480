@@ -28,6 +28,14 @@ Artix Linux with s6.
 | `gpu-power.conf` | MX150 clock offsets per power source, set by `gpu-power` after each driver load |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
+| `nftables.conf`, `local.d/firewall.start` | inbound firewall in its own table (policy drop; SSH from named hosts only). The addresses are examples |
+| `ssh/sshd_config.d/50-harden.conf`, `sysctl.d/95-harden.conf` | keys only; kernel pointer, kexec and redirect settings |
+| `local.d/tmp-flags.start` | `/tmp` gets `nosuid,nodev` (the s6 service that mounts it ignores `fstab`) |
+| `local.d/boot-mount.start` | mounts `/boot` (this boot set has no `mount -a`) and names the dm devices of the early init |
+| `local.d/t480-reseal.start`, `usr-local/sbin/t480-reseal` | TPM side of the disk encryption, see `kernel/early-init/README.md` |
+| `pacman.d/hooks/95-t480-sign.hook`, `usr-local/sbin/t480-sign-kernel` | sign the kernel for the GRUB in the firmware after every install |
+| `initcpio/` (`t480crypt`), `mkinitcpio*.conf` | the distro kernels ask the LUKS passphrase and open root and swap |
+| `usr-local/libexec/slock-keyring` | opens the login keyring after a fingerprint unlock with a key sealed in the TPM; must stay mode 0755 (slock checks it with the real uid) |
 
 `/etc` and `/usr/local` are git repositories on the laptop and are changed through
 `syswork` (see `../src/syswork`). `syswork apply` does not handle deleted files: remove

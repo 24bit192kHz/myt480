@@ -170,3 +170,7 @@ vfio
 vfio_iommu_type1
 mdev
 kvmgt
+
+# MX150 passthrough to a Windows VM (VFIO, 2026-10-02)
+vfio_pci
+vfio_pci_core

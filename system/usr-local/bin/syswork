@@ -43,7 +43,9 @@ syswork 0.1.0 — whole-root overlay worktrees (ext4, no snapshots needed)
                               rsync upper -> / + git commits + audit log
   syswork drop <name> [--yes] unmount + delete upper = instant revert
   syswork mount <name>        remount after reboot (uppers persist)
-  syswork mount-all           remount every worktree with a stored upper
+  syswork mount-all           remount worktrees marked automount (boot)
+  syswork umount <name>       unmount, keep upper (remount with mount)
+  syswork umount-all          unmount every worktree without active shadows
   syswork shadow <name> <live-path>   bind merged file over live (test 1 file)
   syswork unshadow <live-path>        revert a shadow bind
   syswork shadows             list active shadow binds
@@ -58,6 +60,11 @@ Typical flow:
   s6-svc -r /run/service/thinkfan 2>/dev/null || true
   sudo syswork unshadow /etc/thinkfan.yaml            # instant revert
   sudo syswork apply wifi-test --yes                  # commit to live + git
+
+Idle worktrees: an overlay with lowerdir=/ pins dentries of files deleted
+on /, so their space is not freed while it stays mounted. Unmount worktrees
+you are not editing (umount); touch /var/lib/syswork/<name>/automount to
+have mount-all remount one at boot.
 EOF
 }
 
@@ -138,6 +145,7 @@ cmd_mount_all() {
     [[ -d "$d" ]] || continue
     n=$(basename "$d")
     [[ -d "$(upper_of "$n")" ]] || continue
+    [[ -e "$SYSWORK_ROOT/$n/automount" ]] || continue
     mkdir -p "$(merged_of "$n")"
     if ! mountpoint -q "$(merged_of "$n")" 2>/dev/null; then
       mount -t overlay overlay -o "lowerdir=/,upperdir=$(upper_of "$n"),workdir=$(work_of "$n"),index=off" "$(merged_of "$n")" \
@@ -145,6 +153,40 @@ cmd_mount_all() {
     fi
   done
   audit "mount-all"
+}
+
+active_shadows() {
+  local f="$SYSWORK_ROOT/$1/shadows" line
+  [[ -f "$f" ]] || return 0
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && mountpoint -q "$line" 2>/dev/null && echo "$line"
+  done <"$f"
+  return 0
+}
+
+cmd_umount() {
+  need_root "umount"; valid_name "${1:?usage: syswork umount <name>}"
+  local n="$1" M sh; M=$(merged_of "$n")
+  [[ -d "$(upper_of "$n")" ]] || die "unknown worktree '$n'"
+  mountpoint -q "$M" 2>/dev/null || { info "'$n' not mounted"; return 0; }
+  sh=$(active_shadows "$n")
+  [[ -z "$sh" ]] || die "'$n' has active shadows, unshadow first: ${sh//$'\n'/ }"
+  umount "$M"
+  audit "umount $n"; info "unmounted $M (upper kept; syswork mount $n to resume)"
+}
+
+cmd_umount_all() {
+  need_root "umount-all"
+  local d n
+  for d in "$SYSWORK_ROOT"/*/; do
+    [[ -d "$d" ]] || continue
+    n=$(basename "$d")
+    mountpoint -q "$(merged_of "$n")" 2>/dev/null || continue
+    if [[ -n "$(active_shadows "$n")" ]]; then
+      info "skipping '$n' (active shadows)"; continue
+    fi
+    cmd_umount "$n"
+  done
 }
 
 cmd_shadow() {
@@ -343,6 +385,7 @@ main() {
     new) cmd_new "$@";; list|ls) cmd_list "$@";; status|st) cmd_status "$@";;
     diff) cmd_diff "$@";; apply) cmd_apply "$@";; drop|rm) cmd_drop "$@";;
     mount) cmd_mount "$@";; mount-all) cmd_mount_all "$@";;
+    umount|unmount) cmd_umount "$@";; umount-all) cmd_umount_all "$@";;
     shadow) cmd_shadow "$@";; unshadow) cmd_unshadow "$@";; shadows) cmd_shadows "$@";;
     init-repos) cmd_init_repos "$@";; help|-h|--help|"") cmd_help;;
     version|--version) echo "syswork $VERSION";;

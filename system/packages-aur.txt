@@ -17,8 +17,7 @@ otf-stix
 python-validity
 rankmirrors
 rate-mirrors-bin
-thinkfan
 thinkfan-tui-bin
-throttled-git
 validity-rs
 yay
+zapfast-bin

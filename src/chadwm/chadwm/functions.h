@@ -37,3 +37,6 @@ static void focusdir(const Arg *arg);
 static void movedir(const Arg *arg);
 static void resizedir(const Arg *arg);
 static void droptoggle(const Arg *arg);
+
+/* keyhelp.c: Super+? cheat sheet generated from keys[] / buttons[] */
+static void keyhelp(const Arg *arg);

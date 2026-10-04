@@ -542,6 +542,69 @@ impl Device {
         average(&self.usb.read_data()?, self.capture.lines_per_frame)
     }
 
+    /// Capture `n` frames one second apart with the stored calibration applied
+    /// and write them as 8-bit PGMs (112x112) named `<path>` with the index
+    /// before the extension. The scan glow is on for the whole run so the user
+    /// knows when to press. A blank frame is flat mid-grey; a finger shows its
+    /// ridges. Diagnostic only, writes nothing to the sensor.
+    pub fn frame_dump(&mut self, path: &str, n: usize) -> Result<()> {
+        self.glow_start_scan().context("glow")?;
+        let res = (|| {
+            for i in 0..n {
+                let frame = self.blank_frame()?;
+                let bpl = TYPE_199.bytes_per_line;
+                let w = bpl - 8;
+                let px: Vec<u8> = frame.chunks(bpl).flat_map(|l| l.iter().skip(8).copied()).collect();
+                let h = px.len() / w;
+                let mut out = format!("P5\n{w} {h}\n255\n").into_bytes();
+                out.extend_from_slice(&px);
+                let name = match path.rsplit_once('.') {
+                    Some((stem, ext)) => format!("{stem}{i}.{ext}"),
+                    None => format!("{path}{i}"),
+                };
+                std::fs::write(&name, out).with_context(|| format!("writing {name}"))?;
+                println!("{name}: {w}x{h}, {}", residual_stats(&frame));
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            Ok(())
+        })();
+        let _ = self.glow_end_scan();
+        res
+    }
+
+    /// Stream frames to stdout as a PGM sequence for `secs` seconds (contrast x2
+    /// around mid-grey) so a video player can show the sensor live, e.g.
+    /// `validity-rs frame-live 60 | ffplay -f pgm_pipe -i -`. Glow stays on.
+    pub fn frame_live(&mut self, secs: u64) -> Result<()> {
+        use std::io::Write;
+        self.glow_start_scan().context("glow")?;
+        let t0 = Instant::now();
+        let mut n = 0u32;
+        let mut out = std::io::stdout().lock();
+        let res = (|| {
+            while t0.elapsed() < Duration::from_secs(secs) {
+                let frame = self.blank_frame()?;
+                let bpl = TYPE_199.bytes_per_line;
+                let w = bpl - 8;
+                let px: Vec<u8> = frame
+                    .chunks(bpl)
+                    .flat_map(|l| l.iter().skip(8).map(|&x| ((x as i32 - 128) * 2 + 128).clamp(0, 255) as u8))
+                    .collect();
+                let h = px.len() / w;
+                let mut img = format!("P5\n{w} {h}\n255\n").into_bytes();
+                img.extend_from_slice(&px);
+                if out.write_all(&img).and_then(|_| out.flush()).is_err() {
+                    break; // viewer closed
+                }
+                n += 1;
+            }
+            Ok(())
+        })();
+        let _ = self.glow_end_scan();
+        eprintln!("{n} frames in {:.1} s", t0.elapsed().as_secs_f64());
+        res
+    }
+
     /// Measure how well the stored calibration still fits the sensor, without
     /// writing anything: the residual of a blank frame under the stored
     /// calibration, the same under a fresh in-memory calibration, and how far

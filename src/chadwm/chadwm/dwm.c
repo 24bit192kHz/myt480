@@ -96,6 +96,8 @@ enum {
   CurMove,
   CurResizeHorzArrow,
   CurResizeVertArrow,
+  CurEdgeL, CurEdgeR, CurEdgeT, CurEdgeB, /* hyde.c edgecursor(): gap / edge resize */
+  CurEdgeTL, CurEdgeTR, CurEdgeBL, CurEdgeBR,
   CurLast
 }; /* cursor */
 enum {
@@ -180,6 +182,7 @@ typedef struct {
   unsigned int button;
   void (*func)(const Arg *arg);
   const Arg arg;
+  const char *desc; /* cheat sheet text (keyhelp.c, Super+?) */
 } Button;
 
 typedef struct Monitor Monitor;
@@ -191,6 +194,7 @@ struct Client {
   float sratio;     /* hyde.c dwindle: share of this node taken by the client */
   int splitflip;    /* hyde.c: togglesplit flipped this node's direction */
   int svert, nodew, nodeh; /* hyde.c: last layout's split axis + node size */
+  int spref;        /* hyde.c: split axis fixed when the node appeared (preserve_split), -1 none */
   int x, y, w, h;
   int oldx, oldy, oldw, oldh;
   int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
@@ -211,6 +215,7 @@ typedef struct {
   KeySym keysym;
   void (*func)(const Arg *);
   const Arg arg;
+  const char *desc; /* cheat sheet text; func == NULL marks a KEYSECTION header */
 } Key;
 
 typedef struct {
@@ -292,6 +297,7 @@ static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
+static void leavenotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static void moveorplace(const Arg *arg);
 static Client *nexttiled(Client *c);
@@ -306,6 +312,7 @@ static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizebarwin(Monitor *m);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
+static void dragresize(Client *c, int corner, int x, int y);
 static void resizerequest(XEvent *e);
 static void restack(Monitor *m);
 static void run(void);
@@ -412,6 +419,7 @@ static void (*handler[LASTEvent])(XEvent *) = {
     [MappingNotify] = mappingnotify,
     [MapRequest] = maprequest,
     [MotionNotify] = motionnotify,
+    [LeaveNotify] = leavenotify,
     [PropertyNotify] = propertynotify,
     [ResizeRequest] = resizerequest,
     [UnmapNotify] = unmapnotify};
@@ -420,6 +428,8 @@ static Atom wmatom[WMLast], netatom[NetLast], xatom[XLast];
    0 = previous tagset, CHADWM_VIEW_EMPTY = first tag without clients */
 #define CHADWM_VIEW_EMPTY 0x80000000UL
 static Atom chadwmview;
+/* _CHADWM_KEY root message (chadwm -x N, the Super+? sheet): run keys[N] */
+static Atom chadwmkey;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme, clrborder;
@@ -490,6 +500,8 @@ struct Monitor {
 #include "movestack.c"
 #include "shiftview.c"
 #include "hyde.c"
+#include "keyhelp.c"
+#include "bartip.c"
 
 struct Pertag {
 	unsigned int curtag, prevtag; /* current and previous tag */
@@ -706,6 +718,7 @@ void buttonpress(XEvent *e) {
         char id[12], btn[4];
         snprintf(id, sizeof id, "%d", blockid[i]);
         snprintf(btn, sizeof btn, "%u", ev->button);
+        tipclick();
         spawn(&(Arg){ .v = (const char *[]){ "/bin/sh", "-c",
               "exec \"$HOME/.config/chadwm/scripts/barclick.sh\" \"$0\" \"$1\"",
               id, btn, NULL } });
@@ -745,6 +758,19 @@ void buttonpress(XEvent *e) {
     restack(selmon);
     XAllowEvents(dpy, ReplayPointer, CurrentTime);
     click = ClkClientWin;
+  }
+
+  /* HyDE resize_on_border: Button1 in the gap next to a window edge (within
+   * 15 px) resizes that window from the edge, like dragging its border */
+  if (click == ClkRootWin && ev->button == Button1 && !CLEANMASK(ev->state)) {
+    int corner = 0;
+    if ((c = edgeclient(ev->x_root, ev->y_root, &corner))) {
+      if (c != selmon->sel)
+        focus(c);
+      restack(selmon);
+      dragresize(c, corner, ev->x_root, ev->y_root);
+      return;
+    }
   }
 
 execute_handler:
@@ -844,6 +870,12 @@ void clientmessage(XEvent *e) {
       a.ui = 1 << i;
     }
     view(&a);
+    return;
+  }
+  if (cme->window == root && cme->message_type == chadwmkey) {
+    unsigned long k = (unsigned long)cme->data.l[0];
+    if (k < LENGTH(keys) && keys[k].func)
+      keys[k].func(&(keys[k].arg));
     return;
   }
 
@@ -2026,7 +2058,8 @@ void grabkeys(void) {
     for (k = start; k <= end; k++)
       for (g = 0; g < 4; g++)
         for (i = 0; i < LENGTH(keys); i++)
-          if (XkbKeycodeToKeysym(dpy, (KeyCode)k, g, 0) == keys[i].keysym)
+          if (keys[i].func && /* KEYSECTION headers are not bindings */
+              XkbKeycodeToKeysym(dpy, (KeyCode)k, g, 0) == keys[i].keysym)
             for (j = 0; j < LENGTH(modifiers); j++)
               XGrabKey(dpy, k, keys[i].mod | modifiers[j], root, True,
                        GrabModeAsync, GrabModeAsync);
@@ -2138,6 +2171,7 @@ void manage(Window w, XWindowAttributes *wa) {
   c->oldbw = wa->border_width;
   c->cfact = 1.0;
   c->sratio = 0.5;
+  c->spref = -1;
 
  	updateicon(c);
   updatetitle(c);
@@ -2308,6 +2342,7 @@ void motionnotify(XEvent *e) {
 			selmon->previewshow = 0;
 			showtagpreview(0);
 		}
+		tipmotion(selmon, ev->x, ev->x_root);
 	} else if (selmon->previewshow != 0) {
 		selmon->previewshow = 0;
 		showtagpreview(0);
@@ -2321,6 +2356,16 @@ void motionnotify(XEvent *e) {
     focus(NULL);
   }
   mon = m;
+  { /* resize cursor over a gap next to a window edge (resize_on_border) */
+    static int shown = 0;
+    int corner = 0;
+    if (!edgeclient(ev->x_root, ev->y_root, &corner))
+      corner = 0;
+    if (corner != shown) {
+      XDefineCursor(dpy, root, corner ? edgecursor(corner) : cursor[CurNormal]->cursor);
+      shown = corner;
+    }
+  }
 }
 
 void
@@ -2560,6 +2605,8 @@ void propertynotify(XEvent *e) {
   }
   if ((ev->window == root) && (ev->atom == XA_WM_NAME))
     updatestatus();
+  else if (ev->window == root && ev->atom == tipatom)
+    tipupdate();
   else if (ev->state == PropertyDelete)
     return; /* ignore */
   else if ((c = wintoclient(ev->window))) {
@@ -2680,25 +2727,35 @@ void resizeclient(Client *c, int x, int y, int w, int h) {
   XSync(dpy, False);
 }
 
+/* HyDE / Hyprland mouse resize: Super+RMB, Super+X held, or dragging a gap
+ * next to an edge. The pointer is not warped; the corner (or edge) grabbed
+ * decides which sides move. Floating windows resize from it while the
+ * opposite corner stays put; tiled dwindle windows stay tiled and the
+ * dividers on the grabbed side follow the pointer (hyde.c dwindleresize). */
 void resizemouse(const Arg *arg) {
-  int ocx, ocy, nw, nh;
   Client *c;
+  int x, y;
+
+  if (!(c = selmon->sel) || c->isfullscreen)
+    return;
+  restack(selmon);
+  if (!getrootptr(&x, &y))
+    return;
+  dragresize(c, (x < c->x + WIDTH(c) / 2 ? HC_LEFT : HC_RIGHT) |
+                (y < c->y + HEIGHT(c) / 2 ? HC_TOP : HC_BOTTOM), x, y);
+}
+
+void dragresize(Client *c, int corner, int x, int y) {
+  int ocx = c->x, ocy = c->y, ocw = c->w, och = c->h, nx, ny, nw, nh, lx = x, ly = y;
+  int tiled = !c->isfloating && c->mon->lt[c->mon->sellt]->arrange;
+  int dwindle = tiled && c->mon->lt[c->mon->sellt]->arrange == hydwindle;
   Monitor *m;
   XEvent ev;
   Time lasttime = 0;
 
-  if (!(c = selmon->sel))
-    return;
-  if (c->isfullscreen) /* no support resizing fullscreen windows by mouse */
-    return;
-  restack(selmon);
-  ocx = c->x;
-  ocy = c->y;
   if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
-                   None, cursor[CurResize]->cursor, CurrentTime) != GrabSuccess)
+                   None, edgecursor(corner), CurrentTime) != GrabSuccess)
     return;
-  XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1,
-               c->h + c->bw - 1);
   do {
     XMaskEvent(dpy, MOUSEMASK | KeyPressMask | KeyReleaseMask | ExposureMask | SubstructureRedirectMask, &ev);
     switch (ev.type) {
@@ -2711,28 +2768,40 @@ void resizemouse(const Arg *arg) {
       if ((ev.xmotion.time - lasttime) <= (1000 / 60))
         continue;
       lasttime = ev.xmotion.time;
-
-      nw = MAX(ev.xmotion.x - ocx - 2 * c->bw + 1, 1);
-      nh = MAX(ev.xmotion.y - ocy - 2 * c->bw + 1, 1);
-      if (c->mon->wx + nw >= selmon->wx &&
-          c->mon->wx + nw <= selmon->wx + selmon->ww &&
-          c->mon->wy + nh >= selmon->wy &&
-          c->mon->wy + nh <= selmon->wy + selmon->wh) {
-        if (!c->isfloating && selmon->lt[selmon->sellt]->arrange &&
-            (abs(nw - c->w) > snap || abs(nh - c->h) > snap))
-          togglefloating(NULL);
+      if (dwindle) {
+        dwindleresize(c, ev.xmotion.x - lx, ev.xmotion.y - ly, corner);
+        lx = ev.xmotion.x;
+        ly = ev.xmotion.y;
+        break;
       }
-      if (!selmon->lt[selmon->sellt]->arrange || c->isfloating)
-        resize(c, c->x, c->y, nw, nh, 1);
+      nw = ocw;
+      nh = och;
+      if (corner & HC_RIGHT)
+        nw += ev.xmotion.x - x;
+      else if (corner & HC_LEFT)
+        nw -= ev.xmotion.x - x;
+      if (corner & HC_BOTTOM)
+        nh += ev.xmotion.y - y;
+      else if (corner & HC_TOP)
+        nh -= ev.xmotion.y - y;
+      nw = MAX(nw, 1);
+      nh = MAX(nh, 1);
+      /* other tiled layouts: float once the size really changes (dwm) */
+      if (tiled && !c->isfloating) {
+        if (abs(nw - ocw) <= snap && abs(nh - och) <= snap)
+          break;
+        togglefloating(NULL);
+      }
+      nx = corner & HC_LEFT ? ocx + ocw - nw : ocx;
+      ny = corner & HC_TOP ? ocy + och - nh : ocy;
+      resize(c, nx, ny, nw, nh, 1);
       break;
     }
   } while (ev.type != ButtonRelease && ev.type != KeyRelease); /* Super+Z/X: key release ends it; held-key repeats (KeyPress) are swallowed */
-  XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1,
-               c->h + c->bw - 1);
   XUngrabPointer(dpy, CurrentTime);
   while (XCheckMaskEvent(dpy, EnterWindowMask, &ev))
     ;
-  if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) {
+  if (c->isfloating && (m = recttomon(c->x, c->y, c->w, c->h)) != selmon) {
     sendmon(c, m);
     selmon = m;
     focus(NULL);
@@ -3077,6 +3146,8 @@ void setup(void) {
   netatom[NetNumberOfDesktops] = XInternAtom(dpy, "_NET_NUMBER_OF_DESKTOPS", False);
   netatom[NetCurrentDesktop] = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
   chadwmview = XInternAtom(dpy, "_CHADWM_VIEW", False);
+  chadwmkey = XInternAtom(dpy, "_CHADWM_KEY", False);
+  tipatom = XInternAtom(dpy, "_CHADWM_TIP", False);
   netatom[NetDesktopNames] = XInternAtom(dpy, "_NET_DESKTOP_NAMES", False);
   netatom[NetClientInfo] = XInternAtom(dpy, "_NET_CLIENT_INFO", False);
   /* init cursors */
@@ -3085,6 +3156,14 @@ void setup(void) {
   cursor[CurMove] = drw_cur_create(drw, XC_fleur);
   cursor[CurResizeHorzArrow] = drw_cur_create(drw, XC_sb_h_double_arrow);
   cursor[CurResizeVertArrow] = drw_cur_create(drw, XC_sb_v_double_arrow);
+  cursor[CurEdgeL] = drw_cur_create(drw, XC_left_side);
+  cursor[CurEdgeR] = drw_cur_create(drw, XC_right_side);
+  cursor[CurEdgeT] = drw_cur_create(drw, XC_top_side);
+  cursor[CurEdgeB] = drw_cur_create(drw, XC_bottom_side);
+  cursor[CurEdgeTL] = drw_cur_create(drw, XC_top_left_corner);
+  cursor[CurEdgeTR] = drw_cur_create(drw, XC_top_right_corner);
+  cursor[CurEdgeBL] = drw_cur_create(drw, XC_bottom_left_corner);
+  cursor[CurEdgeBR] = drw_cur_create(drw, XC_bottom_right_corner);
   /* init appearance */
   scheme = ecalloc(LENGTH(colors) + 1, sizeof(Clr *));
   scheme[LENGTH(colors)] = drw_scm_create(drw, colors[0], 3);
@@ -3206,6 +3285,7 @@ void spawn(const Arg *arg) {
 void
 setclienttagprop(Client *c)
 {
+	c->spref = -1; /* tags changed: a fresh dwindle node wherever it lands */
 	long data[] = { (long) c->tags, (long) c->mon->num };
 	XChangeProperty(dpy, c->win, netatom[NetClientInfo], XA_CARDINAL, 32,
 			PropModeReplace, (unsigned char *) data, 2);
@@ -3398,19 +3478,21 @@ void centerwin(const Arg *arg) {
 }
 
 void resizepct(const Arg *arg) {
-	/* HyDE Super+Shift+C: size the focused window to arg->i percent of the
-	 * work area, keeping it centred. */
+	/* HyDE Super+Shift+C (~/mhm/scripts/resize-30.sh): a tiled window is
+	 * floated and centred first (Super+C), then sized to arg->i % of the
+	 * monitor width and 70 % of its height (90 % on monitor 1) around its
+	 * own centre, as Hyprland resizes floating windows. */
 	Client *c = selmon->sel;
-	int w, h;
+	int w, h, cx, cy;
 	if (!c || arg->i <= 0 || c->isfullscreen)
 		return;
-	c->isfloating = 1;
-	c->iscentered = 1;
-	w = c->mon->ww * arg->i / 100;
-	h = c->mon->wh * arg->i / 100;
-	resize(c, c->mon->wx + (c->mon->ww - w) / 2,
-	       c->mon->wy + (c->mon->wh - h) / 2, w, h, 0);
-	arrange(selmon);
+	if (!c->isfloating)
+		centerwin(arg);
+	w = c->mon->mw * arg->i / 100;
+	h = c->mon->mh * (c->mon->num == 1 ? 90 : 70) / 100;
+	cx = c->x + WIDTH(c) / 2;
+	cy = c->y + HEIGHT(c) / 2;
+	resize(c, cx - w / 2 - c->bw, cy - h / 2 - c->bw, w, h, 0);
 	focus(c);
 }
 
@@ -3657,7 +3739,7 @@ void updatebars(void) {
   Monitor *m;
   XSetWindowAttributes wa = {.override_redirect = True,
                              .background_pixmap = ParentRelative,
-                              .event_mask = ButtonPressMask|ExposureMask|PointerMotionMask};
+                              .event_mask = ButtonPressMask|ExposureMask|PointerMotionMask|LeaveWindowMask};
 
   XClassHint ch = {"dwm", "dwm"};
   for (m = mons; m; m = m->next) {
@@ -4196,8 +4278,13 @@ void zoom(const Arg *arg) {
 int main(int argc, char *argv[]) {
   if (argc == 2 && !strcmp("-v", argv[1]))
     die("dwm-" VERSION);
+  else if (argc == 2 && !strcmp("-k", argv[1])) { /* keymap as TSV (keyhelp.c) */
+    dumpkeys(stdout);
+    return EXIT_SUCCESS;
+  } else if (argc == 3 && !strcmp("-x", argv[1])) /* run keys[N] in the running chadwm */
+    return sendkey(argv[2]);
   else if (argc != 1 && strcmp("-s", argv[1]))
-    die("usage: dwm [-v]");
+    die("usage: dwm [-v|-k|-x N]");
   if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
     fputs("warning: no locale support\n", stderr);
   if (!(dpy = XOpenDisplay(NULL)))

@@ -16,7 +16,7 @@ CONFIG_POWER_STATE_OFF_AFTER_FAILURE=y
 CONFIG_PAYLOAD_GRUB2=y
 CONFIG_GRUB2_REVISION=y
 CONFIG_GRUB2_REVISION_ID="t480-fast"
-CONFIG_GRUB2_EXTRA_MODULES="nvme gfxterm_background png keystatus time boottime sleep cmostest"
+CONFIG_GRUB2_EXTRA_MODULES="nvme gfxterm_background png keystatus time boottime sleep cmostest pgp gcry_rsa gcry_sha256"
 CONFIG_GRUB2_INCLUDE_RUNTIME_CONFIG_FILE=y
 CONFIG_GRUB2_RUNTIME_CONFIG_FILE="site-local/grub.cfg"
 CONFIG_SEABIOS_SECONDARY_PAYLOAD=y
@@ -34,3 +34,9 @@ CONFIG_COMPRESS_RAMSTAGE_LZ4=y
 # CONFIG_COMPRESS_RAMSTAGE_LZMA is not set
 CONFIG_CBFS_SIZE=0xEEC000
 CONFIG_FSP_HYPERTHREADING=y
+# C52: measured boot. PCR 2 = coreboot stages and CBFS files incl. the GRUB payload
+# (with its grub.cfg, signing key and password). The disk key is sealed to it.
+CONFIG_TPM_MEASURED_BOOT=y
+# The MX150 option ROM is only loaded while the GPU is on: keep it out of PCR 2 (it goes
+# to PCR 3), or switching the GPU off would change the PCR the disk key is sealed to.
+CONFIG_TPM_MEASURED_BOOT_RUNTIME_DATA="pci10de,1d10.rom"

@@ -14,6 +14,9 @@ xset s off; xset s noblank; xset -dpms
 /usr/local/bin/dwm-polkit >/dev/null 2>&1 &
 # dwm-lock-watch is singleton; this start remains safe across WM restarts.
 /usr/local/bin/dwm-lock-watch >/dev/null 2>&1 &
+# Bitwarden desktop: waits for the boot lock to go away, starts in the tray
+# and unlocks with it (bw-screen boot; bitwarden-slock, 2026-10-01).
+[ -x /usr/local/bin/bw-screen ] && /usr/local/bin/bw-screen boot >/dev/null 2>&1 &
 
 # Fn brightness keys are handled in the kernel (blkeys); the level is restored
 # at boot and saved on every key change by udev (/usr/local/sbin/backlight-state).

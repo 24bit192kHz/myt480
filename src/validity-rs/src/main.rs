@@ -7,6 +7,7 @@ mod db;
 mod dbus;
 mod device;
 mod flash;
+mod host;
 mod pair;
 mod sensor;
 mod timeslot;
@@ -65,6 +66,8 @@ commands:
   delete USER            delete all of USER's fingers
   calibrate              recalibrate and store a new clean-slate image
   calib-check            measure how well the stored calibration fits (writes nothing)
+  frame FILE.pgm [N]     dump N frames (1/s, glow on) as PGM images; hold a finger on to see ridges
+  frame-live [SECS]      stream frames to stdout as PGM (pipe into ffplay -f pgm_pipe -i -)
   led                    flash the sensor LED
   raw HEX                send a raw command over TLS and print the reply
   factory-reset --yes    wipe pairing, firmware and fingers on the sensor
@@ -219,6 +222,48 @@ fn run(cfg_path: &std::path::Path, args: &[String]) -> Result<()> {
         "calib-check" => {
             let mut d = open(&cfg)?;
             let r = d.calib_check();
+            d.close();
+            r
+        }
+        "host-eval" => {
+            let mut o = host::eval::Opts { root: PathBuf::from(arg(1)?), ..Default::default() };
+            let mut i = 2;
+            while let Ok(k) = arg(i) {
+                let v = arg(i + 1)?;
+                match k {
+                    "--probe" => o.probe = v.parse()?,
+                    "--crops" => o.crops_per_impression = v.parse()?,
+                    "--period" => o.sensor_period = v.parse()?,
+                    "--mcc-scale" => o.mcc_scale = v.parse()?,
+                    "--threads" => o.threads = v.parse()?,
+                    "--only" => o.only = Some(v.to_string()),
+                    "--report" => o.report = Some(PathBuf::from(v)),
+                    "--r" => o.r = Some(v.parse()?),
+                    "--min-vc" => o.min_vc = Some(v.parse()?),
+                    "--min-me" => o.min_me = Some(v.parse()?),
+                    "--matcher" => o.matcher = v.to_string(),
+                    _ => bail!("unknown host-eval option {k}"),
+                }
+                i += 2;
+            }
+            host::eval::run(&o)
+        }
+        "host-selfcheck" => host::cli::selfcheck_cmd(arg(1)?),
+        "host-synth" => host::synth::cmd(),
+        "host-mosaic" => host::cli::mosaic_cmd(arg(1)?, arg(2)?),
+        "host-minutiae" => host::cli::minutiae_cmd(arg(1)?, arg(2)?),
+        "frame" => {
+            let path = arg(1)?.to_string();
+            let n: usize = arg(2).ok().map(str::parse).transpose()?.unwrap_or(1);
+            let mut d = open(&cfg)?;
+            let r = d.frame_dump(&path, n);
+            d.close();
+            r
+        }
+        "frame-live" => {
+            let secs: u64 = arg(1).ok().map(str::parse).transpose()?.unwrap_or(60);
+            let mut d = open(&cfg)?;
+            let r = d.frame_live(secs);
             d.close();
             r
         }

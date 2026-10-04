@@ -21,6 +21,13 @@
  * are set through NVML for the current power source. They last until the driver
  * is unloaded, so every load sets them again.
  *
+ * Runtime D3: with "rtd3 1" in /etc/gpu-power.conf every load uses NVIDIA's coarse-grained
+ * runtime D3 (NVreg_DynamicPowerManagement=0x01, nvidia-drm modeset=0 fbdev=0, runtime PM
+ * allowed): while the driver is loaded the GPU powers itself off (D3cold, rail off) about a
+ * second after the last program closes it and wakes in well under a second. On AC the GPU
+ * then sleeps whenever it is idle instead of staying on; programs still start without a
+ * module load. Changing the setting takes effect at the next load (gpu-power off; auto).
+ *
  * Installed setuid root: the only thing a user can make it do is run modprobe
  * with the fixed arguments below and a fixed environment.
  */
@@ -42,7 +49,7 @@
 #define LOCK     "/run/gpu-power.lock"	/* one gpu-power at a time */
 #define USERS    "/run/gpu-power.users"	/* prime-run holds a shared lock while a program runs */
 #define MANUAL   "/run/gpu-power.manual"	/* "on" or "off" set by hand */
-#define CONF     "/etc/gpu-power.conf"	/* clock offsets per power source */
+#define CONF     "/etc/gpu-power.conf"	/* clock offsets per power source, rtd3 */
 #define NVML     "/usr/lib/libnvidia-ml.so.1"
 
 static char *const envp[] = { "PATH=/usr/bin:/bin", NULL };
@@ -129,6 +136,22 @@ static const char *wanted(void)
 	return m ? m : on_ac() ? "on" : "off";
 }
 
+/* "rtd3 1" in CONF: load the driver with coarse-grained runtime D3 */
+static int conf_rtd3(void)
+{
+	char line[96], key[48];
+	int v, r = 0;
+	FILE *f = fopen(CONF, "r");
+
+	if (!f)
+		return 0;
+	while (fgets(line, sizeof(line), f))
+		if (sscanf(line, "%47s %d", key, &v) == 2 && !strcmp(key, "rtd3"))
+			r = v == 1;
+	fclose(f);
+	return r;
+}
+
 static int status(void)
 {
 	char state[16] = "?";
@@ -140,6 +163,8 @@ static int status(void)
 	}
 	printf("driver %s, GPU %s\n", exists("/sys/module/nvidia") ? "loaded" : "not loaded",
 	       strcmp(state, "D3cold") ? "on" : "off");
+	if (exists("/sys/module/nvidia") && conf_rtd3())
+		puts("runtime D3: the GPU powers off whenever no program uses it");
 	if (m)
 		printf("mode: %s by hand (gpu-power auto returns to the AC/battery policy)\n", m);
 	else
@@ -168,6 +193,20 @@ static void conf_offsets(int *gpc, int *mem)
 				*mem = v;
 		}
 	fclose(f);
+}
+
+/* PCI devices start with runtime power management forbidden ("on"). Without a
+   driver the GPU then keeps its root port awake and the ACPI power resource never
+   turns the rail off; "auto" lets the port and the GPU go to D3cold. The same
+   setting lets the NVIDIA driver suspend the GPU at runtime (rtd3). */
+static void allow_runtime_pm(void)
+{
+	FILE *f = fopen(GPU "/power/control", "w");
+
+	if (f) {
+		fputs("auto", f);
+		fclose(f);
+	}
 }
 
 /* Set the clock offsets through NVML (the driver must be loaded) */
@@ -201,6 +240,7 @@ static int on(int quiet)
 {
 	static const char *const mods[] = { "nvidia", "nvidia_modeset", "nvidia_drm", "nvidia_uvm" };
 	struct timespec ts = { 0, 50 * 1000 * 1000 };
+	const int rtd3 = conf_rtd3();
 	size_t i;
 
 	if (!gpu_present()) {
@@ -209,7 +249,13 @@ static int on(int quiet)
 		return 2;
 	}
 	for (i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
-		char *argv[] = { "modprobe", "-q", "--ignore-install", (char *)mods[i], NULL };
+		char *argv[] = { "modprobe", "-q", "--ignore-install", (char *)mods[i], NULL, NULL, NULL };
+		if (rtd3 && i == 0)
+			argv[4] = "NVreg_DynamicPowerManagement=0x01";
+		if (rtd3 && i == 2) {	/* KMS and its fbdev client keep the GPU awake */
+			argv[4] = "modeset=0";
+			argv[5] = "fbdev=0";
+		}
 		if (run(argv)) {
 			fprintf(stderr, "gpu-power: cannot load %s\n", mods[i]);
 			return 1;
@@ -219,20 +265,9 @@ static int on(int quiet)
 	for (i = 0; i < 60 && !exists("/dev/nvidia0"); i++)
 		nanosleep(&ts, NULL);
 	tune(quiet);
+	if (rtd3)
+		allow_runtime_pm();
 	return 0;
-}
-
-/* PCI devices start with runtime power management forbidden ("on"). Without a
-   driver the GPU then keeps its root port awake and the ACPI power resource never
-   turns the rail off; "auto" lets the port and the GPU go to D3cold. */
-static void allow_runtime_pm(void)
-{
-	FILE *f = fopen(GPU "/power/control", "w");
-
-	if (f) {
-		fputs("auto", f);
-		fclose(f);
-	}
 }
 
 static int off(int quiet)

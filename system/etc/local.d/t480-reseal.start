@@ -1,0 +1,5 @@
+#!/bin/sh
+# First boot after a planned firmware flash (t480-reseal next-boot): bind the disk key
+# to the new firmware and remove the one-shot blob.
+[ -e /boot/t480/kmk.next ] && /usr/local/sbin/t480-reseal
+exit 0

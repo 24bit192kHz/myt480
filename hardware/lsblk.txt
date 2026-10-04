@@ -1,6 +1,9 @@
-NAME          SIZE TYPE FSTYPE MOUNTPOINTS
-sda             0B disk        
-nvme0n1     238.5G disk        
-├─nvme0n1p1 204.1G part ext4   /var/lib/docker
-│                              /
-└─nvme0n1p2  34.4G part swap   [SWAP]
+NAME          SIZE TYPE  FSTYPE      MOUNTPOINTS
+sda             0B disk              
+nvme0n1     238.5G disk              
+├─nvme0n1p1 204.1G part  crypto_LUKS 
+│ └─root    204.1G crypt             /var/lib/docker
+│                                    /
+├─nvme0n1p2  34.1G part  crypto_LUKS 
+│ └─swap     34.1G crypt             [SWAP]
+└─nvme0n1p3   256M part  ext4        /boot

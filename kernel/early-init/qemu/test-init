@@ -1,0 +1,76 @@
+#!/bin/sh
+# QEMU replica: stands in for the real init (/usr/local/sbin/t480-init.real) and walks
+# through the whole procedure, one stage per boot. Serial console = harness.
+export PATH=/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin DM_DISABLE_UDEV=1 TPM2TOOLS_TCTI=device:/dev/tpmrm0
+mount -t proc proc /proc 2>/dev/null; mount -t sysfs sys /sys 2>/dev/null; mount -t tmpfs tmpfs /run
+C=/var/lib/t480-convert; S=/var/lib/t480-test; mkdir -p $S $C
+stage=$(cat $S/stage 2>/dev/null || echo 0)
+ok()   { echo "TEST stage $stage OK: $*"; }
+fail() { echo "TEST stage $stage FAIL: $*"; echo T480-TEST-FAILED; cat /dev/t480-early.log; sync; poweroff -f; }
+next() { echo $1 > $S/stage; sync; echo "TEST stage $stage -> $1, reboot"; umount /boot 2>/dev/null; mount -o remount,ro /; reboot -f; }
+early() { grep -q "t480-early: $1" /dev/t480-early.log || fail "early init did not say '$1': $(tr '\n' '|' < /dev/t480-early.log)"; }
+enc_checks() {
+	[ "$(awk '$2=="/"{print $1}' /proc/mounts | tail -1)" = /dev/dm-0 ] || fail "root is not dm-0: $(cat /proc/mounts | tr '\n' '|')"
+	mount -a 2>&1; grep -q "nvme0n1p3 /boot " /proc/mounts || fail "/boot not mounted from fstab"
+	[ -L /boot/boot ] && [ -s /boot/vmlinuz-linux-t480 ] || fail "/boot content"
+	dmsetup table | grep -q "root: .* crypt aes-xts-plain64 :64:encrypted:t480-root .* sector_size:4096" || fail "root table: $(dmsetup table)"
+	dmsetup table | grep -q "swap: .* crypt aes-xts-plain64 :64:encrypted:t480-swap" || fail "swap table"
+	swapon -a 2>&1; grep -q dm-1 /proc/swaps || fail "swap not on dm-1: $(cat /proc/swaps)"
+	[ "$(cat /sys/power/resume)" = "$(cat /sys/block/dm-1/dev)" ] || fail "resume device $(cat /sys/power/resume)"
+	[ "$(cat /sys/class/tpm/tpm0/pcr-sha256/8)" != 0000000000000000000000000000000000000000000000000000000000000000 ] || fail "PCR 8 not extended"
+	[ ! -e $C/root.vk ] || fail "volume key file left behind"
+	md5sum -c $S/payload.md5 >/dev/null 2>&1 || fail "data changed by the conversion"
+}
+echo "TEST stage $stage begins; early init: $(grep -o 'root .*' /dev/t480-early.log | head -1)"
+case $stage in
+0)	early "root plain, swap plain, TPM key not released"
+	# what the T480 already has: an ECC storage primary at 0x81000101
+	tpm2_createprimary -Q -C o -G ecc -c /run/p.ctx && tpm2_evictcontrol -Q -C o -c /run/p.ctx 0x81000101 || fail "createprimary"
+	head -c 64 /dev/urandom > $C/root.vk; head -c 64 /dev/urandom > $C/swap.vk; printf %s "test-pass-phrase-1" > $C/pass
+	mkdir -p $C/t480 /boot/t480
+	t480-reseal init $C/t480 && t480-reseal wrap root $C/root.vk $C/t480 && t480-reseal wrap swap $C/swap.vk $C/t480 || fail "seal"
+	cp $C/t480/* /boot/t480/
+	# cross-check t480-reseal's policy arithmetic with tpm2-tools (PCR 2 now, PCR 8 zero)
+	{ xxd -r -p < /sys/class/tpm/tpm0/pcr-sha256/2; head -c 32 /dev/zero; } > /run/pcrs
+	tpm2_createpolicy -Q --policy-pcr -l sha256:2,8 -f /run/pcrs -L /run/want.pol || fail "createpolicy"
+	xxd -p -c 64 /run/want.pol > $S/policy
+	P=$(sed -n '/^policy()/,/^}/p' /usr/local/sbin/t480-reseal; echo policy); [ "$(die(){ exit 1; }; eval "$P")" = "$(cat $S/policy)" ] || fail "policy digest mismatch"
+	# some data to compare afterwards
+	head -c 300000000 /dev/urandom > /payload.bin; md5sum /payload.bin $(command -v cryptsetup) /etc/passwd > $S/payload.md5
+	ok "keys sealed: $(ls $C/t480 | tr '\n' ' ')"; next 1 ;;
+1)	early "root plain, swap plain, TPM key released"
+	keyctl link @u @s; keyctl search @u trusted t480-kmk >/dev/null || fail "kmk not in the keyring"
+	[ "$(cat /sys/class/tpm/tpm0/pcr-sha256/8)" != 0000000000000000000000000000000000000000000000000000000000000000 ] || fail "PCR 8 not extended"
+	# the sealed policy must no longer match this boot's PCRs (PCR 8 is extended)
+	tpm2_createpolicy -Q --policy-pcr -l sha256:2,8 -L /run/now.pol || fail "createpolicy"
+	[ "$(xxd -p -c 64 /run/now.pol)" != "$(cat $S/policy)" ] || fail "policy still satisfiable after the early init"
+	T480_KEYDIR=/boot/t480 t480-reseal || fail "reseal"
+	cp /boot/t480/kmk.blob $C/t480/kmk.blob
+	touch $C/armed; ok "unseal on a plain root, second unseal refused, reseal"; next 2 ;;
+2)	[ -s $C/convert.log ] || fail "no conversion log: $(cat $C/convert-failed.log 2>/dev/null | tail -5)"
+	early "root opened, swap opened, TPM key released"; enc_checks
+	t480-reseal status; t480-reseal || fail "reseal on the encrypted system"
+	ok "conversion: $(tail -2 $C/convert.log | head -1)"
+	echo 3 > $S/stage; sync
+	echo "TEST hibernate"; echo $$ > /run/marker; echo disk > /sys/power/state
+	# execution continues here after the resume
+	[ "$(cat /run/marker)" = $$ ] || fail "resume lost the session"
+	dmesg | grep -q "PM: hibernation: hibernation exit\|Restarting tasks" || fail "no resume in dmesg"
+	stage=3; ok "hibernate + resume through the encrypted swap"
+	t480-reseal next-boot || fail "next-boot"; [ -s /boot/t480/kmk.next ] || fail "no kmk.next"
+	next 4 ;;
+3)	fail "booted fresh instead of resuming" ;;
+4)	early "master key from the one-shot blob"; enc_checks
+	t480-reseal || fail "reseal after next-boot"; [ ! -e /boot/t480/kmk.next ] || fail "kmk.next still there"
+	ok "one-shot blob used and removed"; next 5 ;;
+5)	early "root opened, swap opened, TPM key released"; enc_checks
+	ok "normal boot after the reseal. Now the harness changes the 'firmware' (PCR 2)"; echo 6 > $S/stage; sync; mount -o remount,ro /; echo T480-TEST-CHANGE-FIRMWARE; poweroff -f ;;
+6)	early "TPM did not release the master key"; enc_checks_skip=1
+	[ "$(awk '$2=="/"{print $1}' /proc/mounts | tail -1)" = /dev/dm-0 ] || fail "root is not dm-0"
+	mount -a; ok "passphrase boot after a firmware change; rekey (asks the passphrase twice)"
+	t480-reseal rekey || fail "rekey"
+	next 7 ;;
+7)	early "root opened, swap opened, TPM key released"; enc_checks
+	ok "automatic again after rekey"; echo T480-TEST-ALL-PASS; sync; mount -o remount,ro /; poweroff -f ;;
+esac
+fail "fell through"

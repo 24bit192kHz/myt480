@@ -1,4 +1,4 @@
-/* slock-ly config */
+/* slock config */
 
 /* fonts (fontconfig names; pixel sizes are derived from screen height) */
 static const char *font_clock = "Adwaita Sans:style=Light";

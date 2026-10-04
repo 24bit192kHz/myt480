@@ -1,0 +1,138 @@
+#!/bin/sh
+# t480-reseal: the TPM side of the disk encryption (root only).
+#
+# The disk volume keys are kernel "encrypted" keys (t480-root, t480-swap) wrapped by the
+# "trusted" key t480-kmk. The TPM releases t480-kmk only while PCR 2 (coreboot + GRUB +
+# grub.cfg) has the value sealed here and PCR 8 is still zero; the early init in the
+# kernel extends PCR 8 right after loading it. Blobs live in /boot/t480.
+#
+#   t480-reseal               seal t480-kmk to the PCR 2 of this boot (run after a
+#                             firmware change once the machine is up again)
+#   t480-reseal next-boot     BEFORE flashing firmware: leave a one-shot blob without a
+#                             PCR policy, so the first boot of the new firmware needs no
+#                             passphrase; that boot reseals and deletes it
+#   t480-reseal rekey         after a passphrase boot (key not loaded): asks the LUKS
+#                             passphrase, makes a new t480-kmk and wraps the keys again
+#   t480-reseal status
+#   t480-reseal init DIR      first setup: new t480-kmk, blob to DIR/kmk.blob
+#   t480-reseal wrap NAME VKFILE DIR    wrap a 64-byte volume key -> DIR/NAME.key
+#   t480-reseal dm NAME DEVICE DIR      data offset + sector size of a LUKS2 device -> DIR/NAME.dm
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+D=${T480_KEYDIR:-/boot/t480}
+PARENT=0x81000101
+DISK=${T480_DISK:-/dev/nvme0n1p}
+
+die() { echo "t480-reseal: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "must run as root"
+
+# Policy digest of PolicyPCR(sha256: 2, 8) for this boot's PCR 2 and a zero PCR 8
+# (what the early init sees before it extends PCR 8).
+policy() {
+	p2=$(cat /sys/class/tpm/tpm0/pcr-sha256/2)
+	[ ${#p2} = 64 ] || die "cannot read PCR 2"
+	pd=$({ printf %s "$p2" | xxd -r -p; head -c 32 /dev/zero; } | sha256sum | cut -c1-64)
+	{ head -c 32 /dev/zero; printf '0000017f00000001000b03040100%s' "$pd" | xxd -r -p; } | sha256sum | cut -c1-64
+}
+kid() { keyctl search @u "$1" "$2" 2>/dev/null; }
+# Keys added by the early init (PID 1) are in root's user keyring and only usable through
+# a session keyring that links it. The caller's session keyring may be gone (a detached job
+# after its ssh session closed: pam_keyinit revokes it), so always run in a fresh one.
+if [ -z "${T480_RESEAL_SESSION:-}" ]; then
+	T480_RESEAL_SESSION=1 exec keyctl session - "$0" "$@"
+fi
+keyctl link @u @s 2>/dev/null || :
+# the blobs live on the boot partition: never write them into the directory underneath
+if [ "$D" = /boot/t480 ] && [ -b "${DISK}3" ] && ! mountpoint -q /boot; then
+	mount /boot || die "/boot is not mounted"
+fi
+
+put() { # put FILE: stdin -> FILE atomically
+	umask 077
+	cat > "$1.new"
+	[ -s "$1.new" ] || { rm -f "$1.new"; die "empty blob for $1"; }
+	sync "$1.new" 2>/dev/null || sync
+	mv -f "$1.new" "$1"
+}
+
+seal_new() { # seal_new DIR: fresh master key bound to the current PCR 2
+	id=$(kid trusted t480-kmk) && keyctl unlink "$id" @u >/dev/null 2>&1 || :
+	id=$(keyctl add trusted t480-kmk "new 32 keyhandle=$PARENT hash=sha256 policydigest=$(policy)" @u) ||
+		die "the TPM refused to create the master key"
+	keyctl pipe "$id" | put "$1/kmk.blob"
+}
+
+case "${1:-reseal}" in
+reseal)
+	id=$(kid trusted t480-kmk) || die "t480-kmk is not loaded (passphrase boot?): run 't480-reseal rekey'"
+	keyctl update "$id" "update keyhandle=$PARENT hash=sha256 policydigest=$(policy)" ||
+		die "reseal failed"
+	keyctl pipe "$id" | put "$D/kmk.blob"
+	rm -f "$D/kmk.next"
+	sync
+	echo "t480-reseal: sealed to PCR 2 $(cut -c1-16 /sys/class/tpm/tpm0/pcr-sha256/2)..."
+	;;
+next-boot)
+	id=$(kid trusted t480-kmk) || die "t480-kmk is not loaded: run 't480-reseal rekey' first"
+	keyctl update "$id" "update keyhandle=$PARENT" || die "update failed"
+	keyctl pipe "$id" | put "$D/kmk.next"
+	# keep the loaded key policy-bound; only the file on disk is open
+	keyctl update "$id" "update keyhandle=$PARENT hash=sha256 policydigest=$(policy)" || :
+	sync
+	echo "t480-reseal: one-shot blob written. Flash and reboot now; until that boot the disk key is"
+	echo "             only bound to this TPM, not to the firmware."
+	;;
+rekey)
+	T=$(mktemp -d /run/t480-rekey.XXXXXX)
+	trap 'rm -rf "$T"' EXIT
+	seal_new "$D"
+	for n in root swap; do
+		case $n in root) dev=${DISK}1 ;; swap) dev=${DISK}2 ;; esac
+		cryptsetup isLuks "$dev" 2>/dev/null || continue
+		echo "LUKS passphrase for $dev ($n):"
+		cryptsetup luksDump --batch-mode --dump-volume-key --volume-key-file "$T/$n.vk" "$dev" >/dev/null ||
+			die "could not read the volume key of $dev"
+		"$0" wrap $n "$T/$n.vk" "$D"
+		"$0" dm $n "$dev" "$D"
+	done
+	rm -f "$D/kmk.next"
+	sync
+	echo "t480-reseal: new master key sealed, volume keys wrapped."
+	;;
+init)
+	[ -d "${2:-}" ] || die "usage: t480-reseal init DIR"
+	seal_new "$2"
+	;;
+wrap)
+	[ $# = 4 ] && [ -d "$4" ] || die "usage: t480-reseal wrap NAME VKFILE DIR"
+	[ "$(wc -c < "$3")" = 64 ] || die "$3 is not a 64-byte key"
+	kid trusted t480-kmk >/dev/null || die "t480-kmk is not loaded"
+	id=$(kid encrypted "t480-$2") && keyctl unlink "$id" @u >/dev/null 2>&1 || :
+	id=$(keyctl add encrypted "t480-$2" "new default trusted:t480-kmk 64 $(xxd -p -c 64 "$3")" @u) ||
+		die "cannot wrap the key (CONFIG_USER_DECRYPTED_DATA?)"
+	keyctl pipe "$id" | put "$4/$2.key"
+	;;
+dm)
+	[ $# = 4 ] && [ -d "$4" ] || die "usage: t480-reseal dm NAME DEVICE DIR"
+	cryptsetup luksDump "$3" | awk '
+		/^Data segments:/ { seg = 1 }
+		seg && /offset:/ { off = $2 }
+		seg && /sector:/ { ss = $2 }
+		seg && /cipher:/ { c = $2 }
+		/^Keyslots:/ { seg = 0 }
+		END { if (c != "aes-xts-plain64" || off % 512 || !ss) exit 1; printf "%d %d\n", off / 512, ss }
+	' | put "$4/$2.dm" || die "unexpected LUKS2 layout on $3"
+	;;
+status)
+	echo "PCR 2: $(cat /sys/class/tpm/tpm0/pcr-sha256/2)"
+	echo "PCR 8: $(cat /sys/class/tpm/tpm0/pcr-sha256/8)"
+	for k in "trusted t480-kmk" "encrypted t480-root" "encrypted t480-swap"; do
+		# shellcheck disable=SC2086
+		if id=$(kid $k); then echo "loaded: $k ($id)"; else echo "not loaded: $k"; fi
+	done
+	ls -l "$D" 2>/dev/null || echo "no $D"
+	dmsetup table 2>/dev/null | sed 's/ [0-9a-f]\{64,\} / <key> /'
+	;;
+*)
+	sed -n '2,20p' "$0"; exit 2 ;;
+esac

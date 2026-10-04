@@ -1,0 +1,3 @@
+#!/bin/sh
+# Inbound firewall (table inet t480), see /etc/nftables.conf
+/usr/bin/nft -f /etc/nftables.conf

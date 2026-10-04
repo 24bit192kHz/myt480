@@ -24,6 +24,8 @@ breeze-icons
 brightnessctl
 btop
 btrfs-progs
+calcurse
+clinfo
 cronie-s6
 cryptsetup-s6
 cups-s6
@@ -86,6 +88,7 @@ gucharmap
 gvfs-mtp
 haveged-s6
 help2man
+hivex
 hostapd
 hypridle
 hyprland
@@ -93,6 +96,7 @@ hyprlock
 hyprpolkitagent
 i3lock
 inetutils
+intel-media-driver
 intel-ucode
 inxi
 iptables
@@ -161,6 +165,7 @@ nvtop
 obconf-qt
 openbox
 openbsd-netcat
+opencl-nvidia-580xx
 openntpd-s6
 openssh-s6
 os-prober
@@ -173,12 +178,15 @@ powertop
 pulseaudio-alsa
 pulseaudio-bluetooth
 pulseaudio-zeroconf
+python-numpy
 python-ply
 python-virtualenv
 python-xlib
 qemu-desktop
 qps
 qt5-imageformats
+qt5ct
+qt6ct
 qt6gtk2
 quickshell
 raw-thumbnailer
@@ -187,6 +195,8 @@ rofimoji
 rsync-s6
 rustdesk
 s-nail
+samba
+sassc
 screengrab
 scrot
 sddm-s6
@@ -199,6 +209,7 @@ sway
 swaybg
 sysbench
 sysfsutils
+telegram-desktop
 terminus-font
 tesseract
 tesseract-data-ara
@@ -208,6 +219,7 @@ texinfo
 thermald
 tlp-rdw
 tmux
+tpm2-tools
 ttf-carlito
 ttf-dejavu
 ttf-dejavu-nerd

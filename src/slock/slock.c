@@ -1,8 +1,8 @@
-/* slock-ly v2: suckless slock fork, PAM password + fingerprint, clock UI.
+/* slock v2: suckless slock fork, PAM password + fingerprint, clock UI.
  *
  * Auth
  *  - Two PAM services, as before: "slock-finger" (pam_fprintd only) and
- *    "slock-password" (pam_unix + faillock + keyring). Finger attempts can
+ *    "slock-password" (pam_unix + faillock). Finger attempts can
  *    never touch the faillock tally.
  *  - Fingerprint runs in ONE long-lived worker thread for the whole lock.
  *    It is never orphaned or restarted by typing: a scan stays armed while
@@ -18,6 +18,9 @@
  *    an expiring status message (v1 woke every 100 ms).
  *  - On exit the process simply ends; open-fprintd watches the claimer's
  *    bus name and releases the sensor.
+ *  - A successful unlock leaves a one-shot root-owned token in
+ *    /run/slock that polkit honours for 30 s (bitwarden-slock: Bitwarden
+ *    unlocks with the screen, no second fingerprint).
  *
  * Render
  *  - Translucent overlay: a 32-bit ARGB window with a black veil
@@ -161,7 +164,11 @@ pam_try(const char *svc, const char *pw)
 	struct conv_ctx c = { pw };
 	struct pam_conv pc = { conv, &c };
 	pam_handle_t *ph = NULL;
+#ifdef SLOCK_PAM_CONFDIR   /* test builds only: private PAM stack */
+	int ret = pam_start_confdir(svc, user, &pc, SLOCK_PAM_CONFDIR, &ph);
+#else
 	int ret = pam_start(svc, user, &pc, &ph);
+#endif
 
 	if (ret == PAM_SUCCESS)
 		ret = pam_authenticate(ph, 0);
@@ -170,6 +177,51 @@ pam_try(const char *svc, const char *pw)
 	if (ph)
 		pam_end(ph, ret);
 	return ret == PAM_SUCCESS;
+}
+
+/* ------------------------------------------------------------ keyring */
+
+/* The login keyring's password is a random key sealed in the TPM, so a
+ * fingerprint unlock can open it too. /usr/local/libexec/slock-keyring
+ * (root) unseals it, or after a password unlock recovers it from the
+ * password escrow, and hands it to the user's gnome-keyring-daemon. Only the
+ * first unlock after boot reaches the TPM (~1 s); later ones return at once.
+ * The screen unlocks even if this fails. pw goes over a pipe, never argv. */
+static const char *kr_helper = "/usr/local/libexec/slock-keyring";
+
+static void
+keyring_open(const char *mode, const char *pw)
+{
+	char *argv[] = { "slock-keyring", (char *)mode, (char *)user, NULL };
+	char *envp[] = { "PATH=/usr/bin:/bin", NULL };
+	int fd[2], i, st;
+	pid_t pid;
+
+	if (geteuid() != 0 || access(kr_helper, X_OK) || pipe2(fd, O_CLOEXEC))
+		return;
+	if ((pid = fork()) < 0) {
+		close(fd[0]);
+		close(fd[1]);
+		return;
+	}
+	if (pid == 0) {
+		dup2(fd[0], 0);
+		if (setresgid(0, 0, 0) || setresuid(0, 0, 0))
+			_exit(1);
+		execve(kr_helper, argv, envp);
+		_exit(127);
+	}
+	close(fd[0]);
+	if (pw)
+		(void)!write(fd[1], pw, strlen(pw));
+	close(fd[1]);
+	/* onchld may reap it first (ECHILD); either way stop after 5 s */
+	for (i = 0; i < 100; i++) {
+		pid_t r = waitpid(pid, &st, WNOHANG);
+		if (r == pid || (r < 0 && errno == ECHILD))
+			return;
+		usleep(50000);
+	}
 }
 
 static void *
@@ -181,6 +233,7 @@ finger_worker(void *arg)
 	for (;;) {
 		time_t t0 = time(NULL);
 		if (pam_try(svc_fp, NULL)) {
+			keyring_open("finger", NULL);
 			post(EV_OK);
 			return NULL;
 		}
@@ -208,6 +261,8 @@ pw_worker(void *arg)
 	(void)arg;
 
 	ok = pam_try(svc_pw, pwbuf);
+	if (ok)
+		keyring_open("password", pwbuf);
 	pthread_mutex_lock(&pwlock);
 	explicit_bzero(pwbuf, sizeof(pwbuf));
 	pwbusy = 0;
@@ -239,6 +294,56 @@ start_pw(const char *pw, size_t len)
 	}
 	pthread_detach(t);
 	return 1;
+}
+
+/* ------------------------------------------------------ unlock token */
+
+/* bitwarden-slock: after a successful unlock, leave a one-shot token that
+ * polkit rule 49-bitwarden-slock accepts (via /usr/local/libexec/
+ * slock-grant) for 30 s, so Bitwarden unlocks without a second
+ * fingerprint. Only root can write here: the directory is root:polkitd 0770,
+ * the token root:polkitd 0640 holding CLOCK_BOOTTIME seconds. */
+static const char *tokdir = "/run/slock";
+
+static int
+tokpath(char *buf, size_t n, const char *prefix)
+{
+	return snprintf(buf, n, "%s/%s%s", tokdir, prefix, user) < (int)n;
+}
+
+static void
+token_drop(void)
+{
+	char p[300];
+
+	if (tokpath(p, sizeof(p), "unlock."))
+		unlink(p);
+}
+
+static void
+token_grant(void)
+{
+	char p[300], tmp[300], v[48];
+	struct group *g = getgrnam("polkitd");
+	struct timespec ts;
+	struct stat st;
+	int fd, n;
+
+	if (geteuid() != 0 || !g)
+		return;
+	if (mkdir(tokdir, 0770) == 0 && (chown(tokdir, 0, g->gr_gid) || chmod(tokdir, 0770)))
+		return;
+	if (lstat(tokdir, &st) || !S_ISDIR(st.st_mode) || st.st_uid != 0 ||
+	    !tokpath(p, sizeof(p), "unlock.") || !tokpath(tmp, sizeof(tmp), ".new.") ||
+	    clock_gettime(CLOCK_BOOTTIME, &ts))
+		return;
+	n = snprintf(v, sizeof(v), "%lld.%03ld\n", (long long)ts.tv_sec, ts.tv_nsec / 1000000);
+	unlink(tmp);
+	if ((fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0640)) < 0)
+		return;
+	n = fchown(fd, 0, g->gr_gid) == 0 && write(fd, v, n) == n;
+	if (close(fd) || !n || rename(tmp, p))
+		unlink(tmp);
 }
 
 /* ------------------------------------------------------------ battery */
@@ -625,6 +730,7 @@ run(Display *dpy, struct lock **locks, int nscreens, int rrbase)
 			switch (ev) {
 			case EV_OK:
 				explicit_bzero(pw, sizeof(pw));
+				token_grant();
 				return;
 			case EV_BADPW:
 				status = ST_BADPW;
@@ -730,11 +836,11 @@ main(int argc, char **argv)
 	int i, n, rrbase = -1, rrerr;
 
 	if (argc > 1 && !strcmp(argv[1], "-v")) {
-		puts("slock-ly 2.0");
+		puts("slock 2.0");
 		return 0;
 	}
 	if (argc > 1)
-		die("usage: slock-ly [-v]\n");
+		die("usage: slock [-v]\n");
 
 	dontkillme();
 	{
@@ -759,6 +865,9 @@ main(int argc, char **argv)
 	unsetenv("XDG_CONFIG_HOME");
 	unsetenv("XDG_CACHE_HOME");
 	unsetenv("XDG_DATA_HOME");
+
+	/* a grant from an earlier unlock must never outlive into this lock */
+	token_drop();
 
 	if (pipe2(evpipe, O_CLOEXEC | O_NONBLOCK))
 		die("slock: pipe: %s\n", strerror(errno));

@@ -6,7 +6,8 @@
 #
 # <file system>             <mount point>  <type>  <options>  <dump>  <pass>
 UUID=<UUID of the root file system> /              ext4    defaults,noatime   0 1
+/dev/nvme0n1p3                            /boot          ext4    defaults,noatime   0 2
 UUID=<UUID of the swap partition> swap           swap    defaults,pri=100   0 0
-tmpfs                                     /tmp           tmpfs   defaults,noatime,mode=1777 0 0
+tmpfs                                     /tmp           tmpfs   defaults,noatime,nosuid,nodev,mode=1777 0 0
 
 192.168.0.23:/my-zfs  /mnt/my-zfs  nfs  noauto,nofail,soft,timeo=10,retrans=2,_netdev  0  0

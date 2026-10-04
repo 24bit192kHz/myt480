@@ -1,0 +1,5 @@
+# Root file system of the second QEMU replica: GNU userland (bash, util-linux, coreutils) as on
+# the T480's Artix, to rehearse the launcher and t480-reseal with the same tools.
+FROM archlinux:latest
+RUN pacman -Sy --noconfirm --needed cryptsetup tpm2-tools keyutils e2fsprogs util-linux device-mapper tinyxxd 2>&1 | tail -2 && \
+    rm -rf /var/cache/pacman/pkg/* /usr/share/locale/* /usr/share/doc /usr/share/man /usr/share/i18n /usr/lib/python3*/test /usr/share/gtk-doc /usr/include /var/lib/pacman/sync

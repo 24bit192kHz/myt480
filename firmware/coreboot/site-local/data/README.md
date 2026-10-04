@@ -23,3 +23,7 @@ The other files are the same on every T480 with this configuration:
 | `background.png`, `font.pf2` | GRUB menu |
 | `bootorder` | SeaBIOS boot order |
 | `pacman.elf`, `*.img`, `*.flp` | toys in the boot menu |
+
+Two more files are yours to make and are not here: `boot.pub` (GnuPG public key the
+default kernel is signed with) and `auth.cfg` (GRUB superuser and `password_pbkdf2`
+line). The main README, step 3a, says how.

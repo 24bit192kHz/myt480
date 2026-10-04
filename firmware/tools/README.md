@@ -14,3 +14,8 @@
 | `gpu/` | the MX150 clock offset kit (sweeps, load and bandwidth tests); its README explains the runs |
 | `bench-all.sh` | the benchmark set used before and after the undervolt |
 | `hib-measure2.sh` | hibernate cycle timing |
+| `flashrom.sh NAME`, `flashrom-warm.sh NAME` | flash `roms/NAME.rom` (FMAP + COREBOOT) after `romcheck.sh` and `t480-reseal next-boot`, then cold boot (RTC alarm, needs AC) or reboot. Root, detached |
+| `bootmeasure.sh LABEL` | one line per boot: firmware time, GRUB kernel load, power-on to chadwm, PCR 2 |
+| `idlepower.py LABEL [s]` | idle power of the current state: battery draw, RAPL, package C-states, GPU and root port power state |
+| `speedgate.sh` | raw partition against LUKS2/dm-crypt with `fio`, interleaved; it was run on the swap partition before the disk was encrypted |
+| `qtest52.py` | QEMU scenarios for the GRUB boot policy: bad, missing and tampered signatures, password prompts |

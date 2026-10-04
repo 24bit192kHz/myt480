@@ -8,26 +8,28 @@ when a program needs it. This repository has everything to build the same laptop
 |---|---|
 | Hardware | ThinkPad T480, i7-8650U, 32 GB, GeForce MX150, NVMe |
 | Firmware | coreboot with patches, GRUB 2 payload, SeaBIOS and toys as secondary payloads |
-| OS | Artix Linux, s6 init, no initramfs |
-| Kernel | `linux-t480`: Linux 7.2.8, CachyOS PKGBUILD, BORE, only the modules this laptop uses |
+| OS | Artix Linux, s6 init, no initramfs on disk; root and swap LUKS2-encrypted, opened by the TPM without a prompt |
+| Kernel | `linux-t480`: Linux 7.2.8, CachyOS PKGBUILD, BORE, only the modules this laptop uses, a 62 kB early init built in |
+| Boot chain | coreboot measures itself and GRUB into the TPM; GRUB only starts a signed kernel without a password; the kernel unseals the disk key |
 | Desktop | X11, chadwm, picom, st, rofi, slock-ly |
 | Graphics | Intel UHD 620 for everything; MX150 on demand through `prime-run` |
 
-Results on this machine: firmware hands over to GRUB about 0.6 s after power-on with the
-MX150 enabled (0.4 s without), the desktop is up about 2.6 s after a reset, the laptop
-idles at 6.7 W on battery with the MX150 off, the MX150 is ready about 2 s after a
-program asks for it, hibernate resumes 5 s after power-on, and a tested undervolt
-(-115 mV core on AC) gives about 15 % more CPU throughput at the same temperature.
+Results on this machine: with measured boot, the signature check and the encrypted disk
+the desktop is up 3.5 to 3.6 s after power-on (3.6 to 3.9 s before all of that, see
+`docs/notes/2026-10-04-disk-encryption.md`), the laptop idles at 6.7 to 6.9 W on battery
+with the MX150 off, the MX150 is ready about 2 s after a program asks for it, hibernate
+resumes 6 s after the wake alarm, and a tested undervolt (-115 mV core on AC) gives about
+15 % more CPU throughput at the same temperature.
 
 ## Branches
 
 | Branch | Firmware | State |
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
-| `main` | C51: all patches in `firmware/coreboot/README.md` (0001 to 0025): link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi, and the vendor platform setup (radios, wake sources, subsystem IDs, GMM) | flashed and tested: RTC-alarm cold boots, S3 with the watchdog armed, GPU off/on cycles; hibernate, a watchdog hang test and a 10-minute GPU load test on the builds before it |
+| `main` | C51: all patches in `firmware/coreboot/README.md` (0001 to 0025): link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi, and the vendor platform setup (radios, wake sources, subsystem IDs, GMM); C52 to C54 (2026-10-04): TPM measured boot, GRUB signature check and password, boot entries for the encrypted disk, h8 options from the devicetree, GPU option ROM measured into PCR 3 (patches 0026 and 0027, `site-local`) | flashed and tested: RTC-alarm cold boots, S3 with the watchdog armed, GPU off/on cycles; hibernate, a watchdog hang test and a 10-minute GPU load test on the builds before it; C54 also: suspend, hibernate, firmware flash with re-seal |
 
 Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
-`main` is what runs on my laptop now; `speed` is the state before the review round.
+`main` is what runs on my laptop now (C54); `speed` is the state before the review round.
 
 ## Layout
 
@@ -113,6 +115,22 @@ asks GRUB for its menu on the next boot.
 The kernel boots without an initramfs through `init=/usr/local/sbin/t480-init`; the
 command line is in `hardware/kernel-cmdline.txt` and is set in `site-local/grub.cfg`.
 
+### 3a. Signed kernel, GRUB password, disk encryption (optional, in this order)
+
+`docs/notes/2026-10-04-disk-encryption.md` explains the design and what it cost.
+
+1. Signing key: a GnuPG key without passphrase in a root-only directory; export the
+   public key to `site-local/data/boot.pub`. `system/usr-local/sbin/t480-sign-kernel`
+   signs `/boot/vmlinuz-linux-t480`, and the pacman hook in `system/etc/pacman.d/hooks/`
+   runs it after every kernel install.
+2. GRUB password: `grub-mkpasswd-pbkdf2`, then `site-local/data/auth.cfg` with
+   `set superusers="you"` and `password_pbkdf2 you <hash>`. Neither file is in this
+   repository. Build and flash; from then on GRUB refuses an unsigned default kernel.
+3. Encryption: `kernel/early-init/README.md`. Make a verified backup first.
+
+After that, before every firmware flash: `t480-reseal next-boot` (or use
+`firmware/tools/flashrom.sh`), or the next boot asks for the LUKS passphrase.
+
 ### 4. Desktop
 
 Copy the dotfiles in `home/` (`ls -a`) to `~/`, `home/config/` to `~/.config/` and
@@ -143,6 +161,15 @@ Firmware C51 (2026-10-01) takes those IDs from the devicetree, as the upstream s
 Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 works).
 
 ## Known limits
+
+- The disk key is bound to the firmware (TPM PCR 2), not to a secret you type. Someone
+  who can rewrite the flash chip with a clip programmer can defeat that; the flash is
+  not write-locked, on purpose, so that it can be updated from Linux.
+- Bitwarden desktop holds `memfd_secret` memory, and the kernel refuses to hibernate
+  while any program does. `home/local-bin/hibernate-safe` quits it, hibernates and
+  starts it again; other ways to hibernate are refused while it runs.
+- The RTC alarm does not wake this laptop from S5 on battery; `firmware/tools/coldboot.sh`
+  needs AC.
 
 - Tested on one T480. The firmware patches also build for the T480s and T580, untested.
 - `system/etc/thermald.conf` undervolts per power source: -115 mV core and cache on AC,

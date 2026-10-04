@@ -1,0 +1,170 @@
+From 3c6870a4643ae0448fd0de4e6129f9761d062f85 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Sun, 4 Oct 2026 16:34:02 +0300
+Subject: [PATCH 27/27] [local] h8: wireless and tablet switch from the
+ devicetree, as in upstream series v5
+
+Review on Gerrit (CB:95880, CB:95912): no Kconfig options for hardware facts.
+ec/lenovo/h8 gets the registers no_wireless_switch (SSDT name HWSW, WLSW
+returns 1) and has_tablet_mode_switch (MHKG only then); the T480 override
+tree sets the first.
+
+---
+ src/ec/lenovo/h8/Kconfig                      | 15 ---------------
+ src/ec/lenovo/h8/acpi/thinkpad.asl            | 17 +++++------------
+ src/ec/lenovo/h8/chip.h                       |  4 ++++
+ src/ec/lenovo/h8/ssdt.c                       | 19 ++++++++++++++++++-
+ src/mainboard/lenovo/sklkbl_thinkpad/Kconfig  |  2 --
+ .../variants/t480/overridetree.cb             |  7 +++++++
+ 6 files changed, 34 insertions(+), 30 deletions(-)
+
+diff --git a/src/ec/lenovo/h8/Kconfig b/src/ec/lenovo/h8/Kconfig
+index aad2a861c5..7f6d45be30 100644
+--- a/src/ec/lenovo/h8/Kconfig
++++ b/src/ec/lenovo/h8/Kconfig
+@@ -96,19 +96,4 @@ config H8_HAS_2ND_THERMAL_ZONE
+ 	bool
+ 	default n
+ 
+-config H8_NO_WIRELESS_SWITCH
+-	bool
+-	default n
+-	help
+-	  The EC has no master wireless switch bit at 0x48 (newer boards); the
+-	  ACPI WLSW method then reports the radios as enabled, as the vendor
+-	  firmware does, instead of a bit that reads 0 and hard-blocks them.
+-
+-config H8_NO_TABLET_MODE_SWITCH
+-	bool
+-	default n
+-	help
+-	  The board is no tablet: do not offer the MHKG method, which makes
+-	  thinkpad_acpi register a tablet mode switch.
+-
+ endif # EC_LENOVO_H8
+diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
+index f26f807b2e..1b20c94508 100644
+--- a/src/ec/lenovo/h8/acpi/thinkpad.asl
++++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
+@@ -8,6 +8,7 @@ Device (HKEY)
+ 	External (\HKLT, IntObj)
+ 	External (\HKBL, IntObj)
+ 	External (\HUWB, IntObj)
++	External (\HWSW, IntObj)
+ 
+ 	Name (_HID, EisaId (CONFIG_THINKPADEC_HKEY_EISAID))
+ 
+@@ -111,14 +112,6 @@ Device (HKEY)
+ 		Return (0x07FFFFFF)
+ 	}
+ 
+-#if !CONFIG(H8_NO_TABLET_MODE_SWITCH)
+-	/* Report tablet mode switch state */
+-	Method (MHKG, 0, NotSerialized)
+-	{
+-		Return (TBSW << 3)
+-	}
+-#endif
+-
+ 	/* Mute audio */
+ 	Method (SSMS, 1, NotSerialized)
+ 	{
+@@ -147,11 +140,11 @@ Device (HKEY)
+ 	/* Master wireless switch state */
+ 	Method (WLSW, 0, NotSerialized)
+ 	{
+-#if CONFIG(H8_NO_WIRELESS_SWITCH)
++		If (HWSW) {
++			Return (\_SB.PCI0.LPCB.EC.GSTS)
++		}
++		/* No switch: the radios are never blocked by it */
+ 		Return (1)
+-#else
+-		Return (\_SB.PCI0.LPCB.EC.GSTS)
+-#endif
+ 	}
+ 
+ 	/* Set to one on first boot */
+diff --git a/src/ec/lenovo/h8/chip.h b/src/ec/lenovo/h8/chip.h
+index 4ac686ea2d..975806cfc3 100644
+--- a/src/ec/lenovo/h8/chip.h
++++ b/src/ec/lenovo/h8/chip.h
+@@ -34,6 +34,10 @@ struct ec_lenovo_h8_config {
+ 	bool has_keyboard_backlight;
+ 	bool has_power_management_beeps;
+ 	bool has_uwb;
++	/* The board is, or shares this devicetree with, a tablet */
++	bool has_tablet_mode_switch;
++	/* The EC has no master wireless switch bit (0x48 reads 0) */
++	bool no_wireless_switch;
+ 
+ 	u8 bdc_gpio_num;
+ 	u8 bdc_gpio_lvl;
+diff --git a/src/ec/lenovo/h8/ssdt.c b/src/ec/lenovo/h8/ssdt.c
+index fbe7070df0..3214ab4261 100644
+--- a/src/ec/lenovo/h8/ssdt.c
++++ b/src/ec/lenovo/h8/ssdt.c
+@@ -24,7 +24,9 @@ static char *h8_dsdt_scope(const struct device *dev, const char *scope)
+  */
+ void h8_ssdt_generator(const struct device *dev)
+ {
+-	if (!acpi_device_path(dev))
++	const struct ec_lenovo_h8_config *conf = dev->chip_info;
++
++	if (!acpi_device_path(dev) || !conf)
+ 		return;
+ 
+ 	printk(BIOS_INFO, "ACPI:    * H8\n");
+@@ -38,6 +40,21 @@ void h8_ssdt_generator(const struct device *dev)
+ 	acpigen_write_name_byte("HKLT", h8_thinklight_active() ? ONE_OP : ZERO_OP);
+ 	acpigen_write_name_byte("HKBL", h8_kb_backlight_active() ? ONE_OP : ZERO_OP);
+ 	acpigen_write_name_byte("HUWB", h8_has_uwb() ? ONE_OP : ZERO_OP);
++	acpigen_write_name_byte("HWSW", conf->no_wireless_switch ? ZERO_OP : ONE_OP);
++
++	/*
++	 * thinkpad_acpi registers a tablet mode switch when MHKG exists, so
++	 * only tablets get it: Method (MHKG) { Return (TBSW << 3) }
++	 */
++	if (conf->has_tablet_mode_switch) {
++		acpigen_write_method("MHKG", 0);
++		acpigen_emit_byte(RETURN_OP);
++		acpigen_emit_byte(SHIFT_LEFT_OP);
++		acpigen_emit_namestring("TBSW");
++		acpigen_write_integer(3);
++		acpigen_emit_byte(ZERO_OP); /* no target */
++		acpigen_pop_len(); /* Method MHKG */
++	}
+ 
+ 	acpigen_pop_len(); /* Scope HKEY */
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
+index be8b7043f9..90d1965d66 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
+@@ -14,8 +14,6 @@ config BOARD_LENOVO_SKLKBL_THINKPAD_COMMON
+ 	select H8_HAS_FNLOCK_LED
+ 	select H8_HAS_PRIMARY_FN_KEYS
+ 	select H8_SUPPORT_BT_ON_WIFI
+-	select H8_NO_WIRELESS_SWITCH
+-	select H8_NO_TABLET_MODE_SWITCH
+ 	select HAVE_ACPI_RESUME
+ 	select HAVE_ACPI_TABLES
+ 	select INTEL_GMA_HAVE_VBT
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index ad8f5532ca..a471b63edc 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -14,6 +14,13 @@ chip soc/intel/skylake
+ 		# domain in sconfig, so give it here.
+ 		subsystemid 0x17aa 0x225d inherit
+ 		device ref gmm on end	# Gaussian Mixture Model accelerator, as the vendor firmware
++		device ref lpc_espi on
++			chip ec/lenovo/h8
++				# The EC bit of the wireless switch reads 0; the vendor WLSW is a constant
++				register "no_wireless_switch" = "true"
++				device ref lenovo_ec on end
++			end
++		end
+ 		device ref south_xhci on
+ 			register "usb2_ports" = "{
+ 				[0] = USB2_PORT_MID(OC1),		// USB-A

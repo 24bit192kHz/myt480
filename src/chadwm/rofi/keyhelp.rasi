@@ -1,0 +1,79 @@
+/* keyhelp.rasi — Super+? cheat sheet (scripts/keyhelp.sh). Colours come from
+ * the theme-sync palette; keyhelp.sh sets columns, lines and the window width
+ * at run time and draws the key chips / headers with Pango markup. */
+@import "~/.config/rofi/grayscale.rasi"
+
+* {
+    font:             "JetBrainsMono Nerd Font 10";
+    background-color: transparent;
+    text-color:       @fg-col;
+}
+window {
+    location:         center;
+    anchor:           center;
+    border:           2px;
+    border-color:     @border-col;
+    border-radius:    14px;
+    padding:          20px 24px 16px;
+    background-color: @bg-col;
+}
+mainbox {
+    children:         [ inputbar, listview ];
+    spacing:          14px;
+}
+inputbar {
+    children:         [ prompt, entry, textbox-hint ];
+    spacing:          10px;
+    padding:          5px;
+    border-radius:    10px;
+    background-color: @bg-col-light;
+}
+prompt {
+    padding:          5px 14px;
+    border-radius:    7px;
+    background-color: @fg-col;
+    text-color:       @bg-col;
+    font:             "JetBrainsMono Nerd Font Bold 10";
+    vertical-align:   0.5;
+}
+entry {
+    padding:          5px 4px;
+    vertical-align:   0.5;
+    placeholder:      "type to filter: a key, a word, a section";
+    placeholder-color: @grey;
+    cursor:           text;
+}
+listview {
+    flow:             vertical;
+    fixed-height:     true;
+    fixed-columns:    true;
+    dynamic:          false;
+    scrollbar:        false;
+    spacing:          1px;
+}
+element {
+    padding:          1px 10px;
+    border:           0;
+    border-radius:    6px;
+}
+element selected.normal, element selected.urgent {
+    background-color: @selected-col;
+}
+/* section headers and spacers (keyhelp.sh marks them active): never highlighted */
+element normal.active, element alternate.active, element selected.active {
+    background-color: transparent;
+}
+element-icon {
+    enabled:          false;
+}
+element-text {
+    text-color:       inherit;
+    vertical-align:   0.5;
+}
+textbox-hint {
+    expand:           false;
+    padding:          5px 10px;
+    vertical-align:   0.5;
+    text-color:       @grey;
+    str:              "Enter runs the selected key · Esc closes";
+}

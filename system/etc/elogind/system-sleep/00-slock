@@ -2,7 +2,7 @@
 # lock X before sleep: use the same session-bound primary locker as manual lock.
 case "$1" in
   pre)
-    pgrep -x slock-ly >/dev/null 2>&1 && exit 0
+    pgrep -x slock >/dev/null 2>&1 && exit 0
     XA=$(ps -o args= -C Xorg 2>/dev/null | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n1)
     [ -n "$XA" ] && [ -f "$XA" ] || XA=/home/btw/.Xauthority
     export DISPLAY=:0 XAUTHORITY="$XA" SLOCK_USER=btw

@@ -1,6 +1,12 @@
 upstream: https://github.com/siduck/chadwm
 upstream base: 7991ac8d33878b716e7e7cabf58b47503864f622
 local commits:
+478770e bar: battery module reads battwatch's live state file (ETA on battery); clicks open the battwatch viewer, summary, TUI
+3affbfe bar: GPU module skips nvidia-smi while the MX150 is runtime-suspended (gpu-power rtd3), so polling cannot keep it awake
+47b46e3 bar: module 8 with the Umm al-Qura Hijri date (hijri.c), Gregorian + Hijri calendar on click, Arabic font cycling; module 12 stealth VPN toggle (vpn.sh); module 13 MX150 load and temperature while its driver is loaded
+bebb53f Super+? cheat sheet generated from keys[] and buttons[] (keyhelp.c, keyhelp.sh, rofi theme): description field and KEYSECTION headers in the key table, chadwm -k dumps the keymap, _CHADWM_KEY runs a key from the sheet
+46b774d HyDE resize: drag a gap next to a window edge (resize_on_border), edge cursors, corner-aware Super+RMB resize without pointer warp, dwindle dividers follow the pointer, preserve_split; Super+Shift+C floats and centres first
+382e933 run.sh: start Bitwarden in the tray and unlock it after the boot lock (bw-screen boot)
 d5a51a7 keybinds: Bluetooth bar module
 b3ade81 bar: Bluetooth module 11 (connected device), btmenu.sh rofi picker
 615d3de keybinds: bar modules
@@ -10,3 +16,4 @@ ca0bdc6 HyDE behaviour: dwindle default layout with togglesplit/resize per node,
 a92e570 brightd in C (masked evdev, no idle wakeups); bar.sh: builtins over forks; bar font JetBrainsMono NF (Iosevka not installed)
 a5c0ddf bar.sh: 5 s aligned refresh, battery every 30 s (combined packs, energy_* or charge_*), xsetroot only on change
 dcad846 chadwm: _CHADWM_VIEW root message (view first empty tag / previous tagset, used by dwm-lock); run.sh: picom first, wallpaper start in background; grayscale theme, bar theme, brightd, keybinds
+working tree of 2026-09-30 on top (uncommitted): chadwm/bartip.c, chadwm/config.def.h, chadwm/dwm.c, keybinds.txt, scripts/bar.sh, scripts/barclick.sh, scripts/barhover.sh, scripts/calendar.sh, scripts/hijri.c, scripts/powermenu.sh, scripts/vol.sh

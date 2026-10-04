@@ -1,8 +1,46 @@
 #!/bin/sh
-# open-fprintd suspend/resume (what open-fprintd-{suspend,resume}.service do
-# on systemd). Without it the Validity 06cb:009a sensor is wedged after sleep.
+# elogind sleep hook for the fingerprint stack (open-fprintd + driver).
+#
+# Both drivers are stopped before sleep and started fresh after it; the old
+# in-place Suspend/Resume path failed silently (2026-10-01): the lock screen
+# arms a verify around the moment of suspend, on wake that verify still held the
+# sensor, validity-rs gave up its Resume after 5 s without logging, and the
+# sensor (USB-reset during S3) was never re-initialised, so every scan came back
+# "no match". python-validity crashed on the same path (GPF in libusb).
+#
+# pre:  tell open-fprintd we sleep (it queues client calls), stop the driver
+#       (validity-rs reboots the sensor on SIGTERM).
+# post: wait for 06cb:009a, start the driver (fresh open, ~0.7 s), then Resume
+#       open-fprintd: it clears its suspended flag and replays the queued calls
+#       once the driver has registered again.
+PATH=/usr/bin:/bin
+LIVE=$(readlink -f /run/s6-rc 2>/dev/null)
+MARK=/run/fprint-sleep.driver
+
+log() { logger -t fprint-sleep "$*"; }
+svdir() { for d in "/run/service/$1" "$LIVE/servicedirs/$1"; do [ -e "$d/supervise" ] && { echo "$d"; return; }; done; }
+up() { d=$(svdir "$1"); [ -n "$d" ] && [ "$(s6-svstat -o up "$d" 2>/dev/null)" = true ]; }
+sensor_present() { grep -qs "^009a$" /sys/bus/usb/devices/*/idProduct; }
+
 case "$1" in
-  pre)  /usr/lib/open-fprintd/suspend.py >/dev/null 2>&1 || true ;;
-  post) /usr/lib/open-fprintd/resume.py  >/dev/null 2>&1 || true ;;
+  pre)
+    /usr/lib/open-fprintd/suspend.py >/dev/null 2>&1 || log "open-fprintd Suspend failed"
+    for drv in validity-rs python3-validity; do
+      if up "$drv"; then
+        echo "$drv" > "$MARK"
+        s6-svc -wD -T 5000 -d "$(svdir "$drv")" 2>/dev/null || { log "$drv did not stop in 5 s, killing"; s6-svc -k "$(svdir "$drv")"; }
+        log "stopped $drv for sleep"
+        break
+      fi
+    done ;;
+  post)
+    if [ -s "$MARK" ]; then
+      drv=$(cat "$MARK"); rm -f "$MARK"
+      i=0; until sensor_present || [ $i -ge 40 ]; do sleep 0.25; i=$((i+1)); done
+      sensor_present || log "06cb:009a missing 10 s after wake"
+      [ "$drv" = python3-validity ] && rm -f /var/run/python-validity/backoff
+      s6-svc -u "$(svdir "$drv")" && log "started $drv after wake" || log "could not start $drv"
+    fi
+    /usr/lib/open-fprintd/resume.py >/dev/null 2>&1 || log "open-fprintd Resume failed" ;;
 esac
 exit 0

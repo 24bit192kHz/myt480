@@ -1,4 +1,4 @@
-GRUB_DEFAULT="gnulinux-advanced-<UUID of the root file system>>gnulinux-linux-advanced-<UUID of the root file system>"
+GRUB_DEFAULT="gnulinux-advanced-<UUID of the /boot file system>>gnulinux-linux-advanced-<UUID of the /boot file system>"
 GRUB_TIMEOUT=0
 GRUB_TIMEOUT_STYLE=hidden
 GRUB_DISTRIBUTOR='Artix'

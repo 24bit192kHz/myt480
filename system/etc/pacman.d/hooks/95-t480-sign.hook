@@ -1,0 +1,12 @@
+# Runs after 90-mkinitcpio-install.hook has copied the kernel to /boot:
+# the firmware GRUB only boots /boot/vmlinuz-linux-t480 with a valid .sig.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/modules/*-t480/vmlinuz
+
+[Action]
+Description = Signing /boot/vmlinuz-linux-t480 for the firmware GRUB...
+When = PostTransaction
+Exec = /usr/local/sbin/t480-sign-kernel

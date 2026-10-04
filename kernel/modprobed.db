@@ -275,3 +275,5 @@ xt_set
 xt_state
 xt_tcpudp
 zram
+vfio_pci
+vfio_pci_core

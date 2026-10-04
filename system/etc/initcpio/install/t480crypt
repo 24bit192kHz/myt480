@@ -1,0 +1,14 @@
+#!/bin/bash
+# mkinitcpio install hook for the distro (fallback) kernels on the T480: open the
+# encrypted root and swap with the LUKS passphrase. linux-t480 does not use this (it has
+# its own early init with the TPM).
+build() {
+    add_module 'dm-crypt'
+    add_all_modules '/crypto/'
+    add_binary 'cryptsetup'
+    map add_udev_rule '10-dm.rules' '13-dm-disk.rules' '95-dm-notify.rules'
+    add_runscript
+}
+help() {
+    echo "Opens /dev/nvme0n1p1 as root and /dev/nvme0n1p2 as swap with one passphrase."
+}

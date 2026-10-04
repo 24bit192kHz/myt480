@@ -7,6 +7,9 @@
 
 pkill -x rofi && exit 0
 
+# the Rust session window (chadpower) when installed; rofi below is the fallback
+[ -z "$1" ] && command -v chadpower >/dev/null && chadpower && exit 0
+
 choice=$1
 if [ -z "$choice" ]; then
 	choice=$(printf '%s\n' \
