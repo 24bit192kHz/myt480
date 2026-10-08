@@ -34,3 +34,46 @@ gpe0_dw0..2 = GPP_C/D/E explicitly (the live PMC GPIO_GPE_CFG is 0x432 already).
   the GPU once and keep `dgpu status` = on.
 - myt480 is not updated for C55 yet (patches must be regenerated against the new base).
 - /usr/local/bin/dgpu knows the one-shot byte (status line); /usr/local commits f06c0c8, 4570611.
+
+## 14:18 C55 FLASHED (warm reboot, on battery, user's go) and verified
+- flashprog VERIFIED 14:17:58, backup roms/backup-before-C55.rom. Boot 14:18: TPM key released with the
+  one-shot blob, kmk.blob resealed 14:18:18 to the new PCR 2 B5B658BF...; coreboot 755 ms to payload;
+  no "Duplicate GPE DW" line; dGPU enabled, D3cold when idle, prime-run glxinfo renders on the MX150,
+  5/5 D3cold cycles; thinkpad_acpi "BIOS CBET4000 t480, EC N24HT37W-3.36"; LID _PRW is gpe17 now.
+- verify48.sh run as root lost its ssh-filled fields (it expects to run as btw); checked by hand.
+- TLP turned the NMI watchdog off again (/etc/tlp.conf NMI_WATCHDOG=0 -> 1, syswork tlp-nmi).
+- myt480 28fbdd9 pushed: patches 0001-0028 on main b5fbbcff8a, libgfxinit on 2c446dbc, READMEs,
+  system files, this note.
+- Still for the user: lid-open wake from hibernate, a 4 s power hold (must boot once without the GPU
+  and keep `dgpu status` on), one night in plain poweroff for the drain baseline, fallback GRUB entries.
+
+## 14:35-15:05 lid wake from S4: what the EC does under coreboot
+- With C55 (_PRW GPE 0x17 = EC_WAKE# on GPP_C23, armed: gpe0_en[0] 0x00800000) a lid open in S4
+  does nothing: gpe0_sts[0] shows only bit 22 (EC SCI, GPP_C22) latched, never bit 23. Pad config
+  of GPP_C22/C23 is byte-identical to stock (inteltool). In S3 the lid wakes by a power-button
+  pulse from the EC (PM1_STS WAK PWRBTN, no GPE armed for it).
+- Stock arms the EC for S4/S5 wake in SMM at sleep entry (OPTS: SLTP = SMI 0x05, AWON(4) =
+  SMI 0x12); the ACPI-visible EC writes (HWLO = 0x32 bit 2 = h8 WKLD, HWLB, HCMU) match coreboot.
+  EC RAM 0x3d is 0x5f on stock and 0 on coreboot; writing 0x5f (ectool -w 0x3d -z 0x5f) did not
+  help and the EC reset it to 0 across the S4 cycle. Dead end.
+- 14:55:33 "crash": TCO reset exactly 30 s after "Performing sleep operation 'hibernate'": the
+  keepalive is frozen while the image is written. 02-sleep-guard now disarms the TCO in pre
+  (hibernate only, marker /run/sleep-guard.wd-off) and post re-arms it (syswork wd-hib);
+  exercised with pre/post by hand and by a real hibernate at 14:59 (image restored, re-armed).
+- C56 = C55 + LID _PRW GPE 0x16 (the EC SCI GPE armed as a wake GPE for S3/S4). To check after
+  the flash: hibernate + lid open; S3 + plug/unplug the charger (spurious wake?); S3 + lid.
+
+## 15:22 lid wake from S4: not achievable without the vendor SMM; back on C55
+- C56 (LID _PRW GPE 0x16) and C57-exp (0x16 + 0x17 both armed, gpe0_en[0] 0x00c00000, EC 0x3d
+  written to 0x5f right before the sleep): hibernate + lid open = nothing, no GPE latched, PM1
+  WAK PWRBTN only after the user's press. gpe0_sts[0] bit 22 is set on EVERY boot (EC SCI at
+  power-on), so it was never evidence of a lid SCI in S4. The EC clears 0x3d by itself.
+- Conclusion: the T480 EC does not treat a lid open as a wake event in S4/S5 unless Lenovo's SMM
+  (SLTP = SMI 0x05, AWON = SMI 0x12 at _PTS) arms it; the ACPI-visible EC bits (HWLO/WKLD,
+  HWLB, HCMU) and the PCH side (pads identical to stock, GPEs armed) are not enough. In S3 the
+  EC pulses PWRBTN# on lid open, which is why S3 lid wake works. Lenovo's own BIOS has no
+  "wake/power on by lid" setting on this model (think-lmi dump), so the vendor _PRW {0x17, 4}
+  is likely boilerplate. Not pursued further (would need the SMM handlers reverse-engineered).
+- Final state: C55 flashed back 15:22 (PCR 2 B5B658BF..., resealed), lid _PRW {0x17, 4} kept as
+  the vendor's; experiment branches c56 / c57exp and roms C56.rom, C57-exp-bothgpe.rom kept.
+  The sleep hook keeps: WoL AC-only, TCO disarm around hibernate (the real fix of the day).

@@ -16,12 +16,17 @@
 # 2. Wake-on-LAN on AC only (pre, every sleep), as Lenovo's "Wake On LAN: AC Only" default:
 #    with the GbE armed, its PHY stays powered through S3/S4 on battery for nothing
 #    (/proc/acpi/wakeup GLAN). post puts the wake setting back as it was.
-# 3. Hibernate (pre): hung-task panic at 60 s for the transition (a sync or notifier stuck
-#    in D state while userspace still pets the watchdog) -> panic=10 reboots instead.
+# 3. Hibernate (pre): the TCO watchdog is DISARMED first. Every user process, the keepalive
+#    included, is frozen while the kernel writes the image, so a hibernate that takes longer
+#    than the 30 s timeout ends in a TCO reset (2026-10-08 14:55:33, exactly 30 s after
+#    "Performing sleep operation 'hibernate'", TCO2_STS SECOND_TO); the hardware halts the
+#    timer in S3 but not before S4. post re-arms it. For a real hang in the transition:
+#    hung-task panic at 60 s (a sync or notifier stuck in D state) -> panic=10 reboots.
 #    post puts the defaults back. PM debug messages go to the kernel log.
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 SAVE=/run/sleep-guard.saved
 WOL=/run/sleep-guard.wol-off
+WDOFF=/run/sleep-guard.wd-off
 GLAN=/sys/bus/pci/devices/0000:00:1f.6/power/wakeup
 
 case "$2" in
@@ -36,8 +41,8 @@ tco_ticks() { # the TCO timeout register as the hardware has it
 	dd if=/dev/port bs=1 skip=$((0x$base + 0x12)) count=2 2>/dev/null | od -An -tu2 | tr -d ' '
 }
 
-rearm_watchdog() {
-	pid=$(pgrep -o -f 'watchdog-keepalive$') || return 0 # not armed (disarmed by hand)
+stop_keepalive() { # magic close through the keepalive's own descriptor; 1 if it would not exit
+	pid=$(pgrep -o -f 'watchdog-keepalive$') || return 0
 	kill -TERM "$pid" 2>/dev/null
 	pkill -TERM -P "$pid" -x sleep 2>/dev/null # the trap runs once its sleep returns
 	i=0; while kill -0 "$pid" 2>/dev/null && [ $i -lt 70 ]; do sleep 0.1; i=$((i+1)); done
@@ -45,6 +50,21 @@ rearm_watchdog() {
 		logger -t sleep-guard "keepalive $pid did not exit, watchdog left as it was"
 		return 1
 	fi
+}
+
+disarm_watchdog() {
+	pgrep -f 'watchdog-keepalive$' >/dev/null || return 0 # not armed
+	stop_keepalive || return 1
+	touch "$WDOFF"
+	logger -t sleep-guard "TCO watchdog disarmed for $1 (the keepalive is frozen while the image is written)"
+}
+
+rearm_watchdog() {
+	if ! pgrep -f 'watchdog-keepalive$' >/dev/null && [ ! -e "$WDOFF" ]; then
+		return 0 # not armed (disarmed by hand)
+	fi
+	rm -f "$WDOFF"
+	stop_keepalive || return 1
 	t=$(cat /sys/class/watchdog/watchdog0/timeout 2>/dev/null); t=${t:-30}
 	wdctl -s "$t" /dev/watchdog0 >/dev/null 2>&1
 	want=$((t * 10 / 6)) have=$(tco_ticks)
@@ -63,6 +83,7 @@ pre)
 		echo disabled >$GLAN && touch "$WOL"
 	fi
 	[ "$act" = hibernate ] || exit 0
+	disarm_watchdog "$2"
 	[ -e "$SAVE" ] || printf '%s %s %s\n' "$(cat /proc/sys/kernel/hung_task_timeout_secs)" \
 		"$(cat /proc/sys/kernel/hung_task_panic)" "$(cat /sys/power/pm_debug_messages)" >"$SAVE"
 	echo 60 >/proc/sys/kernel/hung_task_timeout_secs
