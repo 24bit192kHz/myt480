@@ -77,3 +77,24 @@ gpe0_dw0..2 = GPP_C/D/E explicitly (the live PMC GPIO_GPE_CFG is 0x432 already).
 - Final state: C55 flashed back 15:22 (PCR 2 B5B658BF..., resealed), lid _PRW {0x17, 4} kept as
   the vendor's; experiment branches c56 / c57exp and roms C56.rom, C57-exp-bothgpe.rom kept.
   The sleep hook keeps: WoL AC-only, TCO disarm around hibernate (the real fix of the day).
+
+## 15:25-15:45 stock SMM analysed (workstation /mnt/ssd-cachy/t480-smm, UEFIExtract + capstone)
+- ACPI `SMI(cmd, ...)` = mailbox at MNVS+0xFC0, SW SMI 0xF5, handled by module SmmAslSmi
+  (jump table at RVA 0x3c40). Case 0x12 (AWON) is `xor eax,eax; ret`: a no-op. Case 0x05 with
+  PAR0=0 (SLTP) only sets SMI_EN.SLP_SMI_EN (PMBASE+0x30 bit 4) and clears SLP_SMI_STS: it arms
+  the sleep SMI. The real sleep work is in module SmmSleepEvent (SLP_EN trap):
+  - S4 handler: GetVariable(Setup/LenovoConfig); unless NVS WIWK (0xD8B bit 0) or a setup bit
+    says otherwise, it rewrites PM1_CNT SLP_TYP to S5 (0x1c00) and writes CMOS 0x74 = 0x55:
+    Lenovo hibernates as S5 by default. In the real-S4 branch it sets EC indexed register 0x41
+    bit 2 (ports 0x15EC index / 0x15EE data, decoded by coreboot's gen2_dec 0x15E0-0x15EF),
+    EC RAM 0x3a |= 0x20 unless WLAC (WakeOnLAN) == 2, EC RAM 0x3b &= ~0x10, and the helper
+    0x12ec sets 0x41 bit 1 from NVS NPME (0xD1A bit 4) and clears idx 0x26 bit 2.
+  - S5 handler: idx 0x41 &= ~4, EC RAM 0xcf &= ~0x40.
+  - S3 handler: idx 0x41 |= 4 under the same flag.
+- Replicated the real-S4 EC state from the sleep hook (idx 0x41 = 0x0f, bits survive the
+  S4 cycle) + HWLO via _PSW: hibernate + lid open still nothing (15:33-15:38). Nothing in any
+  handler is lid-specific. CONCLUSION: the T480 cannot wake from hibernation by lid open, on
+  Lenovo's firmware too (it is S5 there by default, and the EC does not treat the lid as an
+  S4 wake even when armed as Lenovo arms it). Closed.
+- Tool kept: ~/t480-build/tools/ecidx.py (read/setbit/clearbit of the 0x15EC index space).
+  Sleep hook restored (no experiment lines), idx 0x41 back to 0x09.
