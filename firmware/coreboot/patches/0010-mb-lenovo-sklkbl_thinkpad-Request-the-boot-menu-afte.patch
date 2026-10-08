@@ -1,7 +1,7 @@
-From 3e1c0907f1ae1788ee25f2efead5400891648922 Mon Sep 17 00:00:00 2001
+From 9b56f7deff4c559fe52b883fc597e57fc967b959 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 20:56:33 +0300
-Subject: [PATCH 11/14] mb/lenovo/sklkbl_thinkpad: Request the boot menu after
+Subject: [PATCH 10/28] mb/lenovo/sklkbl_thinkpad: Request the boot menu after
  a power-button override
 
 The EC keyboard on these ThinkPads only answers ~2.5 s after power-on, so a
@@ -11,23 +11,33 @@ its menu once (the payload clears it, the OS can set it before a reboot),
 and a power-button override (power held 4 s, how a hung boot is turned
 off) sets it. Anything else is normalised to 0, since the byte holds
 power-on garbage until first written.
+
 ---
- .../lenovo/sklkbl_thinkpad/ramstage.c         | 34 +++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ .../lenovo/sklkbl_thinkpad/ramstage.c         | 36 ++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-index 2f3198c5a1..2c819ea875 100644
+index b26d0bd449..a2a56fad51 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-@@ -1,8 +1,40 @@
+@@ -1,9 +1,13 @@
  /* SPDX-License-Identifier: GPL-2.0-only */
  
+ #include <build.h>
 +#include <console/console.h>
 +#include <intelblocks/pmclib.h>
 +#include <pc80/mc146818rtc.h>
+ #include <smbios.h>
+-#include <string.h>
 +#include <soc/pm.h>
  #include <soc/ramstage.h>
++#include <string.h>
  #include "variant.h"
+ 
+ const char *smbios_mainboard_bios_version(void)
+@@ -15,6 +19,34 @@ const char *smbios_mainboard_bios_version(void)
+ 	return "CBET4000 " COREBOOT_VERSION;
+ }
  
 +/*
 + * CMOS byte shared with the payload and the OS: 0xb5 asks the payload to
@@ -60,7 +70,7 @@ index 2f3198c5a1..2c819ea875 100644
  void mainboard_silicon_init_params(FSP_SIL_UPD *params)
  {
  	// Setup GPIOs
-@@ -11,6 +43,8 @@ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
+@@ -23,6 +55,8 @@ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
  
  static void mainboard_enable(struct device *dev)
  {
@@ -69,6 +79,3 @@ index 2f3198c5a1..2c819ea875 100644
  	if (CONFIG(VARIANT_HAS_DGPU))
  		dgpu_detect();
  }
--- 
-2.55.0
-

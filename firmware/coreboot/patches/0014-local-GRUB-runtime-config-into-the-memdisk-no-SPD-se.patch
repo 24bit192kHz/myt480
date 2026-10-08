@@ -1,7 +1,7 @@
-From 79a8a87b86231f5e62d87462ab9036dd0e239b40 Mon Sep 17 00:00:00 2001
+From a7a1f2649fd23e2ed4e8fd2c8c557010140a1260 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 01:15:54 +0300
-Subject: [PATCH 15/16] [local] GRUB runtime config into the memdisk; no SPD
+Subject: [PATCH 14/28] [local] GRUB runtime config into the memdisk; no SPD
  serial check on a warm reset
 
 ---

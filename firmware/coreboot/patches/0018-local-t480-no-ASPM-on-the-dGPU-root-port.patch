@@ -1,7 +1,7 @@
-From 8511f487e77f7989aa051296aeb5f9115a386bf7 Mon Sep 17 00:00:00 2001
+From 31234260e71cfd53d0f2714745186a4dd762bbd5 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 07:55:41 +0300
-Subject: [PATCH 19/20] [local] t480: no ASPM on the dGPU root port
+Subject: [PATCH 18/28] [local] t480: no ASPM on the dGPU root port
 
 Second silent hang of the day, again with the driver loaded and the GPU
 idle on battery; the hard-lockup detector did not fire, so every CPU

@@ -25,6 +25,8 @@ Artix Linux with s6.
 | `local.d/watchdog.start`, `modules-load.d/itco-watchdog.conf` | arm the TCO hardware watchdog at boot |
 | `local.d/bluetooth.start`, `bluetooth/main.conf` | bluetoothd at boot, adapter auto-enabled |
 | `local.d/hibernate-tune.start` | hibernate image size and compression threads |
+| `local.d/lockup-detect.start` | kernel lockup detectors on (the firmware command line has `nowatchdog`; the TCO watchdog alone does not catch a stuck CPU), `msr.allow_writes` for thermald-t480 |
+| `elogind/system-sleep/02-sleep-guard` | re-arms the TCO watchdog after every wake (the PCH halts it), hung-task panic around a hibernate, Wake-on-LAN only on AC as Lenovo's default |
 | `gpu-power.conf` | MX150 clock offsets per power source, set by `gpu-power` after each driver load |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |

@@ -1,7 +1,7 @@
-From 45310a0962d5c40c7f1a0c23cdec9d508e05db53 Mon Sep 17 00:00:00 2001
+From 6a1675138284989eba2fda38135ddaddd462b8b5 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 13:56:27 +0300
-Subject: [PATCH 01/14] ec/lenovo/h8/acpi: Notify processors from _PSR only on
+Subject: [PATCH 01/28] ec/lenovo/h8/acpi: Notify processors from _PSR only on
  a state change
 
 _PSR runs every time the OS reads the AC adapter state (Linux evaluates
@@ -36,6 +36,3 @@ index 436fdcfaeb..3db94833de 100644
  		return (Local0)
  	}
  
--- 
-2.55.0
-

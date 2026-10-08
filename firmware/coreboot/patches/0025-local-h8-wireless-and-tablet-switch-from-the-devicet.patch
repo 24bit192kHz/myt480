@@ -1,7 +1,7 @@
-From 3c6870a4643ae0448fd0de4e6129f9761d062f85 Mon Sep 17 00:00:00 2001
+From 1d6fe36a0762a9dcc986fef4d79d67c0e697aeb6 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Sun, 4 Oct 2026 16:34:02 +0300
-Subject: [PATCH 27/27] [local] h8: wireless and tablet switch from the
+Subject: [PATCH 25/28] [local] h8: wireless and tablet switch from the
  devicetree, as in upstream series v5
 
 Review on Gerrit (CB:95880, CB:95912): no Kconfig options for hardware facts.
@@ -43,7 +43,7 @@ index aad2a861c5..7f6d45be30 100644
 -
  endif # EC_LENOVO_H8
 diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
-index f26f807b2e..1b20c94508 100644
+index d18a2faa61..d805b3ee4e 100644
 --- a/src/ec/lenovo/h8/acpi/thinkpad.asl
 +++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
 @@ -8,6 +8,7 @@ Device (HKEY)
@@ -54,7 +54,7 @@ index f26f807b2e..1b20c94508 100644
  
  	Name (_HID, EisaId (CONFIG_THINKPADEC_HKEY_EISAID))
  
-@@ -111,14 +112,6 @@ Device (HKEY)
+@@ -118,14 +119,6 @@ Device (HKEY)
  		Return (0x07FFFFFF)
  	}
  
@@ -69,7 +69,7 @@ index f26f807b2e..1b20c94508 100644
  	/* Mute audio */
  	Method (SSMS, 1, NotSerialized)
  	{
-@@ -147,11 +140,11 @@ Device (HKEY)
+@@ -154,11 +147,11 @@ Device (HKEY)
  	/* Master wireless switch state */
  	Method (WLSW, 0, NotSerialized)
  	{
@@ -138,7 +138,7 @@ index fbe7070df0..3214ab4261 100644
  	acpigen_pop_len(); /* Scope HKEY */
  }
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
-index be8b7043f9..90d1965d66 100644
+index 71ba0b1e49..edc16dd817 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 @@ -14,8 +14,6 @@ config BOARD_LENOVO_SKLKBL_THINKPAD_COMMON

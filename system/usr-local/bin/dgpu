@@ -3,7 +3,9 @@
 
 Writes CMOS byte 0x6f: 0xd6 = on, 0 = off. coreboot (sklkbl_thinkpad
 dgpu_early.c) reads it in the bootblock of every boot and S3 resume; the
-choice holds until changed and takes effect at the next boot.
+choice holds until changed and takes effect at the next boot. A power-button
+override (power held 4 s) makes coreboot C55+ skip the GPU for one boot only
+(CMOS 0x6c = 0x3c, cleared by that boot); the choice in 0x6f stays.
 Usage: dgpu on|off|status
 """
 import glob
@@ -11,6 +13,7 @@ import os
 import sys
 
 CMOS_DGPU, DGPU_REQUEST = 0x6F, 0xD6
+CMOS_DGPU_SKIP, DGPU_SKIP_ONCE = 0x6C, 0x3C
 USAGE = "usage: dgpu on|off|status"
 
 if len(sys.argv) != 2 or sys.argv[1] not in ("on", "off", "status"):
@@ -26,6 +29,8 @@ if cmd != "status":
     os.pwrite(fd, bytes([DGPU_REQUEST if cmd == "on" else 0]), 0x71)
 os.pwrite(fd, bytes([CMOS_DGPU]), 0x70)
 requested = os.pread(fd, 1, 0x71)[0] == DGPU_REQUEST
+os.pwrite(fd, bytes([CMOS_DGPU_SKIP]), 0x70)
+skip_once = os.pread(fd, 1, 0x71)[0] == DGPU_SKIP_ONCE
 os.close(fd)
 
 if cmd != "status":
@@ -34,7 +39,8 @@ if cmd != "status":
     print(f"dGPU {cmd} from the next boot.")
     sys.exit(0)
 
-print(f"next boot: dGPU {'on' if requested else 'off'} (CMOS 0x6f)")
+print(f"next boot: dGPU {'on' if requested else 'off'} (CMOS 0x6f)"
+      + (", skipped once after a power-button override (CMOS 0x6c)" if skip_once else ""))
 gpus = [d for d in glob.glob("/sys/bus/pci/devices/*")
         if open(f"{d}/vendor").read().strip() == "0x10de"]
 if not gpus:

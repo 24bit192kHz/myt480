@@ -1,7 +1,7 @@
-From 1e56fb92ca0b8934149a452e1ef0192e0790786f Mon Sep 17 00:00:00 2001
+From db7037c3e69feea24d4f8f8cc57faa9ce5a92858 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 16:03:49 +0300
-Subject: [PATCH] [local] t480: subsystem IDs from the devicetree, as in
+Subject: [PATCH 23/28] [local] t480: subsystem IDs from the devicetree, as in
  upstream series v4
 
 soc/intel/skylake hands FSP the system agent's devicetree IDs instead of
@@ -15,10 +15,10 @@ defaults are gone (lint-stable-024).
  3 files changed, 13 insertions(+), 11 deletions(-)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
-index ca15468a6b..be8b7043f9 100644
+index a82199fd9a..71ba0b1e49 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
-@@ -130,9 +130,3 @@ config VARIANT_HAS_DGPU
+@@ -138,9 +138,3 @@ config VARIANT_HAS_DGPU
  	bool
  
  endif
@@ -69,6 +69,3 @@ index bcac385936..6c2f25c381 100644
  
  	params->PchPmWolEnableOverride = config->WakeConfigWolEnableOverride;
  	params->PchPmPcieWakeFromDeepSx = config->WakeConfigPcieWakeFromDeepSx;
--- 
-2.55.0
-

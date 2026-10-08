@@ -1,10 +1,11 @@
-From 9ea49cef79fe3adca8834e39a100437b4ce5bc54 Mon Sep 17 00:00:00 2001
+From e8f35bcec082e59afb06ee16e03ab4397e81c73c Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:06:52 +0300
-Subject: [PATCH 12/14] device/pci_rom: Pass the whole option ROM to _ROM
+Subject: [PATCH 11/28] device/pci_rom: Pass the whole option ROM to _ROM
 
 The size byte of the ROM header cannot describe more than 127.5 KiB; the
 MX150 VBIOS is 182272 bytes. Same change as patch 1 of the upstream series.
+
 ---
  src/device/pci_rom.c | 36 +++++++++++++++++++++++++++++++++---
  1 file changed, 33 insertions(+), 3 deletions(-)
@@ -88,6 +89,3 @@ index dc41ef14ce..66cd2f12a4 100644
  	acpigen_pop_len(); /* pop scope */
  }
  #endif
--- 
-2.55.0
-

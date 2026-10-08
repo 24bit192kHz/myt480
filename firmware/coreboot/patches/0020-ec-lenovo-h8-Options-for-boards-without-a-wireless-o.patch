@@ -1,7 +1,7 @@
-From f206269c1e7add3edb6125b075cef6bee503647c Mon Sep 17 00:00:00 2001
+From c33d1ec53060aaa56711af3223090e8f62bd7216 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 17:23:18 +0300
-Subject: [PATCH 22/24] ec/lenovo/h8: Options for boards without a wireless or
+Subject: [PATCH 20/28] ec/lenovo/h8: Options for boards without a wireless or
  tablet switch, lid wake state
 
 H8_NO_WIRELESS_SWITCH: WLSW returns 1. The T480's EC has no master wireless
@@ -65,10 +65,10 @@ index 7695e4e5ab..6ee6d9b3ed 100644
  
  	Method(_PSW, 1, NotSerialized)
 diff --git a/src/ec/lenovo/h8/acpi/thinkpad.asl b/src/ec/lenovo/h8/acpi/thinkpad.asl
-index 4991c6d139..f26f807b2e 100644
+index f8f2dc0292..d18a2faa61 100644
 --- a/src/ec/lenovo/h8/acpi/thinkpad.asl
 +++ b/src/ec/lenovo/h8/acpi/thinkpad.asl
-@@ -111,11 +111,13 @@ Device (HKEY)
+@@ -118,11 +118,13 @@ Device (HKEY)
  		Return (0x07FFFFFF)
  	}
  
@@ -82,7 +82,7 @@ index 4991c6d139..f26f807b2e 100644
  
  	/* Mute audio */
  	Method (SSMS, 1, NotSerialized)
-@@ -145,7 +147,11 @@ Device (HKEY)
+@@ -152,7 +154,11 @@ Device (HKEY)
  	/* Master wireless switch state */
  	Method (WLSW, 0, NotSerialized)
  	{

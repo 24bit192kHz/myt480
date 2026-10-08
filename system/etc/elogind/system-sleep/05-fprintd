@@ -13,6 +13,8 @@
 # post: wait for 06cb:009a, start the driver (fresh open, ~0.7 s), then Resume
 #       open-fprintd: it clears its suspended flag and replays the queued calls
 #       once the driver has registered again.
+# With the libfprint stack (fprint-backend libfprint) neither runs: fprintd
+# handles sleep itself through logind, so the hook does nothing.
 PATH=/usr/bin:/bin
 LIVE=$(readlink -f /run/s6-rc 2>/dev/null)
 MARK=/run/fprint-sleep.driver
@@ -24,6 +26,7 @@ sensor_present() { grep -qs "^009a$" /sys/bus/usb/devices/*/idProduct; }
 
 case "$1" in
   pre)
+    up open-fprintd || exit 0
     /usr/lib/open-fprintd/suspend.py >/dev/null 2>&1 || log "open-fprintd Suspend failed"
     for drv in validity-rs python3-validity; do
       if up "$drv"; then
@@ -41,6 +44,7 @@ case "$1" in
       [ "$drv" = python3-validity ] && rm -f /var/run/python-validity/backoff
       s6-svc -u "$(svdir "$drv")" && log "started $drv after wake" || log "could not start $drv"
     fi
+    up open-fprintd || exit 0
     /usr/lib/open-fprintd/resume.py >/dev/null 2>&1 || log "open-fprintd Resume failed" ;;
 esac
 exit 0

@@ -107,6 +107,11 @@ kate
 lib32-glibc
 libftdi
 libnotify
+libretro-core-info
+libretro-mesen
+libretro-mupen64plus-next
+libretro-shaders-slang
+libretro-snes9x
 libstatgrab
 libva-intel-driver
 linux
@@ -121,6 +126,7 @@ lximage-qt
 lxqt-about
 lxqt-admin
 lxqt-archiver
+lxqt-build-tools
 lxqt-config
 lxqt-globalkeys
 lxqt-notificationd
@@ -169,6 +175,7 @@ opencl-nvidia-580xx
 openntpd-s6
 openssh-s6
 os-prober
+papirus-icon-theme
 pavucontrol
 pavucontrol-qt
 pcmanfm-qt
@@ -186,10 +193,14 @@ qemu-desktop
 qps
 qt5-imageformats
 qt5ct
+qt6-tools
 qt6ct
 qt6gtk2
 quickshell
 raw-thumbnailer
+retroarch
+retroarch-assets-ozone
+retroarch-assets-xmb
 rofi
 rofimoji
 rsync-s6

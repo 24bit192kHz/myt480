@@ -148,7 +148,7 @@
   󰃠 brightness    LMB/RMB/󱕒 up / down
   󰕾 volume        LMB mute   RMB pavucontrol
                   󱕒 ±5%
-  󰤨 wifi          LMB network popup (Wi-Fi, VPN, wired)
+  󰤨 wifi          LMB network popup (Wi-Fi, VPN, wired, hotspot)
                   RMB connections
   󰃭 clock         LMB calendar window (click again closes)
                   MMB next Arabic font

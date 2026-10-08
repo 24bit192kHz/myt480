@@ -1,7 +1,7 @@
-From 93a78e891a15adc9d674d92c3897d61706c870c2 Mon Sep 17 00:00:00 2001
+From 811e8fa967b27db300241efa405e2e379017d847 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 17:23:18 +0300
-Subject: [PATCH 24/24] mb/lenovo/sklkbl_thinkpad/t480: Radios on, no tablet
+Subject: [PATCH 22/28] mb/lenovo/sklkbl_thinkpad/t480: Radios on, no tablet
  switch, lid wakes from S4, GMM, subsystem IDs
 
 As on the vendor firmware: the radios are never hard-blocked, no tablet
@@ -14,7 +14,7 @@ PCH and system agent devices carry 17aa:225d.
  3 files changed, 10 insertions(+)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
-index 90d1965d66..ca15468a6b 100644
+index edc16dd817..a82199fd9a 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 @@ -14,6 +14,8 @@ config BOARD_LENOVO_SKLKBL_THINKPAD_COMMON
@@ -26,7 +26,7 @@ index 90d1965d66..ca15468a6b 100644
  	select HAVE_ACPI_RESUME
  	select HAVE_ACPI_TABLES
  	select INTEL_GMA_HAVE_VBT
-@@ -128,3 +130,9 @@ config VARIANT_HAS_DGPU
+@@ -136,3 +138,9 @@ config VARIANT_HAS_DGPU
  	bool
  
  endif
@@ -37,12 +37,12 @@ index 90d1965d66..ca15468a6b 100644
 +config SUBSYSTEM_DEVICE_ID
 +	default 0x225d if BOARD_LENOVO_T480
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
-index 3a949a2fca..4dc31bf982 100644
+index 22be737e73..f6d6b7492e 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
-@@ -3,6 +3,7 @@
- #define BRIGHTNESS_UP \_SB.PCI0.GFX0.INCB
+@@ -4,6 +4,7 @@
  #define BRIGHTNESS_DOWN \_SB.PCI0.GFX0.DECB
+ #define EC_LENOVO_H8_EXTENDED_FN_LAYOUT 1
  #define THINKPAD_EC_GPE 22
 +#define H8_LID_WAKE_STATE 4	/* as the vendor firmware */
  

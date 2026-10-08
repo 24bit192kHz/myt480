@@ -1,0 +1,84 @@
+#!/bin/sh
+# elogind sleep hook: keep a hang in or after a sleep from becoming a dead, lit machine.
+#
+# 1. TCO watchdog (post, every wake): coreboot's resume path halts the PCH TCO timer
+#    (TCO1_CNT TMR_HLT set after S3, measured 2026-10-05), and iTCO_wdt does not stop or
+#    restart it for S3/S4 (need_suspend() is false), so the kernel keeps reporting it
+#    "active" while the keepalive pets a stopped timer. 2026-10-05 20:22 a hibernate
+#    started after an S3 wake hung for 2 h 40 min on battery (no TCO reset, power-button
+#    override). Restarting the keepalive closes /dev/watchdog with the magic 'V' and opens
+#    it again, which runs iTCO_wdt_start() and clears TMR_HLT.
+#    The wake also resets the timeout register (TCOBASE+0x12) to its default of 4 ticks
+#    (2.4 s) while the kernel still believes 30 s: un-halting it as it is reset the machine
+#    5 s after an RTC wake (SECOND_TO, 2026-10-05 23:16). So the timeout is written again
+#    first (wdctl -s: WDIOC_SETTIMEOUT, then magic close), read back from the register, and
+#    the keepalive restarts only when it matches; otherwise the watchdog stays disarmed.
+# 2. Wake-on-LAN on AC only (pre, every sleep), as Lenovo's "Wake On LAN: AC Only" default:
+#    with the GbE armed, its PHY stays powered through S3/S4 on battery for nothing
+#    (/proc/acpi/wakeup GLAN). post puts the wake setting back as it was.
+# 3. Hibernate (pre): hung-task panic at 60 s for the transition (a sync or notifier stuck
+#    in D state while userspace still pets the watchdog) -> panic=10 reboots instead.
+#    post puts the defaults back. PM debug messages go to the kernel log.
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SAVE=/run/sleep-guard.saved
+WOL=/run/sleep-guard.wol-off
+GLAN=/sys/bus/pci/devices/0000:00:1f.6/power/wakeup
+
+case "$2" in
+	hibernate|hybrid-sleep) act=hibernate ;;
+	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
+	*) act=suspend ;;
+esac
+
+tco_ticks() { # the TCO timeout register as the hardware has it
+	base=$(sed -n 's/^ *\([0-9a-f]*\)-[0-9a-f]* : iTCO_wdt$/\1/p' /proc/ioports | head -n1)
+	[ -n "$base" ] || return 1
+	dd if=/dev/port bs=1 skip=$((0x$base + 0x12)) count=2 2>/dev/null | od -An -tu2 | tr -d ' '
+}
+
+rearm_watchdog() {
+	pid=$(pgrep -o -f 'watchdog-keepalive$') || return 0 # not armed (disarmed by hand)
+	kill -TERM "$pid" 2>/dev/null
+	pkill -TERM -P "$pid" -x sleep 2>/dev/null # the trap runs once its sleep returns
+	i=0; while kill -0 "$pid" 2>/dev/null && [ $i -lt 70 ]; do sleep 0.1; i=$((i+1)); done
+	if kill -0 "$pid" 2>/dev/null; then
+		logger -t sleep-guard "keepalive $pid did not exit, watchdog left as it was"
+		return 1
+	fi
+	t=$(cat /sys/class/watchdog/watchdog0/timeout 2>/dev/null); t=${t:-30}
+	wdctl -s "$t" /dev/watchdog0 >/dev/null 2>&1
+	want=$((t * 10 / 6)) have=$(tco_ticks)
+	if [ "$have" != "$want" ]; then
+		logger -t sleep-guard "TCO timeout register $have ticks, want $want: watchdog left disarmed"
+		return 1
+	fi
+	/etc/local.d/watchdog.start
+	logger -t sleep-guard "TCO watchdog re-armed after $1 (${t} s, $have ticks)"
+}
+
+case "$1" in
+pre)
+	if [ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" = 0 ] && \
+	   [ "$(cat $GLAN 2>/dev/null)" = enabled ]; then
+		echo disabled >$GLAN && touch "$WOL"
+	fi
+	[ "$act" = hibernate ] || exit 0
+	[ -e "$SAVE" ] || printf '%s %s %s\n' "$(cat /proc/sys/kernel/hung_task_timeout_secs)" \
+		"$(cat /proc/sys/kernel/hung_task_panic)" "$(cat /sys/power/pm_debug_messages)" >"$SAVE"
+	echo 60 >/proc/sys/kernel/hung_task_timeout_secs
+	echo 1 >/proc/sys/kernel/hung_task_panic
+	echo 1 >/sys/power/pm_debug_messages ;;
+post)
+	if [ -e "$WOL" ]; then
+		echo enabled >$GLAN; rm -f "$WOL"
+	fi
+	if [ -s "$SAVE" ]; then
+		read -r t p d <"$SAVE"
+		echo "$t" >/proc/sys/kernel/hung_task_timeout_secs
+		echo "$p" >/proc/sys/kernel/hung_task_panic
+		echo "$d" >/sys/power/pm_debug_messages
+		rm -f "$SAVE"
+	fi
+	rearm_watchdog "$2" ;;
+esac
+exit 0

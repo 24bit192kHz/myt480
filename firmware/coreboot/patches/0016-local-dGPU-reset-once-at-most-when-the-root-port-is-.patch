@@ -1,7 +1,7 @@
-From 08ff17ec602006e40bb7e5c1d669e99626f41c11 Mon Sep 17 00:00:00 2001
+From bb40ba10fdfda4f576de14037462649b39418f41 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 06:52:08 +0300
-Subject: [PATCH] [local] dGPU: reset once at most when the root port is
+Subject: [PATCH 16/28] [local] dGPU: reset once at most when the root port is
  missing
 
 FSP-S drops a root port whose link is down. A GPU that is enabled but does

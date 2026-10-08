@@ -23,7 +23,7 @@ case $1:$2 in
 6:3) exec pavucontrol ;;  # 󰕾 volume: pavucontrol
 6:4) exec "$S/vol.sh" up ;;  # 󰕾 volume: ±5%
 6:5) exec "$S/vol.sh" down ;;  # 󰕾 volume: ±5%
-7:1) command -v chadnet >/dev/null && exec chadnet  # 󰤨 wifi: network popup (Wi-Fi, VPN, wired)
+7:1) command -v chadnet >/dev/null && exec chadnet  # 󰤨 wifi: network popup (Wi-Fi, VPN, wired, hotspot)
      exec "$S/wifimenu.sh" ;;
 7:3) exec nm-connection-editor ;;  # 󰤨 wifi: connections
 8:1) command -v chadcal >/dev/null && exec chadcal  # 󰃭 clock: calendar window (click again closes)

@@ -1,7 +1,7 @@
-From e2aa8c4192ccdfee0509e83e118150868f7e907a Mon Sep 17 00:00:00 2001
+From 67f9041cffd0d8865a29f96c52e2fbeb69523346 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Sun, 4 Oct 2026 15:05:35 +0300
-Subject: [PATCH 26/27] [local] payloads/GRUB2: pack the site-local signing key
+Subject: [PATCH 24/28] [local] payloads/GRUB2: pack the site-local signing key
  and password into the memdisk
 
 site-local/data/boot.pub and auth.cfg, when present, go to /boot/grub in

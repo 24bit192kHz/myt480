@@ -1,7 +1,7 @@
-From 85fcee408f080230fdb15b5d04318fd5e5a6c561 Mon Sep 17 00:00:00 2001
+From 5a79c2b281532b919b0fba2b4229ea99a3922f38 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 14:31:47 +0300
-Subject: [PATCH 02/14] mb/lenovo/sklkbl_thinkpad/t480: Cache SPD in
+Subject: [PATCH 02/28] mb/lenovo/sklkbl_thinkpad/t480: Cache SPD in
  RW_SPD_CACHE
 
 Reading both SO-DIMM SPDs (2 x 512 bytes DDR4) over SMBus took ~100 ms
@@ -14,7 +14,7 @@ re-read over SMBus, refresh the cache and drop the MRC cache.
  2 files changed, 32 insertions(+), 3 deletions(-)
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
-index 25c8ec6959..90d1965d66 100644
+index a544def293..edc16dd817 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/Kconfig
 @@ -36,6 +36,7 @@ config BOARD_LENOVO_T480
@@ -79,6 +79,3 @@ index 5252a402f9..902f17e8be 100644
  	dump_spd_info(&blk);
  
  	mem_cfg->MemorySpdPtr00    = (uintptr_t)blk.spd_array[0];
--- 
-2.55.0
-

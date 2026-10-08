@@ -1,13 +1,14 @@
-From 9364586fdc1f0b4c4ec51ebf0cec74e4e4511572 Mon Sep 17 00:00:00 2001
+From 9523928545006d6c19b665371453a26bdb8cb307 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:06:52 +0300
-Subject: [PATCH 13/14] [local] mb/lenovo/sklkbl_thinkpad: dGPU support as
+Subject: [PATCH 12/28] [local] mb/lenovo/sklkbl_thinkpad: dGPU support as
  flashed in C32
 
 Power the dGPU in the bootblock, full reset when root port 1 is disabled,
 power off before sleep, ACPI power resource from the SSDT. The same code as
 the upstream series, but the switch is CMOS 0x6f == 0xd6 (`dgpu on`) because
 this build has no option backend, and a power-button override clears it.
+
 ---
  .../lenovo/sklkbl_thinkpad/Makefile.mk        |   3 +
  .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      |  70 +++++++++++
@@ -374,10 +375,10 @@ index 801e0cb0d1..a356370a0f 100644
  	#include <southbridge/intel/common/acpi/sleepstates.asl>
  }
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-index 2c819ea875..c41844f9dc 100644
+index a2a56fad51..eb9cc4aa94 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-@@ -45,8 +45,10 @@ static void mainboard_enable(struct device *dev)
+@@ -57,8 +57,10 @@ static void mainboard_enable(struct device *dev)
  {
  	boot_menu_request();
  
@@ -506,6 +507,3 @@ index deb0cf4c1e..763236e462 100644
  
  #define GPIO_DISCRETE_PRESENCE		GPP_D9	// active low
  #define GPIO_DGFX_VRAM_ID0		GPP_D11
--- 
-2.55.0
-

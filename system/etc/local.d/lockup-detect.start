@@ -1,0 +1,13 @@
+#!/bin/sh
+# Kernel lockup detectors back on (the firmware command line has nowatchdog nmi_watchdog=0):
+# a soft or hard lockup panics, and panic=10 reboots. The TCO watchdog alone only fires when
+# the keepalive process dies, which a single stuck CPU does not cause: on 2026-10-05 a hang in
+# the hibernate path sat for 2 h 40 min with the screen on. hung_task_panic stays off here
+# (02-sleep-guard turns it on around a hibernate only). Order matters: kernel.watchdog first.
+sysctl -q -w kernel.watchdog=1
+sysctl -q -w kernel.soft_watchdog=1 kernel.nmi_watchdog=1
+sysctl -q -w kernel.softlockup_panic=1 kernel.hardlockup_panic=1
+# thermald-t480 writes the undervolt/ICCMAX mailbox (MSR 0x150) and the TCC offset (0x1A2)
+# on purpose, on every resume and profile change; without this the kernel logs each write
+# and taints itself (CPU_OUT_OF_SPEC).
+echo on > /sys/module/msr/parameters/allow_writes 2>/dev/null || true

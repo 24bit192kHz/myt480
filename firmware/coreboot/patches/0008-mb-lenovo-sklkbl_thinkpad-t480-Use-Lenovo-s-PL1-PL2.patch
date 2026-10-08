@@ -1,11 +1,12 @@
-From 46a844c486996c32c69f6658aae2cdeb6f08e429 Mon Sep 17 00:00:00 2001
+From 5fd5c5733362790d5ab2065bb7b89a2e1f8f0a12 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:54:47 +0300
-Subject: [PATCH 09/14] mb/lenovo/sklkbl_thinkpad/t480: Use Lenovo's PL1/PL2
+Subject: [PATCH 08/28] mb/lenovo/sklkbl_thinkpad/t480: Use Lenovo's PL1/PL2
 
 Without an override PL2 is 1.25 * TDP (18 W) and is also written to the
 MCHBAR copy, which caps the i7-8650U far below its turbo until an OS
 daemon rewrites both. Use 25 W (cTDP up) and 44 W like the vendor BIOS.
+
 ---
  .../lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb  | 8 ++++++++
  1 file changed, 8 insertions(+)
@@ -29,6 +30,3 @@ index a771aa1916..7839237a30 100644
  	device domain 0 on
  		device ref south_xhci on
  			register "usb2_ports" = "{
--- 
-2.55.0
-

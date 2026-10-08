@@ -6,7 +6,9 @@ dj64-git
 djgpp-binutils
 dosemu2-git
 fdpp
+firefox-t480
 gcc14
+libfprint-cs9711
 libva-vdpau-driver
 linux-t480
 linux-t480-headers

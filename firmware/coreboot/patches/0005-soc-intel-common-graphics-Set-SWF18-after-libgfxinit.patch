@@ -1,7 +1,7 @@
-From fea12efaa9b8677f23101a4488e3feb40735ebf1 Mon Sep 17 00:00:00 2001
+From f306b820b1a1442986de8fc11312f11e2baa7cd7 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 15:04:06 +0300
-Subject: [PATCH 05/14] soc/intel/common/graphics: Set SWF18 after libgfxinit
+Subject: [PATCH 05/28] soc/intel/common/graphics: Set SWF18 after libgfxinit
  lit a display
 
 A VBIOS/GOP sets the SWF18 scratch register to tell the OS that the
@@ -15,7 +15,7 @@ visible blink on a ThinkPad T480). Set it once libgfxinit succeeded.
  1 file changed, 11 insertions(+)
 
 diff --git a/src/soc/intel/common/block/graphics/graphics.c b/src/soc/intel/common/block/graphics/graphics.c
-index 6cf5ad9f31..c4658b248a 100644
+index fe9a142f5e..eace3f88e1 100644
 --- a/src/soc/intel/common/block/graphics/graphics.c
 +++ b/src/soc/intel/common/block/graphics/graphics.c
 @@ -16,6 +16,8 @@
@@ -43,6 +43,3 @@ index 6cf5ad9f31..c4658b248a 100644
  		}
  	} else {
  		/* Initialize PCI device, load/execute BIOS Option ROM */
--- 
-2.55.0
-

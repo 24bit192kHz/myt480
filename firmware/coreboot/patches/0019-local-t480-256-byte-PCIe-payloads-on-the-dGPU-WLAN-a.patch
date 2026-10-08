@@ -1,7 +1,7 @@
-From 1a66539d14f8b8cc7cbdafbe8e1cb0d9e584adec Mon Sep 17 00:00:00 2001
+From df4042bd517e19c9c996755f5c2b492a8f52ac33 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 16:06:59 +0300
-Subject: [PATCH 20/20] [local] t480: 256-byte PCIe payloads on the dGPU, WLAN
+Subject: [PATCH 19/28] [local] t480: 256-byte PCIe payloads on the dGPU, WLAN
  and SSD ports
 
 The vendor firmware sets Max_Payload_Size 256 on root ports 1, 7 and 11

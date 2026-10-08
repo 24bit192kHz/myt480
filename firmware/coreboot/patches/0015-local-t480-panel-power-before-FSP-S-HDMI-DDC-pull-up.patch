@@ -1,7 +1,7 @@
-From 2f940e29f5d51a49f01afdd271bfeeaec52d8a9b Mon Sep 17 00:00:00 2001
+From 6c84bf65f9bd0ef0e25b0d67c48d5649ee6b1cc1 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 02:18:03 +0300
-Subject: [PATCH 16/16] [local] t480: panel power before FSP-S, HDMI DDC
+Subject: [PATCH 15/28] [local] t480: panel power before FSP-S, HDMI DDC
  pull-ups
 
 Request eDP panel power in ramstage before FSP-S so the 210 ms power-up
@@ -133,10 +133,10 @@ index 0000000000..e3c19493b3
 +	}
 +}
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-index fc006f862b..48fcc2fe76 100644
+index 00bf3fa4c1..5529765205 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
-@@ -37,6 +37,9 @@ static void boot_menu_request(void)
+@@ -49,6 +49,9 @@ static void boot_menu_request(void)
  
  void mainboard_silicon_init_params(FSP_SIL_UPD *params)
  {

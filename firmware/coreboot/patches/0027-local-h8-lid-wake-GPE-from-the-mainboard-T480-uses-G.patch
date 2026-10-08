@@ -1,0 +1,61 @@
+From 52715c8712cb320ccd2a8f950081b7924f2a9aa0 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Thu, 8 Oct 2026 14:08:25 +0300
+Subject: [PATCH 27/28] [local] h8: lid wake GPE from the mainboard; T480 uses
+ GPE 0x17 as the vendor _PRW
+
+lid.asl hard-coded GPE 0x18 in the lid's _PRW. On the T480 the EC's wake
+line EC_WAKE# is GPP_C23, which is GPE 0x17 with GPP_C in GPE0_DW0 (the EC
+SCI on GPP_C22 is GPE 0x16, THINKPAD_EC_GPE 22); Lenovo's DSDT declares the
+lid as {0x17, 4} and has _L17. With 0x18 nothing ever raised the lid GPE
+(gpe18 count 0) and opening the lid did not wake the machine from S4
+(tested 2026-10-05). The mainboard may now define H8_LID_WAKE_GPE.
+
+---
+ src/ec/lenovo/h8/acpi/lid.asl                    | 10 ++++++++--
+ src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl |  2 ++
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/ec/lenovo/h8/acpi/lid.asl b/src/ec/lenovo/h8/acpi/lid.asl
+index 6ee6d9b3ed..e0345d6a94 100644
+--- a/src/ec/lenovo/h8/acpi/lid.asl
++++ b/src/ec/lenovo/h8/acpi/lid.asl
+@@ -1,9 +1,15 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
+-/* Deepest sleep state the lid wakes from; the mainboard may define it before including this */
++/*
++ * Deepest sleep state the lid wakes from and the GPE that signals it; the
++ * mainboard may define both before including this.
++ */
+ #ifndef H8_LID_WAKE_STATE
+ #define H8_LID_WAKE_STATE 3
+ #endif
++#ifndef H8_LID_WAKE_GPE
++#define H8_LID_WAKE_GPE 0x18
++#endif
+ 
+ Field(ERAM, ByteAcc, NoLock, Preserve)
+ {
+@@ -26,7 +32,7 @@ Device(LID)
+ 
+ 	Method(_PRW, 0, NotSerialized)
+ 	{
+-		Return (Package() { 0x18, H8_LID_WAKE_STATE })
++		Return (Package() { H8_LID_WAKE_GPE, H8_LID_WAKE_STATE })
+ 	}
+ 
+ 	Method(_PSW, 1, NotSerialized)
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
+index f6d6b7492e..27a0027e82 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/ec.asl
+@@ -5,6 +5,8 @@
+ #define EC_LENOVO_H8_EXTENDED_FN_LAYOUT 1
+ #define THINKPAD_EC_GPE 22
+ #define H8_LID_WAKE_STATE 4	/* as the vendor firmware */
++/* EC_WAKE# is GPP_C23 (GPE 0x17 with GPP_C in GPE0_DW0), as the vendor _PRW */
++#define H8_LID_WAKE_GPE 0x17
+ 
+ Name(\TCRT, 100)
+ Name(\TPSV, 90)

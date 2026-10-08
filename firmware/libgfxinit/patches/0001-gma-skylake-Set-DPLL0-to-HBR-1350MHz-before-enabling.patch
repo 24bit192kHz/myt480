@@ -1,4 +1,4 @@
-From 7e9bbda541cad88790e2bca2a9f0ce9aa045a7ce Mon Sep 17 00:00:00 2001
+From 497ff0de303a64f0e0256160fda8bcf0b0d33bf0 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 14:54:27 +0300
 Subject: [PATCH 1/3] gma skylake: Set DPLL0 to HBR (1350MHz) before enabling
@@ -12,6 +12,8 @@ modeset including a panel power cycle (~1.2s on a ThinkPad T480).
 
 1350MHz is compatible with the 8100MHz CDClk VCO. RBR-only panels fall back
 to a configurable DPLL through PLLs.Alloc.
+
+(cherry picked from commit 86d16d13cebea87a1240cf5ddac4a25e98c95736)
 ---
  .../skylake/hw-gfx-gma-power_and_clocks.adb   | 27 +++++++++++++++----
  1 file changed, 22 insertions(+), 5 deletions(-)
@@ -54,6 +56,3 @@ index acc4753..d778ab3 100644
        Registers.Set_Mask
          (Register    => Registers.LCPLL1_CTL,
           Mask        => LCPLL1_CTL_PLL_ENABLE);
--- 
-2.55.0
-

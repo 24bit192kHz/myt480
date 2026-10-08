@@ -1,4 +1,4 @@
-From 00d190b326c505a566bb38dc0e50f263b10896ce Mon Sep 17 00:00:00 2001
+From cc48be13f0f7ac249e302dfddb7da64070e398b2 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 15:07:57 +0300
 Subject: [PATCH 3/3] dp_info: Use link N = 0x80000 like Linux i915
@@ -8,6 +8,8 @@ deciding whether it can keep the pre-OS mode (fastset). libgfxinit's
 0x100000 made an identical ratio look different (539045/1048576 vs
 269522/524288 for 138.8 MHz on HBR), forcing a full modeset with a panel
 power cycle at boot.
+
+(cherry picked from commit 14c72d29e6e45a93a3039f93f1286c96bcc148d5)
 ---
  common/hw-gfx-dp_info.adb | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
@@ -28,6 +30,3 @@ index 09e3da6..a091924 100644
  
        subtype Calc_M_Type is Int64 range 0 .. 2 ** 38;
        subtype Calc_N_Type is Int64 range 0 .. 2 ** 38;
--- 
-2.55.0
-

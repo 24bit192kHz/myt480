@@ -1,0 +1,73 @@
+From 51aeef05485eb153617e6c2a696022cb5a3703f9 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Thu, 8 Oct 2026 14:08:25 +0300
+Subject: [PATCH 26/28] [local] dGPU: the power-button override skips the GPU
+ for one boot, the option stays
+
+Holding power for 4 s (PRBTNOR) used to clear the dGPU request in CMOS 0x6f,
+so every rescue, battery swap or hang left the MX150 off until `dgpu on` was
+run again (2026-09-30 twice, 2026-10-04, 2026-10-05). Now the override sets
+CMOS 0x6c to 0x3c, which the bootblock consumes once: that boot runs without
+the GPU (a GPU-related hang can still be escaped) and the next one has it
+again.
+
+---
+ .../lenovo/sklkbl_thinkpad/dgpu_early.c         | 17 ++++++++++++++---
+ src/mainboard/lenovo/sklkbl_thinkpad/variant.h  |  3 +++
+ 2 files changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+index cd1b60cea3..9d76de73fa 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+@@ -8,6 +8,7 @@
+ #include <pc80/mc146818rtc.h>
+ #include <soc/iomap.h>
+ #include <soc/pm.h>
++#include <stdbool.h>
+ #include <timer.h>
+ #include <variant/dgpu.h>
+ 
+@@ -41,15 +42,25 @@ void dgpu_power_on(void)
+ 		PAD_CFG_TERM_GPO(GPIO_1R8VIDEO_AON_ON, 1, UP_20K, RSMRST),
+ 	};
+ 	struct stopwatch sw;
++	bool skip;
+ 
+ 	gpio_configure_pads(pads, ARRAY_SIZE(pads));
+ 
+-	/* Power held for 4 s is how a hung boot is turned off: drop the request */
++	/*
++	 * Power held for 4 s is how a hung boot is turned off: boot once without
++	 * the GPU, so that a GPU-related hang can be escaped, but keep the option.
++	 * Clearing it instead cost the GPU after every rescue, battery swap or
++	 * hang until someone ran `dgpu on` again.
++	 */
+ 	if (inw(ACPI_BASE_ADDRESS + PM1_STS) & PRBTNOR_STS)
+-		cmos_write(0, CMOS_DGPU);
++		cmos_write(DGPU_SKIP_ONCE, CMOS_DGPU_SKIP);
++	skip = cmos_read(CMOS_DGPU_SKIP) == DGPU_SKIP_ONCE;
++	cmos_write(0, CMOS_DGPU_SKIP);
++	if (skip)
++		printk(BIOS_INFO, "dGPU: skipped for this boot (power-button override)\n");
+ 
+ 	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0 ||	/* active low */
+-	    cmos_read(CMOS_DGPU) != DGPU_REQUEST) {
++	    cmos_read(CMOS_DGPU) != DGPU_REQUEST || skip) {
+ 		gpio_configure_pads(power_off, ARRAY_SIZE(power_off));
+ 		return;
+ 	}
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index 26b8815817..f3c704754f 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -13,6 +13,9 @@ uint8_t variant_memory_sku(void);
+ /* CMOS byte 0x6d: 0xa5 while a full reset for a missing GPU link is in flight */
+ #define CMOS_DGPU_RESET		0x6d
+ #define DGPU_RESET_TRIED	0xa5
++/* CMOS byte 0x6c: 0x3c skips the dGPU on the next boot only (power-button override) */
++#define CMOS_DGPU_SKIP		0x6c
++#define DGPU_SKIP_ONCE		0x3c
+ #define  DGPU_REQUEST		0xd6
+ 
+ void dgpu_power_on(void);

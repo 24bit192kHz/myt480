@@ -1,7 +1,7 @@
-From 2ceae624be70ee8dccac2633b0a2cf011e0e57da Mon Sep 17 00:00:00 2001
+From 48141544cd1595cf71716c529fb218c3b384039f Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 07:47:15 +0300
-Subject: [PATCH] [local] t480: no L1 substates on the dGPU root port
+Subject: [PATCH 17/28] [local] t480: no L1 substates on the dGPU root port
 
 Linux is not granted ASPM control by the _OSC, so the root port runs with
 what FSP-S programmed: ASPM L1 with L1.1 and L1.2 substates. After a GPU

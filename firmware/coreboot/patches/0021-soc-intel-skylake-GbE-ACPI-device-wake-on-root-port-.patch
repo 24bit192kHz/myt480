@@ -1,7 +1,7 @@
-From b23056090a2f4665248baf7e4c69a7dd0c3445b7 Mon Sep 17 00:00:00 2001
+From 6f54f2822327b1ff4a43c757c78d42e276d15e66 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 17:23:18 +0300
-Subject: [PATCH 23/24] soc/intel/skylake: GbE ACPI device, wake on root port
+Subject: [PATCH 21/28] soc/intel/skylake: GbE ACPI device, wake on root port
  9, board subsystem IDs for FSP
 
 The GbE device now has its ACPI node with the PME wake (Wake-on-LAN shows

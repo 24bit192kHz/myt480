@@ -20,7 +20,7 @@
     icon_position = left
     max_icon_size = 32
     enable_recursive_icon_lookup = true
-    icon_theme = matefaenzadark
+    icon_theme = Papirus-Dark-Grey
     idle_threshold = 120
     show_age_threshold = -1
     sticky_history = yes

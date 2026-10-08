@@ -1,4 +1,4 @@
-From 94c8f92b1c517a35e8cebd31de455af98fbab8ae Mon Sep 17 00:00:00 2001
+From 29b16643836655613bf1f748ecec969dbcc0a36c Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 14:57:11 +0300
 Subject: [PATCH 2/3] gma skylake: Set DPLL0 link rate even when DPLL0 is
@@ -8,6 +8,8 @@ FSP enables DPLL0 for CDClk before libgfxinit runs, so the previous
 'only while disabled' guard never applied. Like i915, rewrite only the
 DPLL0 link-rate field; the VCO driving CDClk is unaffected and DDI A is
 not in use yet.
+
+(cherry picked from commit f99521c808120c0c7dd3d62554b6346e8af6931e)
 ---
  .../skylake/hw-gfx-gma-power_and_clocks.adb   | 36 ++++++++-----------
  1 file changed, 14 insertions(+), 22 deletions(-)
@@ -59,6 +61,3 @@ index d778ab3..97a8919 100644
        Registers.Set_Mask
          (Register    => Registers.LCPLL1_CTL,
           Mask        => LCPLL1_CTL_PLL_ENABLE);
--- 
-2.55.0
-

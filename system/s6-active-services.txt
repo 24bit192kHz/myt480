@@ -31,7 +31,6 @@ net-lo
 network-detection
 ntpd-log
 ntpd-srv
-open-fprintd
 random-seed
 rc-local
 remount-root
@@ -50,4 +49,3 @@ tty1
 udevadm
 udevd-log
 udevd-srv
-validity-rs
