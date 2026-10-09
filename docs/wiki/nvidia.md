@@ -8,6 +8,14 @@ Pascal according to [NVIDIA's legacy-driver schedule](https://nvidia.custhelp.co
 Keep its kernel module, NVML, OpenGL/Vulkan libraries, and CUDA driver compatible
 when updating. The [open kernel modules require Turing or newer](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/main/README.md).
 
+The [MX150 deep research folder](../../research/2026-10-09-t480/12-mx150/README.md)
+adds exact voltage-interface, closed-RM, full-VBIOS, regulator/EC-throttle,
+sleep and CUDA findings. CPU undervolting already works; a supported direct
+MX150 undervolt policy remains unproved: the recovered overvoltage backend clamps
+negative requests to zero. Positive frequency offsets are not a measured
+undervolt. The approved getter/file/X-session observations verified current
+capabilities without tuning or EC changes; firmware corrections remain source-only.
+
 Before this audit, `NVreg_DynamicPowerManagement=0x03` selected the driver's default
 policy, which disabled RTD3 on this GPU. The driver stayed loaded and the GPU
 remained in D0 on AC. The existing AC offsets were core +200 MHz and memory
@@ -89,8 +97,27 @@ override for its next normal launch. Intel GLX/EGL/Vulkan checks passed; the
 existing Bitwarden instance was left running, so its post-restart device handles
 and any battery improvement remain to be measured.
 
-MX150 Vulkan, docks, real suspend/hibernate, and battery transitions were not
-tested in this session. Retest after driver or firmware updates.
+MX150 Vulkan, docks, real sleep and battery transitions were not tested in the
+initial audit. The subsequently merged [evening record](../notes/2026-10-09-evening.md)
+reports idle-GPU S3/S4 cycles and two owner-operated S4 lid wakes. Live GPU
+allocation preservation and wider transitions remain unvalidated. Retest after
+driver or firmware updates.
+
+Later approved query-only observations reconfirmed PCI `10de:1d10` and active
+580.178.04; the GPU was suspended/D3cold before and after the getter probe.
+This later state supersedes the earlier D0 observation without attributing any
+process change to this continuation. Frequency range getters work; power usage
+and current-limit getters return `NOT_SUPPORTED`. The existing Intel X session
+has no NV-CONTROL extension. Exact static analysis separately proves the
+recovered voltage-offset backend clamps negative values to zero. See the
+[MX150 subject reports](../../research/2026-10-09-t480/12-mx150/README.md).
+
+Build new Pascal CUDA programs with a compatible 12.9 toolkit, rather than
+assuming the driver's reported maximum CUDA version means CUDA 13 can compile
+`sm_61`. NVIDIA removed offline compilation below 7.5 in CUDA 13;
+[the compatibility report](../../research/2026-10-09-t480/12-mx150/05-use-and-validation.md)
+records this boundary, maintenance policy and the unresolved conflict between
+NVIDIA's codec matrix and exact driver's VDPAU decode documentation.
 
 ## Later source-only policy fixes
 
@@ -114,6 +141,12 @@ The Bitwarden holder had a second cause: the laptop starts Bitwarden from
 `bw-screen boot` (session script and the hibernate-later hook), never from the
 desktop file, so the desktop override alone would have changed nothing after a
 reboot. `bw-screen` now launches it through `igpu-run` as well.
+
+The MX150 continuation adds a getter-only inventory, a corrected file-only sleep
+diagnostic, truthful status reporting in a source-only elogind hook, and coreboot
+power-good/CBFS ROM bounds patches. None of those replacement files or firmware
+patches has been installed on the laptop. Hardware sleep and firmware validation
+remain separate from the offline fixture results.
 
 Local checks and repeatable hardware test:
 

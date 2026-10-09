@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 20:00:00 +0300
+Subject: [PATCH] [local] dgpu: abort runtime power-on without power good
+
+DGON stops waiting for DGFX_PWRGD after 100 ms but currently releases the
+GPU reset and enables its PCIe link even when the rail never becomes ready.
+The bootblock already leaves the GPU off on the same timeout.
+
+Recheck power good after the bounded wait. If it is still low, disable the
+link, assert reset, turn off the power request and allow the same 100 ms
+off settling time as DGOF before returning. Do not release reset or enter
+the link-up wait on this path. A signal that becomes ready at the final
+recheck may proceed normally. Successful and already-powered paths stay
+unchanged for stable power good. DGLW's independent link-timeout policy is
+outside this patch.
+
+Source-only proposal, not installed firmware. Baseline inspected:
+coreboot c57exp 84126e3fc1e4129f5be9af44d633736cea68d169;
+acpi/dgpu.asl SHA-256
+1cd672880aca951c7801e4d7076472fc96e76fbb7ce7d72f8af1c27094201afa.
+The file is also reconstructed exactly from local patch 0012; subsequent
+patches 0013..0028 do not change it. Apply after 0028 with git am (or
+patch -p1). Revert its resulting commit, or reverse the source change with
+patch -R -p1 before rebuilding, to revert the source.
+No ROM, CMOS, EC or target settings are changed by adding this patch.
+
+Offline validation is in tools/re-audit/tests/test_dgpu_power_policy.py:
+it checks exact forward/reverse application and executes the patched AML
+methods in ACPICA with fake GPIO helpers and a simulated link. This tests
+control flow, not electrical behavior, ACPI OS recovery, or successful sleep.
+DGON remains a void method; PGPU _STA observes the cleared power-request
+latch through DGST. Hardware validation requires separate user approval.
+
+Validated on 2026-10-09 with iasl/acpiexec 20251212: 10 tests passed,
+including compilation of both the complete baseline and patched existing
+T480 build/dsdt.asl (baseline SHA-256
+a3ba8b977b03fcfe5b2b6c189bba73db66b8f0d56eb82c990ee48d00ebcd3b26).
+Both DSDTs compiled with 0 errors, 0 warnings and the same 29 remarks.
+Fixture GPIO identifiers are anchored in the T480 variant/dgpu.h and the
+selected gpio_soc_defs.h: GPP_E22=118, GPP_E23=119 and GPP_F3=123;
+the actual preprocessed DSDT and matching headers are checked together.
+Run with T480_COREBOOT_ROOT pointing to this matching source/build tree:
+python3 -m unittest discover -s tools/re-audit/tests \
+    -p test_dgpu_power_policy.py -v
+
+---
+ src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+@@ -47,6 +47,15 @@ Scope (\_SB.PCI0.RP01)
+ 			Sleep (1)
+ 			Local0++
+ 		}
++		/* A failed rail must not release reset or enable the PCIe link. */
++		If (!\_SB.PCI0.GRXS (GPIO_DGFX_PWRGD)) {
++			LNKD = 1
++			\_SB.PCI0.CTXS (GPIO_GPU_RST)
++			\_SB.PCI0.CTXS (GPIO_1R8VIDEO_AON_ON)
++			Sleep (100)
++			Return
++		}
++
+ 		Sleep (10)
+ 
+ 		\_SB.PCI0.STXS (GPIO_GPU_RST)

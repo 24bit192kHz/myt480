@@ -1,5 +1,10 @@
 # NVIDIA and Intel graphics
 
+The subsequent [MX150 subject folder](12-mx150/README.md) extends this record
+with voltage controls, signed NV-CONTROL dispatch, selected closed RM, VBIOS,
+EC protections, CUDA/media limits and source-only power/sleep corrections.
+It does not add new live undervolt, sleep, energy or performance results.
+
 ## Inspected baseline and recovered driver behavior
 
 The MX150 is GP108M/Pascal (`10de:1d10`), running proprietary NVIDIA `580.178.04`.
@@ -74,15 +79,22 @@ mapping and synchronous resume need mocked coverage before real sleep with GPU
 allocations. The vendor VT helper can lose a failed `chvt` status; this was
 reproduced offline. See [sleep findings](../../docs/wiki/cross-stack-review.md#3-make-sleep-one-coherent-checked-operation).
 
+The later approved file-only pass found a site hook with corrected hibernate
+mapping and synchronous resume, already present before this continuation's
+queries. Its error status is still hidden; a source-only correction and fourteen
+mock lifecycle fixtures are now included. No hook was installed or sleep tested.
+See [the current sleep record](12-mx150/04-sleep-and-firmware.md).
+
 The later workstation continuation fixes false success after node-wait or
 automatic unload failure, and guards manual `off` with the users lock before
 unloading. Twelve fake-device/modprobe/lock tests passed, including a held launch
-lock before device open. These fixes are source-only; the installed helper still
-uses the earlier deployed version. Exact whitelisted commands, fixed arguments/
+lock before device open. These began source-only; the separate evening record
+reports deployment through `syswork` with updated hashes. Exact whitelisted commands, fixed arguments/
 environment and root-controlled paths were inspected without finding an
 injection exploit. See the [NVIDIA update](../../docs/wiki/nvidia.md#later-source-only-policy-fixes).
 
-Real suspend/hibernate, battery transitions, MX150 Vulkan and external-display
-coverage remain open. Measure the relaunched application/device state and battery
+The evening record adds idle-GPU S3/S4 and two owner-operated lid wakes; live
+GPU allocations, battery transitions, MX150 Vulkan and external-display coverage
+remain open. Measure application/device state and battery
 energy before attributing savings to Intel routing. Keep +200/+1250 offsets:
 earlier +250 MHz core tuning produced silent CUDA errors.

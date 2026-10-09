@@ -159,5 +159,23 @@ no T480 command or EC transaction was performed in that continuation.
 Later GPU node/unload/launch-lock fixes passed twelve policy fixtures and the
 existing five wrapper fixtures, NVML checks and warning-free build. The QEMU
 scenario runner's exit/selector fix passed six verdict fixtures without a VM.
-Both fixes are source-only; they do not change the earlier deployed binary or
-establish another live wake/sleep result.
+These began as source-only changes; the separate evening record subsequently
+reports their deployment. The hardware-free fixtures themselves establish no
+new live wake/sleep result. See the updated deployment and rollback records.
+
+## MX150 voltage and bounds continuation
+
+The [subject reports](../../research/2026-10-09-t480/12-mx150/README.md)
+record exact module/NVML/X/VBIOS hashes, corrected NVOC dispatch layout,
+independent GNU evidence for the negative-offset clamp, regulator/EC wiring and
+source-only power-good/CBFS ROM fixes. Selected-function counts are evidence
+inventory, not complete driver recovery. Raw proprietary output remains private.
+
+After explicit query-only approval, NVML getters, fixed files and the existing X
+session were inspected. No tuning, EC transaction, module reload, sleep/reboot or
+flash occurred. The GPU was D3cold before and after. Getter ranges do not prove
+safe settings; unsupported power readings and missing NV-CONTROL remain explicit.
+The [work log](../../research/2026-10-09-t480/00-work-log.md#8-mx150-voltage-closed-driver-and-ec-protection-continuation)
+records the final combined fixtures and their limits, including actual-source C
+sanitizers, ACPICA execution and complete matching DSDT compilation. These checks
+do not substitute for electrical or allocation-preserving sleep tests.

@@ -1,0 +1,296 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 20:30:00 +0300
+Subject: [PATCH] [local] pci_rom: bound CBFS probe and ACPI image copies
+
+Carry the actual decompressed cbfs_map length through ID fallback and the
+ACPI _ROM copy. Validate bounded header/PCIR metadata before dereferencing
+it, and require a complete bounded image chain rather than enlarging the
+copy to an unchecked legacy init length. Preserve all nonpadding bytes of
+the valid MX150 image (182272 bytes).
+
+Source-only proposal after 0029, not installed firmware. Baseline coreboot
+c57exp 84126e3fc1e4129f5be9af44d633736cea68d169, src/device/pci_rom.c SHA-256
+9770b6345ab1d15e74cb43e06691a0dbc5080ed6c874c7dbcb4fd92ebc025b24.
+The complete correction includes following patch 0031, which fixes cbfs_map
+size_out to report actual produced bytes rather than declared allocation
+capacity. cbfs_get_size reports stored length and is not this mapping bound.
+Keep the strict image walker inside HAVE_ACPI_TABLES for non-ACPI builds.
+
+Unknown on-device ROM mappings and already-loaded executable RAM ROMs are
+not newly bounded by this change. Generic pci_rom_load execution/copy and
+VFCT contracts are not claimed repaired. Strict _ROM validation rejects
+incomplete CBFS PCI image chains; a valid x86 init-prefix artifact alone
+is not a complete image fixture for that contract.
+
+---
+diff --git a/src/device/pci_rom.c b/src/device/pci_rom.c
+--- a/src/device/pci_rom.c
++++ b/src/device/pci_rom.c
+@@ -11,6 +11,7 @@
+ #include <device/pci.h>
+ #include <device/pci_ids.h>
+ #include <device/pci_ops.h>
++#include <stdbool.h>
+ #include <stdio.h>
+ #include <string.h>
+ #include <timestamp.h>
+@@ -33,39 +34,64 @@
+ #endif
+ }
+ 
+-static void *cbfs_boot_map_optionrom(uint16_t vendor, uint16_t device)
++static void *cbfs_boot_map_optionrom(uint16_t vendor, uint16_t device, size_t *size)
+ {
+ 	char name[17] = "pciXXXX,XXXX.rom";
+ 
+ 	snprintf(name, sizeof(name), "pci%04hx,%04hx.rom", vendor, device);
+ 
+-	return cbfs_map(name, NULL);
+-}
+-
+-static size_t cbfs_boot_optionrom_size(uint16_t vendor, uint16_t device)
+-{
+-	char name[17] = "pciXXXX,XXXX.rom";
+-
+-	snprintf(name, sizeof(name), "pci%04hx,%04hx.rom", vendor, device);
+-
+-	return cbfs_get_size(name);
+-}
+-
+-struct rom_header *pci_rom_probe(const struct device *dev)
++	return cbfs_map(name, size);
++}
++
++/* Validate bounded CBFS metadata before any header or PCIR field is read. */
++static bool pci_rom_cbfs_image_header(const void *image, size_t size,
++				    struct rom_header *header, struct pci_data *data)
++{
++	if (size < sizeof(*header))
++		return false;
++	memcpy(header, image, sizeof(*header));
++	if (le16_to_cpu(header->signature) != PCI_ROM_HDR)
++		return false;
++
++	const size_t offset = le16_to_cpu(header->data);
++	if (offset < sizeof(*header) || offset > size || sizeof(*data) > size - offset)
++		return false;
++	memcpy(data, (const u8 *)image + offset, sizeof(*data));
++
++	const size_t dlen = le16_to_cpu(data->dlen);
++	if (le32_to_cpu(data->signature) != PCI_DATA_HDR || dlen < sizeof(*data) ||
++	    dlen > size - offset)
++		return false;
++
++	/* The legacy x86 init area must fit the mapping, even before a copy. */
++	if (data->type == 0 && (!header->size || header->size * 512u > size))
++		return false;
++	return true;
++}
++
++/* size_out is the decompressed CBFS length, or zero for a device ROM. */
++static struct rom_header *pci_rom_probe_with_size(const struct device *dev, size_t *size_out)
+ {
+ 	struct rom_header *rom_header = NULL;
+-	struct pci_data *rom_data;
++	struct rom_header header;
++	struct pci_data data;
++	struct pci_data *rom_data = &data;
++	size_t size = 0;
++	bool from_cbfs;
+ 	u32 vendev = (dev->vendor << 16) | dev->device;
+ 	u32 mapped_vendev = vendev;
+ 
++	if (size_out)
++		*size_out = 0;
++
+ 	/* If the ROM is in flash, then don't check the PCI device for it. */
+ 	mapped_vendev = map_oprom_vendev(vendev);
+-	rom_header = cbfs_boot_map_optionrom(mapped_vendev >> 16, mapped_vendev & 0xffff);
++	rom_header = cbfs_boot_map_optionrom(mapped_vendev >> 16, mapped_vendev & 0xffff, &size);
+ 
+ 	/* Handle the case of VGA_BIOS_ID not being set to the remapped PCI ID. This is a
+ 	   workaround that should be removed once the underlying issue is fixed. */
+ 	if (!rom_header && vendev != mapped_vendev) {
+-		rom_header = cbfs_boot_map_optionrom(vendev >> 16, vendev & 0xffff);
++		rom_header = cbfs_boot_map_optionrom(vendev >> 16, vendev & 0xffff, &size);
+ 		if (rom_header) {
+ 			printk(BIOS_NOTICE, "VGA_BIOS_ID should be the remapped PCI ID "
+ 					    "%04hx,%04hx in the VBIOS file\n",
+@@ -73,7 +99,13 @@
+ 		}
+ 	}
+ 
+-	if (rom_header) {
++	from_cbfs = rom_header != NULL;
++	if (from_cbfs) {
++		if (!pci_rom_cbfs_image_header(rom_header, size, &header, rom_data)) {
++			printk(BIOS_ERR, "%s: Invalid bounded CBFS option ROM\n", dev_path(dev));
++			cbfs_unmap(rom_header);
++			return NULL;
++		}
+ 		printk(BIOS_DEBUG, "In CBFS, ROM address for %s = %p\n",
+ 		       dev_path(dev), rom_header);
+ 	} else if (CONFIG(ON_DEVICE_ROM_LOAD)) {
+@@ -97,6 +129,9 @@
+ 		printk(BIOS_DEBUG, "Option ROM address for %s = %lx\n",
+ 		       dev_path(dev), (unsigned long)rom_address);
+ 		rom_header = (struct rom_header *)rom_address;
++		size = 0;
++		/* The on-device mapping length is unknown; retain its legacy path. */
++		memcpy(&header, rom_header, sizeof(header));
+ 	} else {
+ 		printk(BIOS_DEBUG, "PCI Option ROM loading disabled for %s\n",
+ 		       dev_path(dev));
+@@ -105,16 +140,17 @@
+ 
+ 	printk(BIOS_SPEW,
+ 	       "PCI expansion ROM, signature 0x%04x, INIT size 0x%04x, data ptr 0x%04x\n",
+-	       le16_to_cpu(rom_header->signature),
+-	       rom_header->size * 512, le16_to_cpu(rom_header->data));
+-
+-	if (le16_to_cpu(rom_header->signature) != PCI_ROM_HDR) {
++	       le16_to_cpu(header.signature),
++	       header.size * 512, le16_to_cpu(header.data));
++
++	if (le16_to_cpu(header.signature) != PCI_ROM_HDR) {
+ 		printk(BIOS_ERR, "Incorrect expansion ROM header signature %04x\n",
+-		       le16_to_cpu(rom_header->signature));
++		       le16_to_cpu(header.signature));
+ 		return NULL;
+ 	}
+ 
+-	rom_data = (((void *)rom_header) + le16_to_cpu(rom_header->data));
++	if (!from_cbfs)
++		memcpy(rom_data, (const u8 *)rom_header + le16_to_cpu(header.data), sizeof(*rom_data));
+ 
+ 	printk(BIOS_SPEW, "PCI ROM image, vendor ID %04x, device ID %04x,\n",
+ 	       rom_data->vendor, rom_data->device);
+@@ -124,6 +160,8 @@
+ 	    && (vendev == mapped_vendev)) {
+ 		printk(BIOS_ERR, "ID mismatch: vendor ID %04x, device ID %04x\n",
+ 		       dev->vendor, dev->device);
++		if (from_cbfs)
++			cbfs_unmap(rom_header);
+ 		return NULL;
+ 	}
+ 
+@@ -138,7 +176,14 @@
+ 		// return NULL;
+ 	}
+ 
++	if (size_out)
++		*size_out = size;
+ 	return rom_header;
++}
++
++struct rom_header *pci_rom_probe(const struct device *dev)
++{
++	return pci_rom_probe_with_size(dev, NULL);
+ }
+ 
+ static void *pci_ram_image_start = (void *)PCI_RAM_IMAGE_START;
+@@ -288,6 +333,33 @@
+ /* ACPI */
+ #if CONFIG(HAVE_ACPI_TABLES)
+ 
++/* Require a complete bounded chain; ignore padding after the last image. */
++static size_t pci_rom_cbfs_images_size(const void *rom, size_t size)
++{
++	size_t total = 0;
++
++	while (total < size) {
++		struct rom_header header;
++		struct pci_data data;
++		const size_t remaining = size - total;
++		if (!pci_rom_cbfs_image_header((const u8 *)rom + total, remaining, &header, &data))
++			return 0;
++
++		const size_t ilen = le16_to_cpu(data.ilen) * 512u;
++		const size_t offset = le16_to_cpu(header.data);
++		const size_t dlen = le16_to_cpu(data.dlen);
++		if (!ilen || ilen > remaining || dlen > ilen || offset > ilen - dlen)
++			return 0;
++		if (data.type == 0 && header.size * 512u > ilen)
++			return 0;
++
++		total += ilen;
++		if (data.indicator & 0x80)
++			return total;
++	}
++	return 0;
++}
++
+ static unsigned long
+ ati_rom_acpi_fill_vfct(const struct device *device, acpi_vfct_t *vfct_struct,
+ 		       unsigned long current)
+@@ -408,29 +480,40 @@
+ 	if (rom) {
+ 		length = rom->size * 512;
+ 	} else {
+-		/* Probe for option rom */
+-		rom = pci_rom_probe(device);
+-		if (!rom || !rom->size) {
++		/* Retain the size of the mapping that succeeded, including ID fallback. */
++		size_t mapped_size;
++		rom = pci_rom_probe_with_size(device, &mapped_size);
++		if (!rom) {
+ 			printk(BIOS_WARNING, "%s: Missing PCI Option ROM\n",
+ 			dev_path(device));
+ 			return;
+ 		}
+ 
++		struct rom_header header;
++		memcpy(&header, (const u8 *)rom, sizeof(header));
++		if (!header.size) {
++			if (mapped_size)
++				cbfs_unmap((void *)rom);
++			return;
++		}
++
+ 		/* Supports up to four devices. */
+ 		if ((CBMEM_ID_ROM0 + ngfx) > CBMEM_ID_ROM3) {
+ 			printk(BIOS_ERR, "%s: Out of CBMEM IDs.\n", dev_path(device));
++			if (mapped_size)
++				cbfs_unmap((void *)rom);
+ 			return;
+ 		}
+ 
+-		/* Prepare memory */
+-		/* Zero for a ROM that comes from the device: its size is not known */
+-		const u32 vendev = map_oprom_vendev((device->vendor << 16) | device->device);
+-		const size_t file_size = cbfs_boot_optionrom_size(vendev >> 16, vendev & 0xffff);
+-		const size_t cbrom_length = MAX(pci_rom_images_size(rom, file_size),
+-						rom->size * 512);
++		/* Reject an incomplete CBFS chain; never enlarge to an unchecked init size. */
++		const size_t cbrom_length = mapped_size ?
++			pci_rom_cbfs_images_size(rom, mapped_size) :
++			MAX(pci_rom_images_size(rom, 0), header.size * 512);
++		/* Device mappings and already-loaded RAM ROMs are still unbounded. */
+ 		if (!cbrom_length) {
+-			printk(BIOS_ERR, "%s: ROM has zero length!\n",
+-			dev_path(device));
++			printk(BIOS_ERR, "%s: Invalid or zero-length option ROM!\n", dev_path(device));
++			if (mapped_size)
++				cbfs_unmap((void *)rom);
+ 			return;
+ 		}
+ 
+@@ -438,12 +521,16 @@
+ 		if (!cbrom) {
+ 			printk(BIOS_ERR, "%s: Failed to allocate CBMEM.\n",
+ 			dev_path(device));
++			if (mapped_size)
++				cbfs_unmap((void *)rom);
+ 			return;
+ 		}
+ 		/* Increment CBMEM id for next device */
+ 		ngfx++;
+ 
+-		memcpy(cbrom, rom, cbrom_length);
++		memcpy(cbrom, (const u8 *)rom, cbrom_length);
++		if (mapped_size)
++			cbfs_unmap((void *)rom);
+ 
+ 		rom = cbrom;
+ 		length = cbrom_length;

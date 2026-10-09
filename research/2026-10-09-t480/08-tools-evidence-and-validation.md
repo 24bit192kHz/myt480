@@ -59,6 +59,7 @@ Private evidence remains outside the repository under
 | `audit-20261009-routing` | GLX/EGL/Vulkan, SMART, routing rollback/reapply and final checks |
 | `audit-20261009-cross-stack` | Mocked early-init harness, NVMe vectors, firmware checker fixtures and selected live-state logs |
 | `audit-20261009-ec` | Supplied ISO/EC extraction, hashes, ARC processor/build, Ghidra project/results, independent GNU code/table checks and publication review |
+| `audit-20261009-mx150` | Saved exact RM/X projects, corrected voltage dispatch/clamp, VBIOS/EC policy and primary-source hashes; later approved getter/file/X-session captures |
 
 The publication boundary excludes proprietary DLLs, full firmware images,
 complete proprietary decompiler output, keys, laptop identities and biometric
@@ -81,9 +82,11 @@ These counts overlap where stated and should not be added into one score.
 | Live GPU checks | **5 cold-wake rounds** passed CUDA `vectorAdd`/`scan`, held-job offsets and idle D3cold; PRIME OpenGL passed; no new Xid found | Confirms this firmware/driver/GPU combination. Wrapper-plus-job times **1.249–1.277 seconds** are not isolated hardware wake latencies. |
 | Power observation | **21 snapshots**, **19.995 seconds**, CPU package **63.678 J / 3.185 W** on AC | CPU-package observation only; system discharge was correctly unavailable. No whole-laptop watts or battery-runtime gain claimed. |
 | Cross-stack fixtures | Early-init ordering, NVMe status/queue vectors and failing firmware-checker cases reproduced offline | Early-init assumes successful matching-policy unseal and mocks hardware; no live TPM exploit, controller timeout or flash was performed. |
-| Later GPU policy fixes | **12 new fixtures passed**, existing **5 wrapper fixtures** and NVML checks passed; warning-free `-Werror` build | Fake sysfs/modprobe and real users locks; source-only, no laptop deployment or NVIDIA hardware access. |
+| Later GPU policy fixes | **12 new fixtures passed**, existing **5 wrapper fixtures** and NVML checks passed; warning-free `-Werror` build | Hardware-free fixtures; separate evening record subsequently reports deployment. |
 | Later QEMU verdict fix | **6 fixtures passed** | Failure/unknown-selector exit contract checked without starting QEMU; no new firmware boot-policy result. |
-| EC static continuation | Independent ARC vector/INI3/table/branch agreement | Selected firmware paths recovered; live flag state, rollback and successful S4 wake remain unverified. |
+| EC static continuation | Independent ARC vector/INI3/table/branch agreement | Original static result; separate evening record reports two S4 lid wakes. Full retained baseline and rollback remain open. |
+| Later MX150 source checks | Query ABI, file diagnostic, hook lifecycle, actual AML/DSDT and actual-source ROM/CBFS sanitizer fixtures | Final combined count and limits are in the [work log](00-work-log.md#8-mx150-voltage-closed-driver-and-ec-protection-continuation); no replacement hook/firmware deployment. |
+| Approved MX150 queries | Frequency getters accepted, power usage/current limit unsupported, existing X lacks NV-CONTROL; D3cold before/after | Query-only scope explicitly approved; no tuning/EC/sleep/flash. |
 
 Desktop-file validation, shell syntax, local wiki links and whitespace checks
 passed in the recorded continuation. Original hash restoration and post-restoration
@@ -101,10 +104,14 @@ must distinguish actual runtime tables from stock reference tables. Read the
 individual hardware script's side effects and restoration prerequisites before
 running it; the RTD3 script reloads NVIDIA and is not a passive inventory tool.
 
-No recognition-accuracy, real suspend/hibernate, dock, battery-transition or
-battery-runtime result was established by this audit. The running Bitwarden
-instance retained NVIDIA handles despite the new next-launch Intel override.
+The original audit established no recognition-accuracy, real sleep, dock,
+battery-transition or battery-runtime result. The separate evening record later
+adds idle-GPU S3/S4 and two owner-operated lid wakes, not live GPU allocations.
+The running Bitwarden
+instance retained NVIDIA handles at the earlier deployment check despite the new next-launch Intel override.
 Measure its ordinary relaunch separately before claiming improved idle behavior.
+The later approved getter pass observed D3cold; it did not stop/relaunch that app
+or establish a battery saving.
 The [cross-stack review](../../docs/wiki/cross-stack-review.md) prioritizes mocked
 failure tests and reviewed fixes for boot trust, NVMe recovery and sleep ordering
 before further hardware experiments. The UCSI reconstruction still needs a

@@ -77,10 +77,12 @@ prime-run your-gpu-application
 gpu-power status
 ```
 
-The Bitwarden desktop override already uses Intel. Quit and relaunch an existing
-instance to adopt that environment; a second single-instance launch does not
-replace the first instance's driver choices. The [GPU-routing page](gpu-routing.md)
-records GLX/EGL/Vulkan checks, device-holder inspection, and its separate rollback.
+The Bitwarden desktop override uses Intel. The separate evening deployment also
+corrected `bw-screen boot`, which actually starts it from the session and after
+hibernate; a desktop override alone had missed that route. A second single-instance
+launch does not replace the first instance's driver choices. The
+[GPU-routing page](gpu-routing.md) records the checks and deployment/rollback
+boundaries; the evening notes report D3cold with Bitwarden open.
 
 With no GPU clients, audited coarse RTD3 can let loaded hardware enter D3cold
 on AC. On battery, automatic GPU policy unloads the driver when no wrapper job
@@ -105,6 +107,16 @@ Keep MX150 AC core/memory offsets at +200/+1250 MHz and battery offsets at zero,
 as configured in [`gpu-power.conf`](../../system/etc/gpu-power.conf). The earlier
 tests found silent CUDA errors at +250 MHz core. A rendered image or a benchmark
 score alone would miss those failures. Higher offsets are not recommended here.
+
+Those MX150 settings are frequency tuning, not a demonstrated GPU undervolt.
+The [voltage research](../../research/2026-10-09-t480/12-mx150/01-voltage-and-controls.md)
+traces the PWM regulator and signed overvoltage frontend, then proves that the
+exact 580 kernel handler clamps negative requests to zero and reports minimum 0.
+That control cannot undervolt the MX150. Alternative V/F-policy control,
+calibration and usable voltage telemetry remain unresolved. Approved getters
+confirmed frequency ranges, not safe settings or a voltage control. The
+[MX150 use guide](../../research/2026-10-09-t480/12-mx150/05-use-and-validation.md)
+also covers Pascal-compatible CUDA builds, media limits, sleep and measurement.
 
 ## Measure the result on battery
 

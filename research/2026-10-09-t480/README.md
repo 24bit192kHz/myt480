@@ -23,6 +23,7 @@ starting at baseline `d89f79d`, followed by this organized publication. Read the
 | Recovery and next work | [Verified rollback paths and prioritized remaining fixes](09-rollback-and-next-work.md) |
 | EC and lid wake | [Supplied EC image, ARCompact decoding and selected wake paths](10-ec-firmware-and-lid-wake.md) |
 | Whole-machine coverage | [Every recorded PCI function, other hardware and feature roadmap](11-coverage-and-feature-roadmap.md) |
+| MX150 deep continuation | [Voltage controls, closed RM, VBIOS, EC throttle, sleep and CUDA coverage](12-mx150/README.md) |
 
 ## What improved
 
@@ -39,13 +40,28 @@ identified remaining early-init, bootloader, sleep, and build-check defects;
 those findings are documented and are not presented as completed fixes.
 The workstation continuation also fixes GPU node/unload error reporting and
 manual-off locking, plus the QEMU scenario runner's failure/selector exit status.
-Twelve GPU policy and six runner-verdict fixtures passed; those fixes remain
-source-only.
+Twelve GPU policy and six runner-verdict fixtures passed. The subsequently
+merged [evening record](../../docs/notes/2026-10-09-evening.md) reports deployment
+of those fixes, thermal source/bounds guards and the effective NVIDIA hook.
 
 The EC continuation uses the supplied Lenovo ISO for static Ghidra MCP and
 independent GNU analysis. It identifies a retained lid gate and conditional
 power-button path while keeping
-the requested hardware-test approval boundary. Lid wake from S4 is not restored.
+the requested hardware-test approval boundary. A separate evening run subsequently
+installed the bit-6 sleep hook and records two successful owner-operated S4 lid
+wakes. No firmware flash or `_PTS` change was needed. This query-only continuation
+did not repeat those EC writes or sleep tests; full cleanup/rollback cases remain
+distinct from the two successful cycles.
+
+The [MX150 continuation](12-mx150/README.md) maps actual voltage/clock interfaces,
+selected closed-driver backends, the full VBIOS and regulator/EC throttle wiring.
+It adds a getter-only capability probe, corrects the Intel/offload sleep diagnostic
+and prepares truthful hook status and coreboot power-good/CBFS ROM bounds fixes.
+Direct MX150
+undervolting remains unresolved through alternate policy routes; the recovered
+overvoltage backend clamps negative offsets to zero. Offline checks are
+distinguished from hardware results. After explicit approval, getter/file/X-session
+observations verified current capabilities without tuning or EC changes.
 
 ## Reading the evidence
 

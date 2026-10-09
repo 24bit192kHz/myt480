@@ -28,7 +28,7 @@ hardware. Every PCI function in that snapshot is included in this table.
 | HDA `00:1f.3` | AC/battery idle policy inspected | Codec/pin routing, pops, headset detection, latency and suspend reliability |
 | SMBus `00:1f.4` | Controller and kernel support inventoried | Client topology and battery/sensor ownership; avoid competing raw transactions |
 | Ethernet `00:1f.6` | I219-LM and existing wake policy recorded | Throughput, link power and wake/overnight discharge validation |
-| NVIDIA `01:00.0` | Selected RM power paths reconstructed; CUDA/PRIME/RTD3 and offsets validated | Remaining proprietary RM, sleep allocations, MX150 Vulkan, AC/battery and display transitions |
+| NVIDIA `01:00.0` | Prior CUDA/PRIME/RTD3; approved current getters; selected RM voltage clamp/PM, VBIOS and board/EC protections mapped in [MX150 research](12-mx150/README.md) | Alternative undervolt policy/calibration, remaining RM/microcode, sleep allocations, MX150 Vulkan, energy and display transitions |
 | Wi-Fi `02:00.0` | Intel8265/8275 and source-dependent policy inspected | Firmware internals, roaming/reconnect, throughput/latency and measured power |
 | Thunderbolt bridges `03:00.0`, `04:00.0`, `04:01.0`, `04:02.0` | Topology, NVM23, security/DMA policy inspected | Dock hotplug, authorization, PCIe tunneling and recovery with translated DMA |
 | Thunderbolt NHI `05:00.0` | Correct function/group identified; identity mapping documented | Host/controller firmware protocol and dock/sleep coverage |
@@ -58,10 +58,10 @@ architecture or undocumented pin assignments.
 | Layer | Completed scope | Still open |
 |---|---|---|
 | Coreboot/GRUB | C55 source/build policy and selected NVMe/ROM/checker paths reviewed | Wider FSP, memory training, payload recovery and exhaustive failure coverage |
-| EC/stock BIOS | Selected stock DXE/SMM/EC transport; supplied N24HT37W decoded as ARCompact, ordinary host setter and conditional lid-to-PWRBTN route recovered | Remaining lid callbacks, live identity/retained baseline/completion/rollback, S4 eligibility, EC_WAKE output, keyboard/battery/charger firmware |
+| EC/stock BIOS | Selected transport/ARCompact lid gate; separate evening record reports deployed bit-6 hook and two S4 lid wakes | Remaining callbacks, full live-image identity, retained baseline/completion/cancellation/rollback, S5 separation, EC_WAKE output and other EC policies |
 | Built-in early init/TPM | Actual-source trust-boundary fixture, config and migration policy review | Reviewed fix and negative fixtures before signed-kernel replacement |
 | Kernel/security | Live-matching config, command line, module and DMA/mitigation choices distinguished | Separate diagnostic/hardened profile, measured cost, driver internals and confinement tests |
-| GPU/thermal helpers | Deployed fixes/rollback; later GPU node/unload/launch-lock fixes pass offline and remain source-only | New fix deployment, thermal source/config failure bounds and actual sleep transitions |
+| GPU/thermal helpers | Evening record reports GPU lock/error and thermal source/bounds guard deployment; new getter/diagnostic/hook status and PWRGD/ROM corrections checked offline | New source correction deployment, broader policy bounds and live-allocation/failure transitions |
 | s6/elogind/power services | Selected service, watchdog, locker and NVIDIA sleep paths inspected | Coherent checked sleep transaction and full startup/failure dependency coverage |
 | Desktop/applications | Intel launch policy and Bitwarden future-launch override installed | App restart/holders, compositor/input/audio interactions and matched workload energy |
 | Network/storage/userspace | Targeted inventory and read-only diagnostics | Network services, package/update integrity, filesystem recovery and application-level performance |

@@ -4,19 +4,22 @@ The supplied Lenovo image is now extracted and decoded as **little-endian
 ARCompact**. A conditional lid-open-to-power-button path is recovered:
 **EC byte `0x01`, bit 6 (`BTPC`) enables a retained flag used by a deep-state
 lid-open callback.** This is a concrete host-accessible candidate for `_PTS(4)`.
-Successful S4 wake, the installed image's complete identity and all runtime
-eligibility conditions remain unverified. No ACPI/EC patch is deployed.
+At the original static-analysis stage, successful S4 wake, complete installed
+image identity and runtime eligibility were unverified, and no patch was deployed.
 
-**Result (2026-10-09 evening): it works.** The candidate was tried as a sleep hook
+**Subsequent reported result (2026-10-09 evening): it works.** The candidate was tried as a sleep hook
 instead of an ACPI change: `system/etc/elogind/system-sleep/03-lid-wake-s4` sets
 the bit through coreboot's `ectool` before every hibernate and clears it after
-the resume. The owner hibernated, closed and opened the lid twice (19:23 and
-19:24); the machine powered on and resumed both times, `PM1_STS: WAK PWRBTN`,
+the resume. The owner hibernated, closed and opened the lid twice;
+the machine powered on and resumed both times, `PM1_STS: WAK PWRBTN`,
 `prev_sleep_state 4`, no RTC alarm armed. The host-visible byte reads `0x05`
 again after each S4 cycle, as predicted (shadow, not the retained flag), so the
-hook clears bit 6 unconditionally. See `docs/notes/2026-10-09-evening.md`.
+hook clears bit 6 after resume when its `was-clear` marker exists. That marker is
+created after a pre-sleep shadow read shows bit 6 clear and the write succeeds;
+it does not establish the original retained flag's value. See the
+[separate evening record](../../docs/notes/2026-10-09-evening.md).
 
-This continuation runs on the workstation. No command was run on the T480,
+The original static continuation ran on the workstation. No command was run on the T480,
 and no EC transaction, firmware write, reboot, suspend or hibernate was performed.
 The user's requirement to ask before a hardware test remains in force.
 
@@ -315,7 +318,8 @@ need a reviewed cleanup plan. No rollback ordering test was performed here.
 The asynchronous setter and readback caveat above prevent promising complete
 restoration from this sketch alone. No S5 enablement is proposed.
 
-**Stop before testing.** The next permitted request is approval for a limited
+**Historical approval boundary before the later evening tests.** The original
+next permitted request was approval for a limited
 live **read-only baseline**, separately from any write or sleep test: inspect the
 active DSDT's EC resources/field, read existing byte `0x01` through the kernel's
 EC interface if already available, and capture current firmware/version state.
@@ -327,6 +331,13 @@ Even a zero shadow bit does not prove the retained flag is clear. A later
 hardware experiment requires explicit authorization overriding the current
 read-only restriction, a persistence/synchronization result, and a concrete
 rollback plan; none was performed in this continuation.
+
+The later reported successful cycles do not prove every cancellation/failure
+cleanup or a saved retained-state baseline. The current hook returns before
+both phases when its opt-out file exists; disabling/removing it after arming
+does not itself clear the retained EC flag. Further EC access or cleanup tests
+are outside the separately approved NVIDIA query-only scope. No new EC action
+is performed by documenting that limit.
 
 Private extraction, manifests, Ghidra project/results and independent GNU output
 are retained under `/home/btw/test/rea/work/audit-20261009-ec`. Raw EC images and

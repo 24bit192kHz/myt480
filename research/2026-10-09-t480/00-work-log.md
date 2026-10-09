@@ -23,7 +23,7 @@ appropriate tools. Tool versions and artifact hashes are in the
 
 ## 2. Fan and NVIDIA improvements — `2cb13a3`
 
-[Commit: Make T480 fan and GPU control fail safely; document driver audit](https://github.com/24bit192kHz/myt480/commit/2cb13a3c133df037f55a46a4bb4493fdc34f0c20).
+[Commit: Make T480 fan and GPU control fail safely; document driver audit](https://github.com/24bit 192kHz/myt480/commit/2cb13a3c133df037f55a46a4bb4493fdc34f0c20).
 
 | Change | Repository | Laptop |
 |---|---|---|
@@ -52,7 +52,7 @@ files and driver mode. The application was left running.
 
 ## 3. Protocol recovery, Intel routing, and diagnostics — `fe58a80`
 
-[Commit: Extend T480 protocol audit, Intel routing and measurement wiki](https://github.com/24bit192kHz/myt480/commit/fe58a802fc08913b1d7c9147196d1dd1e6756527).
+[Commit: Extend T480 protocol audit, Intel routing and measurement wiki](https://github.com/24bit 192kHz/myt480/commit/fe58a802fc08913b1d7c9147196d1dd1e6756527).
 
 | Change | Repository | Laptop |
 |---|---|---|
@@ -91,7 +91,7 @@ syntax, relative wiki links and whitespace checks also passed.
 
 ## 4. Cross-stack assessment — `7f5a430`
 
-[Commit: Document cross-stack boot, driver and sleep defects](https://github.com/24bit192kHz/myt480/commit/7f5a430d6091280f9c8d127a1b17096dbf1a0b78).
+[Commit: Document cross-stack boot, driver and sleep defects](https://github.com/24bit 192kHz/myt480/commit/7f5a430d6091280f9c8d127a1b17096dbf1a0b78).
 
 This pass added the [cross-stack review](../../docs/wiki/cross-stack-review.md)
 and corrected the coreboot, kernel and early-init READMEs. It inspected the
@@ -169,29 +169,104 @@ remain in force. Public changes contain derived findings, not raw firmware dumps
 |---|---|---|
 | GPU load fails when its node never appears; automatic policy propagates unload failure | Fake sysfs/modprobe fixtures and warning-free `-Werror` build | Installed 2026-10-09 19:01 (built on the laptop, through `syswork`; `docs/notes/2026-10-09-evening.md`) |
 | Manual GPU off checks the users lock before unloading, refusing a starting/active wrapper without a blocking lock inversion | Real advisory-lock fixtures cover the launch interval before device open and later policy application | Installed with the above |
-| QEMU scenario runner returns1 on failure and2 on unknown selectors | Six verdict/entrypoint fixtures, without starting a VM | Copied to `~/t480-build/tools/qemu/` the same evening; no firmware build/flash |
+| QEMU scenario runner returns 1 on failure and 2 on unknown selectors | Six verdict/entrypoint fixtures, without starting a VM | Copied to `~/t480-build/tools/qemu/` the same evening; no firmware build/flash |
 
 The GPU suite passed **12 new policy fixtures**, the existing **5 wrapper
 fixtures**, and the NVML checks. The firmware-runner suite passed **6 new
 fixtures**. These 18 new tests are separate from the earlier 79-test continuation;
-they are not new hardware, QEMU boot or battery results. The installed GPU helper
-still has the preceding deployed version. Git history provides source rollback.
+they are not new hardware, QEMU boot or battery results. These fixes began as
+source-only; the merged evening record reports their later deployment as shown
+above. Git and the updated deployment record provide distinct rollback paths.
 Updated the wiki and corrected the old missing-SMM lid attribution and forced
 power-off GPU-choice description. All continuation work is published on `testing`.
+
+## 8. MX150 voltage, closed-driver and EC protection continuation
+
+Added the [MX150 subject folder](12-mx150/README.md) with separate voltage/API,
+closed RM, VBIOS/EC, sleep/firmware, application/measurement and coverage reports.
+Used the requested Ghidra MCP again on the exact retained 580.178.04 module,
+saved a persistent project and selected-function/evidence manifests, and checked
+important paths against original ELF relocations/GNU disassembly.
+
+| Work | Result | Boundary |
+|---|---|---|
+| Public control/header + exact NVML analysis | ABI/units/support constraints; legacy transport and corrected NVOC handler record | Selected paths recovered, not the whole RM |
+| Exact X→RM voltage dispatch | Signed µV frontend reaches an exact kernel setter that clamps negative requests to 0; getter min 0 | Recovered overvoltage control cannot undervolt; active GP108 max/telemetry unresolved |
+| Internal RM voltage objects | Type2→internal3 parser/constructor and allowed-point PWM setter | Alternative full V/F-policy implementation/calibration remains open |
+| Full VBIOS/archived C55 | Prefix/init versus full PCIR length, CBFS byte identity, table metadata and unsupported decoder hazards | No new live `_ROM`, ROM edit or flash |
+| Board voltage/EC protection | GPU PWM→NCP81278T VID pin 5; GPIO216 throttle policy, board PROCHOT and unnamed host bit; corrected alert GPIO104/F9 | Active pin/policy state and complete sensor meanings unmeasured; optional EC UART disabled in stored config |
+| Getter inventory | New [`mx150-capabilities.py`](../../tools/re-audit/mx150-capabilities.py); approved getters returned legacy ranges and 32 modern successes, power usage/limit unsupported |13 fake-library tests; no setter; GPU D3cold before/after |
+| Existing-session voltage exposure | `nvidia-settings`/libXNVCtrl absent; Xlib opens existing :0 and finds no NV-CONTROL extension | No package/X/Coolbits changes; voltage telemetry unread |
+| Sleep diagnostic | Truthful file observations for Intel/offload/s6; approved stdin invocation found no detected failures/unknowns |8 fake-root tests; not installed or a real sleep test |
+| Sleep-hook error reporting | Observed live site hook already has hibernate/phase/synchronous resume; source-only snapshot now preserves real failure codes |14 mock lifecycle tests; not deployed; elogind may ignore nonzero status |
+| Runtime DGON failure | Source-only patch 0029 leaves failed rail/link/reset off on PWRGD timeout |10 patch/actual-AML/complete-DSDT checks; no firmware deployment |
+| CBFS ROM source bounds | Patches 0030/0031 validate mapped metadata/image chain and actual produced size; all 182272 MX150 nonpadding bytes preserved | Actual-source C sanitizer fixtures; no on-device/RAM/generic-load/VFCT or complete AML-handler repair claim |
+| Software limits/use | CUDA 12.9 versus 13 build support, Pascal 580 lifecycle, September 2026 fixed-version threshold and media conflict | No new workload performance or feature claims |
+
+The first combined power/SMART/new diagnostic/AML suite passed 56 tests with the matching
+workstation coreboot DSDT integration enabled and no skips. Actual baseline and
+patched DSDTs compiled with 0 errors, 0 warnings and unchanged 29 remarks.
+Temporary owned Ghidra services were stopped after saving. Public material adds
+derived facts, authored tools/tests and patches; raw proprietary output remains
+private. The exact read-only capability observation is reviewable in the
+[voltage report](12-mx150/01-voltage-and-controls.md#approval-boundary-and-concrete-next-observation).
+Approval was requested because the user's earlier instruction requires asking
+before any T480 command. The user explicitly approved those queries only.
+NVML initialization/shutdown and getter calls, the file diagnostic and fixed
+metadata reads ran without installation. The existing X session was queried
+without exposing authentication contents or changing the server. Current site
+sleep files were captured privately. No tuning, EC transaction, module reload,
+process termination, stress/sleep/reboot or flash was performed.
+
+Final combined validation passed **102 tests**, with the matching workstation
+coreboot integration enabled and no skips: 21 power, 4 SMART, 13 NVML ABI/guard,
+8 diagnostic, 10 patch/AML/DSDT, 14 hook lifecycle, 15 ROM bounds and 17 CBFS size
+contract fixtures. Clang ASAN/UBSAN checks the extracted actual C functions;
+decoder outcomes and storage are controlled stubs. The complete matching DSDT
+compilation is separate from a full firmware build. Patches 0029–0031 also applied
+sequentially with `git am` in a disposable source fixture and reversed to all
+three exact baseline files. Shell syntax, Markdown links and non-patch whitespace
+passed; applied-source whitespace was checked separately from mandatory diff
+context spaces in the serialized patch files.
+These are source/control-flow checks, not new electrical, sleep or energy results.
+
+## 9. Integrated evening deployment and lid-wake record
+
+Before publication, `testing` had advanced through
+[the evening deployment](https://github.com/24bit192kHz/myt480/commit/0c6b22b9f98f0047bb881173f007b88e03b916c8),
+[the successful lid tests](https://github.com/24bit192kHz/myt480/commit/cc8a961fdcd444b44b4f319dbf49c65bd429c409)
+and a README correction. This unpublished MX150 work was rebased onto that
+history without rewriting the remote commits. The tested MX150 code/fixtures
+were preserved; deployment descriptions were reconciled with the new record.
+
+The [separate evening notes](../../docs/notes/2026-10-09-evening.md) report the
+new GPU/thermal guards, `bw-screen` Intel routing, effective NVIDIA hook/package
+exclusion, watchdog/RTC changes, idle-GPU RTC S3/S4 cycles, and two owner-operated
+lid wakes from S4 with `WAK PWRBTN`. Those are another run's recorded hardware
+results, not actions or independent retests in the approved getter pass.
+The lid hook enables EC byte `0x01` bit 6 without a firmware or ACPI change.
+Its ordinary success is established by the reported tests; retained-state
+baseline, asynchronous completion, cancellation/failure cleanup and complete
+rollback remain separate questions. Current query-only approval authorizes no
+additional EC access or sleep test.
 
 ## Final recorded state and preserved boundaries
 
 The thermal daemon, GPU helper/wrapper, coarse RTD3 configuration, Intel helper
 and desktop override were deployed. Backup/hash-guarded restoration was tested.
-The last observed Bitwarden process still held NVIDIA devices, so the GPU was
-active/D0 despite coarse mode being enabled; future normal relaunch adopts Intel
-routing. CPU undervolt, GPU offsets, fan curve and configured power limits were
-retained. The live CPU plan was `auto`.
+At the end of the earlier deployment pass, Bitwarden held NVIDIA devices and
+the GPU was active/D0; its next normal relaunch adopts Intel routing. In the
+later approved query pass the GPU was suspended/D3cold before and after NVML.
+That observation supersedes the older D0 state without attributing a process
+change to this continuation. CPU undervolt, retained GPU offset policy, fan
+curve and configured power limits were unchanged. The last checked CPU plan
+was `auto`; it was not queried again under the limited NVIDIA approval.
 
 Firmware was not flashed; kernel/NVIDIA packages were not replaced; the selected
 fingerprint backend was not switched; biometrics were not enrolled or deleted.
-Real suspend/hibernate, external docks, USB-C role swaps and controlled battery
-discharge comparisons remain outstanding. No full recovery of proprietary
+The integrated evening record reports idle-GPU S3/S4 and owner-operated lid wake.
+Live-allocation GPU preservation, external docks, USB-C role swaps and controlled
+battery discharge comparisons remain outstanding. No full recovery of proprietary
 drivers or the EC firmware is claimed.
 
 Raw analysis and selected live logs remain in private workstation evidence

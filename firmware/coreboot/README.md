@@ -39,6 +39,26 @@ On coreboot main of 2026-10-08. Two earlier local patches are upstream now and g
 | 0026 | the power-button override (power held 4 s) makes the next boot run without the MX150 once (CMOS 0x6c) and keeps the choice in 0x6f; before, it cleared the choice and the GPU stayed off until `dgpu on` | belongs in the series |
 | 0027 | ec/lenovo/h8: the mainboard can set the lid's wake GPE; the T480 uses 0x17 (EC_WAKE# on GPP_C23, as Lenovo's `_PRW {0x17, 4}`) instead of the hard-coded 0x18, which maps to no pad here. S4 lid wake remains unimplemented: arming the SCI/wake GPEs and copying the vendor EC state did not enable it. Subsequent SMM analysis found no lid-specific arming path, so the earlier attribution to missing vendor SMM was unsupported. From S3 the lid wakes by the EC's power-button pulse; static EC firmware investigation is recorded in the [research folder](../../research/2026-10-09-t480/README.md) | belongs in the series |
 | 0028 | t480: `gpe0_dw0..2 = GPP_C, GPP_D, GPP_E` in the devicetree, what the PMC fell back to from MISCCFG (no more "Duplicate GPE DW register values" warning) | belongs in the series |
+| 0029 | runtime MX150 power-on stops when PWRGD remains low: disable link, assert reset and clear rail request before returning | source-only research correction; actual AML/DSDT checked, not flashed |
+| 0030 | validate bounded CBFS ROM headers/PCIR and complete image chains; retain mapping size through fallback and ACPI copy | source-only; sanitizer checked; requires 0031's actual-size producer contract |
+| 0031 | CBFS returns actual loaded/decompressed bytes, uses raw extent for NONE and rejects output beyond capacity | source-only producer correction; no firmware deployment |
+
+Patch 0029 was added by the [MX150 research continuation](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md).
+It applies after 0028 and is absent from `dot-config-as-built`/the archived C55
+firmware's behavior. Forward/reverse application, eight ACPICA execution cases
+and complete matching T480 DSDT compilation were checked offline. Building/flashing
+or inducing a failed rail on the laptop requires separate approval. Reversing
+the patch restores source behavior; it does not alter already installed firmware.
+
+Patches 0030 and 0031 form the [CBFS ROM bounds correction](../../research/2026-10-09-t480/12-mx150/03-vbios-and-ec.md).
+Apply both in order after 0029. The original CBFS allocator could publish declared
+decompression capacity rather than actual output; using that value as a parser
+bound would leave 0030 incomplete. Actual-source host fixtures use ASAN/UBSAN,
+including baseline failure reproduction and full MX150 nonpadding preservation.
+They do not validate on-device/RAM ROM mappings, generic execution/VFCT, every
+ACPI AML read contract, the full firmware build or hardware behavior. Reverse
+0031 then 0030 in a source tree before rebuilding to remove them. Existing flashed
+firmware remains unchanged.
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

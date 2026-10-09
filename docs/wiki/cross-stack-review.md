@@ -19,7 +19,7 @@ mistaken for broken drivers.
 | Security choice | CPU mitigations disabled | Live vulnerabilities explicitly report vulnerable states | Compare a recoverable boot profile with mitigations enabled |
 | Security choice | Thunderbolt domain has automatic connection and identity DMA mapping | Live NHI group13 `identity`, domain `none`, advertised protection0 | Test translated/strict host DMA with dock and VM coverage |
 | Feature gap | UCSI connector control/notifications absent | Live-matching kernel disables TYPEC; coreboot omits the recovered bridge | Implement serialized transport plus ACPI notifications; options alone are insufficient |
-| Fixed 2026-10-09 | Lid did not wake S4 hibernation | EC decode found the retained flag behind EC byte `0x01` bit 6; the `03-lid-wake-s4` hook sets it before each hibernate; owner-tested twice (wake by the EC's PWRBTN# pulse, no RTC) | Nothing further; no firmware change needed |
+| Fixed in two reported cycles | Lid did not wake S4 hibernation | EC bit6 gate used by `03-lid-wake-s4`; owner-tested twice (PWRBTN wake from S4, no RTC) | No firmware change needed; retained baseline, cancellation and rollback cases remain open |
 
 ## 1. The TPM boot path needs a stricter root boundary
 
@@ -85,8 +85,8 @@ and buffer lifetime before hardware cold-boot tests.
 
 ## 3. Make sleep one coherent, checked operation
 
-The packaged `/usr/lib/elogind/system-sleep/nvidia` calls `nvidia-sleep.sh suspend`
-for every `pre` event and `resume &` for `post`. It ignores the requested sleep
+At this assessment, `/usr/lib/elogind/system-sleep/nvidia` called `nvidia-sleep.sh suspend`
+for every `pre` event and `resume &` for `post`. That version ignored the requested sleep
 method. The live driver reports `PreserveVideoMemoryAllocations: 1`, so correct
 proc-interface sequencing matters. NVIDIA distinguishes hibernate from suspend
 and requires resume immediately after a successful or failed transition.
@@ -106,6 +106,14 @@ same evening (`docs/notes/2026-10-09-evening.md`).
 The vendor helper also has an exit-status defect: after failed `chvt`, its
 `exit $?` can return the condition test's success rather than the original error.
 That was reproduced with mocked commands, without switching a real VT.
+
+The later approved [MX150 file observation](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md)
+supersedes that hook inventory: the vendor hook is absent and a site hook already
+has hibernate/phase mapping and synchronous resume. Its helper failure codes are
+still hidden; a source-only correction with fourteen mock tests is now included.
+It was not deployed by this continuation. The evening record also updates the
+watchdog/RTC paths below; locker readiness, failure cleanup and live GPU
+allocations remain open.
 
 Other sleep-path issues are:
 

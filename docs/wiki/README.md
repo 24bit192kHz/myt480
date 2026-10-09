@@ -20,12 +20,20 @@ records the supplied firmware's architecture and selected lid/wake traces.
 The [coverage ledger](../../research/2026-10-09-t480/11-coverage-and-feature-roadmap.md)
 accounts for every recorded PCI function and distinguishes analyzed paths from
 remaining hardware and feature work.
+The [MX150 deep continuation](../../research/2026-10-09-t480/12-mx150/README.md)
+covers voltage interfaces, selected closed RM, VBIOS/EC protections, source-only
+power-good/ROM bounds corrections and accurate sleep diagnostics. The recovered
+voltage control clamps negative offsets to zero; an alternative GPU undervolt
+policy remains open. Approved getter observations are distinguished from tuning
+and real sleep validation.
 
 | Area | Result | Status |
 |---|---|---|
 | [Thermal control](thermal.md) | Kernel fan watchdog, immediate curve transitions, EC fallback, conservative missing-config undervolt | Deployed; emulated I/O, graceful shutdown, and live 125-second pause tested |
 | [NVIDIA](nvidia.md) | Coarse RTD3 with clock restoration; signal cleanup; truthful runtime status | Deployed; five cold-wake CUDA rounds and PRIME OpenGL passed |
-| [Intel application routing](gpu-routing.md) | `igpu-run` and Bitwarden desktop override | Deployed; Intel GLX/EGL/Vulkan and full rollback/reapply passed; existing app still running |
+| [MX150 deep research](../../research/2026-10-09-t480/12-mx150/README.md) | Negative voltage clamp, regulator/EC throttle, firmware bounds and sleep errors | Static recovery plus approved getters; replacement hook/firmware source not deployed |
+| [Intel application routing](gpu-routing.md) | `igpu-run`, desktop override and later `bw-screen` startup route | Deployed; evening record reports D3cold with Bitwarden open |
+| [EC and S4 lid wake](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md) | Recovered bit 6 gate used by the existing sleep hook | Separate evening record reports two successful owner-operated lid wakes; broader cleanup/rollback remains open |
 | [USB-C](usb-c.md) | Recovered stock UCSI ACPI layout, SMM dispatch, EC mailbox, and transport ports | Reverse engineered; native implementation remains open |
 | [Fingerprint](fingerprint.md) | Traced Windows cancellation, reset, and idle/resume paths; checked Linux backend selection | Analysis completed for selected paths; backend unchanged |
 | [Fingerprint protocol](fingerprint-protocol.md) | Recovered reset `05 02 00`, stop `04`, secure transport and worker ordering | Static recovery; source cancellation regression addressed separately from live backend |
@@ -54,17 +62,18 @@ remaining hardware and feature work.
 
 The existing CPU undervolt, GPU offsets, fan curve, and power limits were retained.
 This audit did not flash firmware, change the kernel, enroll/delete fingerprints,
-or replace NVIDIA packages. USB-C restoration is **not implemented**. Hardware
-sleep/resume, external docks, USB-C role swaps, and battery discharge measurements
-still need separate validation; this session does not establish those outcomes.
+or replace NVIDIA packages. USB-C restoration is **not implemented**. The merged
+[evening record](../notes/2026-10-09-evening.md) reports idle-GPU S3/S4 and two
+owner-operated S4 lid wakes. Live GPU allocation preservation, external docks,
+USB-C role swaps and battery discharge comparisons still need validation.
 
 ## What to work on next
 
 1. Implement the recovered USB-C mailbox through a serialized kernel/firmware EC
    transport, with timeouts and proper notifications. This addresses a missing
    interface that userspace tuning cannot supply.
-2. Validate GPU RTD3 across real suspend/resume and AC/battery transitions. The
-   tests here establish idle entry, cold wake, correct CUDA results, and offsets.
+2. Extend the recorded idle-GPU sleep cycles to live checked allocations and
+   AC/battery transitions; verify errors, storage, ownership and restoration.
 3. Capture fingerprint cancellation/resume USB traces using the selected backend,
    then compare them with the recovered worker lifecycle.
 4. Measure energy on battery with charging stopped and a repeatable workload;

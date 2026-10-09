@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: 24bit192kHz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 20:45:00 +0300
+Subject: [PATCH] [local] cbfs: report actual successfully loaded size
+
+Keep compressed allocation capacity separate from the successfully loaded
+byte count. Publish the actual decoder result only after success, and reject
+zero or impossible oversized results. For an uncompressed mapping or load,
+use the raw region extent even if a compression attribute declares another
+size. Reset size_out on entry to do_alloc and the ordinary allocation API,
+so failed lookup/type/map/hash/allocation/decode cannot publish stale size.
+
+This supplies the honest mapping bound used by local PCI ROM patch 0030.
+Valid records with matching decompressed lengths retain their behavior.
+Allocator arguments still receive capacity. Existing zero-length direct
+mappings remain possible with a zero output length; allocated zero-length
+loads still fail. Existing allocation/preload lifetime and cleanup behavior
+is unchanged. Unverified-area lookup failures before do_alloc retain their
+existing unspecified output-size contract.
+
+Source-only proposal, not installed firmware. Baseline coreboot c57exp
+84126e3fc1e4129f5be9af44d633736cea68d169, src/lib/cbfs.c SHA-256
+214706ef48ab64cffc21338ab3e5f9029bed2ded72c66983526da176957c36d3.
+Tests compile actual baseline/patched allocator definitions with controlled
+backing and decoder outcomes. They do not execute real firmware, hardware,
+or certify the decompressor implementations.
+
+---
+diff --git a/src/lib/cbfs.c b/src/lib/cbfs.c
+--- a/src/lib/cbfs.c
++++ b/src/lib/cbfs.c
+@@ -483,16 +483,17 @@
+ 	size_t size = region_device_sz(rdev);
+ 	void *loc = NULL;
+ 
++	if (size_out)
++		*size_out = 0;
++
+ 	uint32_t compression = CBFS_COMPRESS_NONE;
+ 	const struct cbfs_file_attr_compression *cattr = cbfs_find_attr(mdata,
+ 				CBFS_FILE_ATTR_TAG_COMPRESSION, sizeof(*cattr));
+ 	if (cattr) {
+ 		compression = be32toh(cattr->compression);
+-		size = be32toh(cattr->decompressed_size);
+-	}
+-
+-	if (size_out)
+-		*size_out = size;
++		if (compression != CBFS_COMPRESS_NONE)
++			size = be32toh(cattr->decompressed_size);
++	}
+ 
+ 	/* allocator == NULL means do a cbfs_map() */
+ 	if (allocator) {
+@@ -505,6 +506,8 @@
+ 			rdev_munmap(rdev, mapping);
+ 			return NULL;
+ 		}
++		if (size_out)
++			*size_out = size;
+ 		return mapping;
+ 	} else if (!cbfs_cache.size) {
+ 		/* In order to use the cbfs_cache you need to add a CBFS_CACHE to your
+@@ -520,10 +523,13 @@
+ 		return NULL;
+ 	}
+ 
+-	size = cbfs_load_and_decompress(rdev, loc, size, compression, mdata, skip_verification);
+-	if (!size)
+-		return NULL;
+-
++	const size_t loaded_size =
++		cbfs_load_and_decompress(rdev, loc, size, compression, mdata, skip_verification);
++	if (!loaded_size || loaded_size > size)
++		return NULL;
++
++	if (size_out)
++		*size_out = loaded_size;
+ 	return loc;
+ }
+ 
+@@ -551,6 +557,9 @@
+ 	struct region_device rdev;
+ 	bool preload_successful = false;
+ 	union cbfs_mdata mdata;
++
++	if (size_out)
++		*size_out = 0;
+ 
+ 	DEBUG("%s(name='%s', alloc=%p(%p), force_ro=%s, type=%d)\n", __func__, name, allocator,
+ 	      arg, force_ro ? "true" : "false", type ? *type : -1);

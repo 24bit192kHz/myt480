@@ -17,7 +17,7 @@ Artix Linux with s6.
 | File | Why |
 |---|---|
 | `modprobe.d/nvidia-ondemand.conf` | nothing loads the NVIDIA driver except `gpu-power` |
-| `modprobe.d/nvidia-sleep.conf` | video memory is saved across suspend; without it a running GPU program breaks |
+| `modprobe.d/nvidia-sleep.conf` | requests VRAM preservation; coherent hooks/backing storage and real sleep validation are still required |
 | `X11/xorg.conf.d/20-intel-fast.conf` | modesetting on the Intel GPU; `AutoAddGPU false` keeps X away from the MX150 |
 | `elogind/system-sleep/` | hooks around suspend: lock, fingerprint reader, battery |
 | `s6/sv/` | own services and changed dependencies |
@@ -28,6 +28,7 @@ Artix Linux with s6.
 | `local.d/lockup-detect.start` | kernel lockup detectors on (the firmware command line has `nowatchdog`; the TCO watchdog alone does not catch a stuck CPU), `msr.allow_writes` for thermald-t480 |
 | `elogind/system-sleep/02-sleep-guard` | re-arms the TCO watchdog after every wake (the PCH halts it), hung-task panic around a hibernate, Wake-on-LAN only on AC as Lenovo's default |
 | `gpu-power.conf` | MX150 clock offsets per power source, set by `gpu-power` after each driver load |
+| `usr-local/bin/nvidia-suspend-test.sh` | source-only file observations for this Intel/offload setup; does not perform sleep or certify hardware readiness |
 | `sudoers.d/` | what runs without a password |
 | `fstab` | partitions by UUID; change them for another disk |
 | `nftables.conf`, `local.d/firewall.start` | inbound firewall in its own table (policy drop; SSH from named hosts only). The addresses are examples |
@@ -39,8 +40,8 @@ Artix Linux with s6.
 | `initcpio/` (`t480crypt`), `mkinitcpio*.conf` | the distro kernels ask the LUKS passphrase and open root and swap |
 | `X11/xorg.conf.d/10-serverflags.conf` | no VT switch and no server kill by key, so a locked X session cannot be left from the keyboard |
 | `pacman.d/hooks/96-strip-setuid.hook` | keeps the setuid bit off two mount helpers nothing here uses |
-| `elogind/system-sleep/nvidia`, `pacman.conf` (`NoExtract`) | replaces the package hook, which elogind would otherwise run instead (it reads `/usr/lib` first and masks by name): the driver is told `hibernate` for S4 (video memory is saved across the power cut) and the resume runs synchronously. Remove `/usr/lib/elogind/system-sleep/nvidia` once; `NoExtract` keeps it away |
-| `elogind/system-sleep/03-lid-wake-s4` | experiment: sets EC RAM byte 0x01 bit 6 before a hibernate so the EC may turn a lid open into a power-button pulse (`docs/wiki/cross-stack-review.md`, research 10); needs `/usr/local/sbin/ectool` from coreboot's `util/ectool` |
+| `elogind/system-sleep/nvidia`, `pacman.conf` (`NoExtract`) | evening deployment removed the masking package hook; hibernate mapping and synchronous resume run. This continuation's additional truthful failure-status correction is source-only |
+| `elogind/system-sleep/03-lid-wake-s4` | EC byte 0x01 bit 6 enables S4 lid wake; evening record reports two owner tests. Needs existing `ectool`; retained-state/cancellation/rollback cases remain unverified |
 | `elogind/system-sleep/20-hibernate-later` | with Bitwarden running the kernel cannot hibernate (memfd_secret): a lid-closed suspend gets an RTC alarm and hibernates after quitting Bitwarden |
 | `elogind/system-sleep/90-battwatch-marks` | battery readings at every sleep edge for battwatch |
 | `elogind/logind.conf.d/10-lid-suspend.conf` | lid = suspend-then-hibernate |

@@ -9,7 +9,9 @@
 # pre hibernate: set the bit, remember that it was clear. post: clear it again. Only bit 6 is
 # touched; the other bits of the byte are written back as they are read at that moment.
 # The EC's shadow of byte 0x01 is zeroed when the EC itself restarts, so the readback is the
-# host view, not proof of the retained flag. Status: untested with a real lid open.
+# host view, not proof of the retained flag. Two owner-operated S4 lid wakes are
+# recorded in docs/notes/2026-10-09-evening.md; cancellation/retained-state rollback
+# remain unverified. The opt-out below skips post cleanup too if enabled after arming.
 # Disable: touch /etc/elogind/no-lid-wake-s4. Writes use coreboot's ectool (ports 0x62/0x66).
 PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
 ECTOOL=/usr/local/sbin/ectool
