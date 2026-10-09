@@ -24,6 +24,7 @@ measured undervolt.
 | Runtime power-on and system sleep correctness | [Sleep and power failure handling](04-sleep-and-firmware.md) |
 | CUDA, applications, media, measurement and recovery | [Getting the most out of the MX150](05-use-and-validation.md) |
 | What is covered, exact evidence and remaining dependencies | [Coverage and evidence](06-coverage-and-evidence.md) |
+| Newer NVIDIA branches and possible patches | [610/615 support, recovered GP108 initialization blocks and expected gains](07-driver-upgrade-and-pascal-support.md) |
 
 The requested [Ghidra MCP](https://github.com/bethington/ghidra-mcp) was used
 again. Full automatic analysis created a 61,679-function inventory; selected
@@ -47,3 +48,11 @@ NV-CONTROL, rather than establishing a new voltage setter. No claim of
 For the whole laptop, continue with the [whole-machine ledger](../11-coverage-and-feature-roadmap.md),
 [EC lid investigation](../10-ec-firmware-and-lid-wake.md) and
 [daily guide](../../../docs/wiki/getting-the-most.md).
+
+The later workstation-only [upgrade investigation](07-driver-upgrade-and-pascal-support.md)
+verifies 615.78.08 as the newest public Linux display release and 580.178.04 as
+the latest compatible Pascal release found. Proprietary 610/615 retain shared
+Pascal fragments but clear GP108's physical HAL entry and omit its object
+registration. A PCI-ID/legacy-check patch alone cannot initialize this GPU.
+No new driver was installed, no target command ran, and no performance benefit
+or usable new-branch patch is claimed.

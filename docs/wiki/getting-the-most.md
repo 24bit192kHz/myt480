@@ -118,6 +118,14 @@ confirmed frequency ranges, not safe settings or a voltage control. The
 [MX150 use guide](../../research/2026-10-09-t480/12-mx150/05-use-and-validation.md)
 also covers Pascal-compatible CUDA builds, media limits, sleep and measurement.
 
+Keep the proprietary 580 driver stack consistent. As checked on 2026-10-09,
+the recorded 580.178.04 is already the latest compatible public release found.
+The [610/615 investigation](../../research/2026-10-09-t480/12-mx150/07-driver-upgrade-and-pascal-support.md)
+recovers missing GP108 selection/registration beyond the legacy support check;
+a PCI-ID patch cannot make the newer driver initialize this GPU. Compatible
+application updates and measured routing/power improvements are more concrete
+next steps than a driver version spoof. No new driver was installed.
+
 ## Measure the result on battery
 
 Keep brightness, displays/docks, radios, workload, and application routing the

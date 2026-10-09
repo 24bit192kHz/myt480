@@ -1,0 +1,546 @@
+{
+  "schema": 1,
+  "research_date": "2026-10-09",
+  "scope": "workstation-only static analysis; no target commands or installation",
+  "device": {
+    "name": "MX150",
+    "gpu": "GP108M",
+    "pci": "10de:1d10",
+    "recorded_driver": "580.178.04"
+  },
+  "latest_public_linux_display_releases_verified": {
+    "R580": "580.178.04",
+    "R595": "595.104.02",
+    "R610": "610.57.04",
+    "R615": "615.78.08"
+  },
+  "download_packages": [
+    {
+      "version": "610.57.04",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/610.57.04/NVIDIA-Linux-x86_64-610.57.04.run",
+      "bytes": 463025450,
+      "sha256": "b2e935c66b83bb00c0c857bc8e0ee0fd52de9286b40c9cc1eec29a7ce7eb116d"
+    },
+    {
+      "version": "615.78.08",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/615.78.08/NVIDIA-Linux-x86_64-615.78.08.run",
+      "bytes": 529834675,
+      "sha256": "3e3f6dddc2ee767a08185300af7be3cb286ece76698d2dde3524599782d07ffe"
+    }
+  ],
+  "artifacts": [
+    {
+      "version": "580.178.04",
+      "member": "kernel/nvidia/nv-kernel.o_binary",
+      "bytes": 112677456,
+      "sha256": "5269a23ffba19a17fe16f076463e7ad4151254659441d1711bee6c6221ff6f4b"
+    },
+    {
+      "version": "580.178.04",
+      "member": "libcuda.so.580.178.04",
+      "bytes": 96284520,
+      "sha256": "dcdf334aeb177c95b3385b797c9b871d03a287895713c6d107f79096b0985aa9"
+    },
+    {
+      "version": "580.178.04",
+      "member": "libnvidia-gpucomp.so.580.178.04",
+      "bytes": 72265336,
+      "sha256": "0334f98aef57fb9f0fc16a404f01a09f4f1a644daa0a769cc4b2162372b9d12a"
+    },
+    {
+      "version": "580.178.04",
+      "member": "libnvidia-ptxjitcompiler.so.580.178.04",
+      "bytes": 39422584,
+      "sha256": "9184b44172455ae00b603fd5318258f99c0a5cbdccd4fe1eeb1654a1bad9c9f1"
+    },
+    {
+      "version": "610.57.04",
+      "member": "kernel/nvidia/nv-kernel.o_binary",
+      "bytes": 120980872,
+      "sha256": "c90f58d59e8fef44fa07d057bd9ffb1e1b5ee38d3c51b35df71e05e0ad268cbf"
+    },
+    {
+      "version": "610.57.04",
+      "member": "libcuda.so.610.57.04",
+      "bytes": 112637032,
+      "sha256": "9c7e7e514b6d4bbacba137b883cfd96cf39ceb6861a1d037619c6dded998139b"
+    },
+    {
+      "version": "610.57.04",
+      "member": "libnvidia-gpucomp.so.610.57.04",
+      "bytes": 110902328,
+      "sha256": "97cd78642d83b7b466e4b8d377f7c4e7d6cda9d6cfe884e4c34f5bc8cf8fcb63"
+    },
+    {
+      "version": "610.57.04",
+      "member": "libnvidia-ptxjitcompiler.so.610.57.04",
+      "bytes": 36830520,
+      "sha256": "0df88a5dc3c2effdd3f895f664572c8a7485152fa1db134db8fcdaf80d4fbc7d"
+    },
+    {
+      "version": "615.78.08",
+      "member": "kernel/nvidia/nv-kernel.o_binary",
+      "bytes": 115570992,
+      "sha256": "8fed359e27d938fd90f0a027fbfe98f30737f97c9055f6f31b20d245b6b4ca2d"
+    },
+    {
+      "version": "615.78.08",
+      "member": "libcuda.so.615.78.08",
+      "bytes": 112668520,
+      "sha256": "f73320931be3c4eabc120a1a7fea25f34f324c0f93e35891f98e81a722b5dfc3"
+    },
+    {
+      "version": "615.78.08",
+      "member": "libnvidia-gpucomp.so.615.78.08",
+      "bytes": 121572536,
+      "sha256": "1350b9e1c3e631c5b0088561540423d7a7d9a75c73242ac2881f94bc64dd6d73"
+    },
+    {
+      "version": "615.78.08",
+      "member": "libnvidia-ptxjitcompiler.so.615.78.08",
+      "bytes": 36965944,
+      "sha256": "581dd5115a18da52476e508ef34b64b7d1366f2795398e5b61f74ba7f382547b"
+    }
+  ],
+  "physical_hal_entries": {
+    "580.178.04": {
+      "symbol": "_nv019377rm",
+      "bytes": 1356,
+      "gp108_index": 34,
+      "gp108_entry": {
+        "index": 34,
+        "arch": 19,
+        "impl": 8,
+        "hidrev": 0
+      },
+      "pascal_entries": [
+        {
+          "index": 29,
+          "arch": 19,
+          "impl": 0,
+          "hidrev": 0
+        },
+        {
+          "index": 30,
+          "arch": 19,
+          "impl": 2,
+          "hidrev": 0
+        },
+        {
+          "index": 31,
+          "arch": 19,
+          "impl": 4,
+          "hidrev": 0
+        },
+        {
+          "index": 32,
+          "arch": 19,
+          "impl": 6,
+          "hidrev": 0
+        },
+        {
+          "index": 33,
+          "arch": 19,
+          "impl": 7,
+          "hidrev": 0
+        },
+        {
+          "index": 34,
+          "arch": 19,
+          "impl": 8,
+          "hidrev": 0
+        }
+      ]
+    },
+    "610.57.04": {
+      "symbol": "_nv019282rm",
+      "bytes": 1392,
+      "gp108_index": 34,
+      "gp108_entry": {
+        "index": 34,
+        "arch": 0,
+        "impl": 0,
+        "hidrev": 0
+      },
+      "pascal_entries": []
+    },
+    "615.78.08": {
+      "symbol": "_nv020004rm",
+      "bytes": 1392,
+      "gp108_index": 34,
+      "gp108_entry": {
+        "index": 34,
+        "arch": 0,
+        "impl": 0,
+        "hidrev": 0
+      },
+      "pascal_entries": []
+    }
+  },
+  "open_source_commits": {
+    "580.178.04": "c8e699821c23e4335bf23330a54a23d15cfb95e9",
+    "610.57.04": "e4a5faa2567f28c8eabe0ebb6422b6d0abcf37eb",
+    "615.78.08": "1a82fbfda8f321b056eb3568850f9316c5e465c5"
+  },
+  "readme_snapshots": [
+    {
+      "version": "580.178.04",
+      "file": "kernel_open.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/kernel_open.html",
+      "bytes": 7717,
+      "sha256": "3d624451ba663e6bfee5e09a9daa2b4c566a57815736ca02b068e332e9aebd0c"
+    },
+    {
+      "version": "580.178.04",
+      "file": "supportedchips.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/supportedchips.html",
+      "bytes": 221260,
+      "sha256": "cf4451791125cfa4027245045bd3a0ecfdb36b510e74e3f608add2b5ce29b86c"
+    },
+    {
+      "version": "580.178.04",
+      "file": "gsp.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/gsp.html",
+      "bytes": 4092,
+      "sha256": "39706b946f0058f2b445551811e3be0455a84d921347623cc4a6c6cd1b9ef625"
+    },
+    {
+      "version": "590.48.01",
+      "file": "kernel_open.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/590.48.01/README/kernel_open.html",
+      "bytes": 7212,
+      "sha256": "64ed7fcf0457cc2a57980bdc570b6b839945482c3ee7afc1abbd52bdfb0c4e5f"
+    },
+    {
+      "version": "590.48.01",
+      "file": "supportedchips.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/590.48.01/README/supportedchips.html",
+      "bytes": 218093,
+      "sha256": "cd8aba21362badaa84d757426d3de7e91744fa4d3b79642af9b701f8ee0eef25"
+    },
+    {
+      "version": "590.48.01",
+      "file": "gsp.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/590.48.01/README/gsp.html",
+      "bytes": 4089,
+      "sha256": "68da1dd5ace3f4f4d0ab3acf4b690aec4e4828f9634ad0209a3c599366be85f9"
+    },
+    {
+      "version": "595.104.02",
+      "file": "kernel_open.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/595.104.02/README/kernel_open.html",
+      "bytes": 7212,
+      "sha256": "64ed7fcf0457cc2a57980bdc570b6b839945482c3ee7afc1abbd52bdfb0c4e5f"
+    },
+    {
+      "version": "595.104.02",
+      "file": "supportedchips.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/595.104.02/README/supportedchips.html",
+      "bytes": 218903,
+      "sha256": "a4ea190cb6b37cea638c80d51e8f4c7b9efb28d0622f756c8d43dc01f8215aad"
+    },
+    {
+      "version": "595.104.02",
+      "file": "gsp.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/595.104.02/README/gsp.html",
+      "bytes": 4092,
+      "sha256": "4238ca68446a726561cf026d2a81ba5d34ad431595251c6a2e9b489add0be149"
+    },
+    {
+      "version": "610.57.04",
+      "file": "kernel_open.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/610.57.04/README/kernel_open.html",
+      "bytes": 7311,
+      "sha256": "7ea546b987fdfaf6ab1072a8d3ab6590173217dce9b21836800076703a9d2a58"
+    },
+    {
+      "version": "610.57.04",
+      "file": "supportedchips.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/610.57.04/README/supportedchips.html",
+      "bytes": 219426,
+      "sha256": "b21467cfdb6d72873697a8fd9df3c5a855a07e7790566f397d764664673629d2"
+    },
+    {
+      "version": "610.57.04",
+      "file": "gsp.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/610.57.04/README/gsp.html",
+      "bytes": 4089,
+      "sha256": "edfc14e872264e53a00b809ee3b2305bdc8ff45b73053f1337b06df0d6d32e2e"
+    },
+    {
+      "version": "615.78.08",
+      "file": "kernel_open.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/615.78.08/README/kernel_open.html",
+      "bytes": 7311,
+      "sha256": "7ea546b987fdfaf6ab1072a8d3ab6590173217dce9b21836800076703a9d2a58"
+    },
+    {
+      "version": "615.78.08",
+      "file": "supportedchips.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/615.78.08/README/supportedchips.html",
+      "bytes": 219128,
+      "sha256": "e2c2d1003cad079ac954b837e27cb8fffb9397584e4d5726ad900bf0f9184707"
+    },
+    {
+      "version": "615.78.08",
+      "file": "gsp.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/615.78.08/README/gsp.html",
+      "bytes": 4089,
+      "sha256": "cb90e445c414355f48efac4731224db1c8d9c9cf88465d79720ad5ddbc99b566"
+    }
+  ],
+  "limitations": [
+    "No patched driver was built, installed or hardware-tested.",
+    "Shared Pascal strings and routines survive; complete removal of every Pascal function is not claimed.",
+    "Performance, power, Vulkan capabilities and new voltage controls were not measured."
+  ],
+  "private_analysis_products": [
+    {
+      "filename": "closed-physical-tables.json",
+      "sha256": "87e023370d1efb91ddb77fd383e062e2f8b0e2433cc3ebb145b7dc9e8a589a0a"
+    },
+    {
+      "filename": "ghidra-615-chip-selection.json",
+      "sha256": "b9eac3baaf6c16257bb797858786a304f00bf6b036ff29dec4f965b4489196d3"
+    },
+    {
+      "filename": "rm-comparison-initial.json",
+      "sha256": "b7c97f87b8c0bc3590205da7159a25f1a84238bda835b3ac6b3deb9ecdb2d7c0"
+    },
+    {
+      "filename": "userspace-marker-comparison.json",
+      "sha256": "1c6672ab08145969c190adf665f2bc253ccb6a5d53d7e45f63513fbf661eda9b"
+    },
+    {
+      "filename": "backend-findings.md",
+      "sha256": "220a6c4a73f42a2ebfa9574751092eb1f4b7c5a2b114d231fb25c9fc9388707e"
+    },
+    {
+      "filename": "benefits-findings.md",
+      "sha256": "74681bae945d1d9cc8672814d1c86483fdc6a443a9afdc6f53895d1a76695704"
+    },
+    {
+      "filename": "closed-backend-findings.md",
+      "sha256": "59f6cac960f03d6bc40c6560cea1c02534141e7005c20c69eb6368ab5a47b795"
+    },
+    {
+      "filename": "closed-mx150-pci-legacy-entries.json",
+      "sha256": "a6f36178d00c5f47a17a1c01c7f10bbd484235c3c807bc22b3a974d7cf387479"
+    },
+    {
+      "filename": "closed-backend-disassembly-manifest.json",
+      "sha256": "ee1ecc45336bdeaa78b0c3e3afd7ea5b25fcefc7c456e00d6f15d2497c44df92"
+    },
+    {
+      "filename": "ghidra-615-hal-registration.json",
+      "sha256": "c27674dd8a871bdc9eb58612844eab5aea850a01ff17d890c8e9351105ca0bf7"
+    },
+    {
+      "filename": "inspect-closed-elf.py",
+      "sha256": "9da69ee63f7948b2bde510f73f1f4e2d00b221d83404b49431d9f4946e2cbf60"
+    },
+    {
+      "filename": "extract_static.py",
+      "sha256": "9b9f6c0d4a7f2f6f18cbe8681aa25db48bd360c66802c9c41477551f52319842"
+    },
+    {
+      "filename": "580.178.04-hal-register-stubs.json",
+      "sha256": "853538080bb9db44e016ce6fbb3caf25169bf5084bd8dae6508f598ce4206780"
+    },
+    {
+      "filename": "580.178.04-hal-registration-xrefs.json",
+      "sha256": "58070f32b5fcf88db92f887b5185ee3a5d5e732778e49394d4ff5859a6f3c83b"
+    },
+    {
+      "filename": "580.178.04-hal-initialization-xrefs.json",
+      "sha256": "ca5d8d33f4e3b77ae83b74ad258d3c45fb2d1cec6218fa21b49590e3d10cf66a"
+    },
+    {
+      "filename": "610.57.04-hal-register-stubs.json",
+      "sha256": "0ebb1978173d03b9019ff0acfdf4cabde296151ee4c41e63c1b0973d46634430"
+    },
+    {
+      "filename": "610.57.04-hal-registration-xrefs.json",
+      "sha256": "67eca78a20997adbba82f70ab64b35b0e9a5adbaf9176ef05648b54e8e68e862"
+    },
+    {
+      "filename": "610.57.04-hal-initialization-xrefs.json",
+      "sha256": "717456564e45efcf381f2249584328f374ad51249190ad9f5b0a134703bfbadb"
+    },
+    {
+      "filename": "615.78.08-hal-register-stubs.json",
+      "sha256": "733f60e9412298bee364d1088f3d2c872e2b05a8d4caea57c45af7083c93ec24"
+    },
+    {
+      "filename": "615.78.08-hal-registration-xrefs.json",
+      "sha256": "11fe0786fe2bb5a14a0c1f7a9a2716010bbf851aeb2a4c4d0135f78c0158904c"
+    },
+    {
+      "filename": "615.78.08-hal-initialization-xrefs.json",
+      "sha256": "616462147b9b6184e2a813c22b143e265e01a95765a01611aeb0f899ae69f35c"
+    }
+  ],
+  "hal_registration": {
+    "580.178.04": {
+      "symbols": {
+        "global_registration": "_nv049808rm",
+        "common_registration": "_nv053989rm",
+        "gp108_registration_stub": "_nv054026rm"
+      },
+      "fixed_id_stub_count": 43,
+      "registered_ids": [
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        59,
+        60,
+        61,
+        62,
+        63,
+        65,
+        66,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75
+      ],
+      "gp108_registered": true,
+      "scope": "recovered normal shipping registration path, statically inferred; no runtime query"
+    },
+    "610.57.04": {
+      "symbols": {
+        "global_registration": "_nv048549rm",
+        "common_registration": "_nv052475rm",
+        "constructor": "_nv033274rm"
+      },
+      "fixed_id_stub_count": 33,
+      "registered_ids": [
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        76,
+        77
+      ],
+      "gp108_registered": false,
+      "scope": "recovered normal shipping registration path, statically inferred; no runtime query"
+    },
+    "615.78.08": {
+      "symbols": {
+        "global_registration": "_nv049844rm",
+        "common_registration": "_nv053797rm",
+        "constructor": "_nv034189rm",
+        "creator": "_nv034190rm"
+      },
+      "fixed_id_stub_count": 34,
+      "registered_ids": [
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        76,
+        77
+      ],
+      "gp108_registered": false,
+      "scope": "recovered normal shipping registration path, statically inferred; no runtime query"
+    }
+  },
+  "release_listing_snapshots": [
+    {
+      "filename": "linux-index.html",
+      "url": "https://download.nvidia.com/XFree86/Linux-x86_64/",
+      "bytes": 45938,
+      "sha256": "9b0b2eb25a69fec5969c91d4ee132b8e867d6278a9b407274401a9874ae37dcb"
+    },
+    {
+      "filename": "driverfinder.html",
+      "url": "https://www.nvidia.com/Download/processFind.aspx?ctk=0&lang=en-us&lid=1&osid=12",
+      "bytes": 47431,
+      "sha256": "3fba73a989a7a4bb6d3d92e0d196570327646c7576dbc6718458248ae83cccbf"
+    }
+  ]
+}

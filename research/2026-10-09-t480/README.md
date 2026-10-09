@@ -63,6 +63,12 @@ overvoltage backend clamps negative offsets to zero. Offline checks are
 distinguished from hardware results. After explicit approval, getter/file/X-session
 observations verified current capabilities without tuning or EC changes.
 
+The later [610/615 driver research](12-mx150/07-driver-upgrade-and-pascal-support.md)
+compares exact proprietary packages and identifies missing GP108 selection and
+registration beyond the early legacy check. The recorded 580.178.04 is already
+the newest compatible public driver found. It documents useful maintenance and
+application paths without installing a new driver or claiming a speed gain.
+
 ## Reading the evidence
 
 **Deployed** means files/policy were changed on the laptop and checked there.

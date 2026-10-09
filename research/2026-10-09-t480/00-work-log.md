@@ -272,3 +272,38 @@ drivers or the EC firmware is claimed.
 Raw analysis and selected live logs remain in private workstation evidence
 directories. This publication adds derived research and authored fixes/fixtures,
 without adding raw DLLs, full firmware images, keys or biometric captures.
+
+## 10. NVIDIA 610/615 upgrade and Pascal support research
+
+The user requested investigation of newer drivers, possible MX150 patches and
+whether upgrading would gain anything. This pass stayed on the workstation:
+no T480 command, installer execution, package replacement, module load, tuning,
+EC access or sleep occurred. The prior getter-only approval was not extended.
+
+Direct official archive/release checks found 615.78.08 released October 7 and
+580.178.04 still the newest compatible public Linux display release. Exact
+610.57.04/615.78.08 packages were downloaded, hashed and statically extracted
+using the workstation decompressor and a checked tar reader; binaries and raw
+analysis remain private. Both packages contain open and proprietary flavors.
+
+Cross-branch source/manual inspection and independent ELF/relocation/disassembly
+identified separate proprietary legacy gates, cleared GP108 physical HAL entries
+and omitted GP108 object registration. R580 registers index 34; the newer paths
+zero slots and start registration at Turing index 37. Ghidra MCP independently
+recovered six selected 615 functions covering support checks, physical matching
+and slot clear/create/register. Shared Pascal routines/strings survive, so the
+report does not claim every implementation was removed or fully recovered.
+
+The [new report](12-mx150/07-driver-upgrade-and-pascal-support.md) separates
+unsupported one-line patch ideas from the larger host-driver/ABI port required,
+checks which later fixes already reached R580, and documents CUDA/application
+options plus an approval-bound reversible package trial. No working 610/615
+port, new undervolt, FPS gain or energy saving was established. The
+[manifest](12-mx150/08-upgrade-evidence.json) records exact package/member hashes,
+source commits, physical-table findings and private analysis provenance.
+
+Independent review corroborated the registration stubs, source limits and
+application requirements. JSON structure/hashes, local Markdown links and
+whitespace were checked for this publication. The earlier 102-test result
+remains attached to the earlier authored fixes, not to this driver research.
+Owned temporary Ghidra MCP server/client processes were stopped after saving.

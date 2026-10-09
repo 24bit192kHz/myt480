@@ -93,3 +93,21 @@ integrated evening notes separately report idle-GPU S3/S4 and two successful
 owner-operated lid wakes; this pass did not repeat them. The completed approved
 observations and the remaining approval boundary are specified in
 [the voltage report](01-voltage-and-controls.md#approval-boundary-and-concrete-next-observation).
+
+## Later 610/615 upgrade investigation
+
+The [upgrade report](07-driver-upgrade-and-pascal-support.md) and
+[artifact manifest](08-upgrade-evidence.json) add official release verification,
+cross-branch READMEs/public-source snapshots, static extraction of exact 610/615
+packages and comparison with retained 580. Three proprietary initialization
+blocks were recovered: legacy rejection, cleared Pascal physical HAL entries,
+and omitted GP108 object registration after slots are zeroed. Ghidra MCP and
+independent GNU/ELF analysis corroborate selected lookup/registration paths.
+Shared Pascal fragments remain; complete removal/recovery of every backend
+routine is not asserted. Kernel/userspace bridging, complete GP108 restoration,
+actual Vulkan feature reports and measured application/energy benefit remain open.
+
+This later pass ran no T480 command and built/installed no patched driver.
+The preceding 102-test suite covers earlier authored fixes, not a 610/615 port.
+New documentation, JSON structure, source anchors and local Markdown links were
+checked separately; no new GPU compatibility or performance test is claimed.

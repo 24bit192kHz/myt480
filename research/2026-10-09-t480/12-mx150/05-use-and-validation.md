@@ -17,6 +17,14 @@ not an exploit test or a certification of the entire system's security.
 Keep taking appropriate 580 maintenance updates rather than freezing every
 component indefinitely.
 
+The subsequent [610/615 investigation](07-driver-upgrade-and-pascal-support.md)
+verified 615.78.08 as the newest public Linux display release on 2026-10-09;
+**580.178.04 remains the latest compatible public release found**. Binary
+inspection recovered separate legacy, physical-HAL and object-registration
+blocks. A PCI-ID patch or mixed newer userspace does not restore the GP108
+implementation. Some advertised 610 fixes already reached 580, and no MX150
+gain from a new-branch port has been measured.
+
 The [NVIDIA open kernel modules](https://github.com/NVIDIA/open-gpu-kernel-modules)
 require Turing or newer. Their public control headers help interpret interfaces,
 but do not provide a Pascal implementation to swap onto this GPU. A driver/kernel
