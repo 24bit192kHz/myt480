@@ -19,7 +19,7 @@ mistaken for broken drivers.
 | Security choice | CPU mitigations disabled | Live vulnerabilities explicitly report vulnerable states | Compare a recoverable boot profile with mitigations enabled |
 | Security choice | Thunderbolt domain has automatic connection and identity DMA mapping | Live NHI group13 `identity`, domain `none`, advertised protection0 | Test translated/strict host DMA with dock and VM coverage |
 | Feature gap | UCSI connector control/notifications absent | Live-matching kernel disables TYPEC; coreboot omits the recovered bridge | Implement serialized transport plus ACPI notifications; options alone are insufficient |
-| Known behavior | Lid does not wake S4 hibernation | Existing C55 investigation and experiments | Preserve known working wake methods; continue EC/SMM investigation separately |
+| Fixed 2026-10-09 | Lid did not wake S4 hibernation | EC decode found the retained flag behind EC byte `0x01` bit 6; the `03-lid-wake-s4` hook sets it before each hibernate; owner-tested twice (wake by the EC's PWRBTN# pulse, no RTC) | Nothing further; no firmware change needed |
 
 ## 1. The TPM boot path needs a stricter root boundary
 

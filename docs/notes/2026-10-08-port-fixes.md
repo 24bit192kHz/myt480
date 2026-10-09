@@ -96,5 +96,8 @@ gpe0_dw0..2 = GPP_C/D/E explicitly (the live PMC GPIO_GPE_CFG is 0x432 already).
   handler is lid-specific. CONCLUSION: the T480 cannot wake from hibernation by lid open, on
   Lenovo's firmware too (it is S5 there by default, and the EC does not treat the lid as an
   S4 wake even when armed as Lenovo arms it). Closed.
+  SUPERSEDED 2026-10-09: this was true of the host side only. The EC firmware itself has the
+  path, behind a flag Lenovo never sets (EC RAM 0x01 bit 6); set from a sleep hook it works,
+  see 2026-10-09-evening.md and research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md.
 - Tool kept: ~/t480-build/tools/ecidx.py (read/setbit/clearbit of the 0x15EC index space).
   Sleep hook restored (no experiment lines), idx 0x41 back to 0x09.

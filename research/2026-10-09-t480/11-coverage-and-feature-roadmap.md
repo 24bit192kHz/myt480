@@ -68,12 +68,12 @@ architecture or undocumented pin assignments.
 
 ## Features worth pursuing
 
-1. **Lid wake from hibernation:** trace the actual EC firmware before proposing an
-   `_PTS` bit. The prior GPE, HWLO and vendor-state experiments are established
-   negatives; repeating them does not create a new feature. A retained gate and
-   conditional deep-state power-button route are now traced in the supplied EC;
-   [live identity, runtime eligibility and rollback](10-ec-firmware-and-lid-wake.md)
-   remain to verify. Keep testing subject to the user's explicit approval.
+1. **Lid wake from hibernation: done.** The retained gate traced in the supplied
+   EC is real: the `03-lid-wake-s4` sleep hook sets EC byte `0x01` bit 6 before
+   each hibernate, and the owner's lid test on 2026-10-09 woke the laptop from S4
+   twice ([result](10-ec-firmware-and-lid-wake.md), `docs/notes/2026-10-09-evening.md`).
+   The prior GPE, HWLO and vendor-state experiments stay as established negatives
+   for those routes; no `_PTS` change was needed.
 2. **Native USB-C status/PD control:** implement the recovered serialized transport
    and notifications after proving capability/status behavior. An offline mailbox
    model or TYPEC option alone does not restore the feature.

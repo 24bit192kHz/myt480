@@ -7,6 +7,15 @@ lid-open callback.** This is a concrete host-accessible candidate for `_PTS(4)`.
 Successful S4 wake, the installed image's complete identity and all runtime
 eligibility conditions remain unverified. No ACPI/EC patch is deployed.
 
+**Result (2026-10-09 evening): it works.** The candidate was tried as a sleep hook
+instead of an ACPI change: `system/etc/elogind/system-sleep/03-lid-wake-s4` sets
+the bit through coreboot's `ectool` before every hibernate and clears it after
+the resume. The owner hibernated, closed and opened the lid twice (19:23 and
+19:24); the machine powered on and resumed both times, `PM1_STS: WAK PWRBTN`,
+`prev_sleep_state 4`, no RTC alarm armed. The host-visible byte reads `0x05`
+again after each S4 cycle, as predicted (shadow, not the retained flag), so the
+hook clears bit 6 unconditionally. See `docs/notes/2026-10-09-evening.md`.
+
 This continuation runs on the workstation. No command was run on the T480,
 and no EC transaction, firmware write, reboot, suspend or hibernate was performed.
 The user's requirement to ask before a hardware test remains in force.
