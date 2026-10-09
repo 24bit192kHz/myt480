@@ -18,6 +18,9 @@ firmware, kernel and sleep-path defects with evidence and next validation steps.
 The October 10 [complete findings and improvement index](../../research/2026-10-09-t480/13-findings-and-improvement-index.md)
 collects all 30 directions, with deployed, source-only and open results linked
 to their evidence and recovery instructions.
+The [remaining scope and preservation report](../../research/2026-10-09-t480/14-unrecovered-scope-and-preservation.md)
+distinguishes inventory from reconstruction and explains the saved-project
+archive and reusable static-analysis tools.
 The [EC continuation](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md)
 records the supplied firmware's architecture and selected lid/wake traces.
 The [coverage ledger](../../research/2026-10-09-t480/11-coverage-and-feature-roadmap.md)
@@ -34,7 +37,7 @@ and real sleep validation.
 |---|---|---|
 | [Thermal control](thermal.md) | Kernel fan watchdog, immediate curve transitions, EC fallback, conservative missing-config undervolt | Deployed; emulated I/O, graceful shutdown, and live 125-second pause tested |
 | [NVIDIA](nvidia.md) | Coarse RTD3 with clock restoration; signal cleanup; truthful runtime status | Deployed; five cold-wake CUDA rounds and PRIME OpenGL passed |
-| [MX150 deep research](../../research/2026-10-09-t480/12-mx150/README.md) | Negative voltage clamp, regulator/EC throttle, firmware bounds and sleep errors | Static recovery plus approved getters; replacement hook/firmware source not deployed |
+| [MX150 deep research](../../research/2026-10-09-t480/12-mx150/README.md) | Negative voltage clamp, regulator/EC throttle, firmware bounds and sleep errors | Static recovery plus approved getters; hook/diagnostic deployed October 10 in a separate run, firmware patches unflashed |
 | [Intel application routing](gpu-routing.md) | `igpu-run`, desktop override and later `bw-screen` startup route | Deployed; evening record reports D3cold with Bitwarden open |
 | [EC and S4 lid wake](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md) | Recovered bit 6 gate used by the existing sleep hook | Separate evening record reports two successful owner-operated lid wakes; broader cleanup/rollback remains open |
 | [USB-C](usb-c.md) | Recovered stock UCSI ACPI layout, SMM dispatch, EC mailbox, and transport ports | Reverse engineered; native implementation remains open |

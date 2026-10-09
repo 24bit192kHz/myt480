@@ -11,6 +11,9 @@ The recorded baseline is an i7-8650U T480 with 32 GB RAM, UHD620, GP108M MX150
 proprietary NVIDIA `580.178.04`. This is the last inspected combination, not a
 fresh October 10 hardware inventory. The [coverage ledger](11-coverage-and-feature-roadmap.md)
 accounts for every PCI function and other device in the stored snapshots.
+The [unrecovered scope and preservation report](14-unrecovered-scope-and-preservation.md)
+explains the remaining implementation/identity gaps and what can be reused from
+Git versus the private saved-project archive.
 
 ## How to read status
 
@@ -66,8 +69,8 @@ The additional rows make the wider memory/controller/userspace coverage explicit
 | I01 | **MX150 idle power:** extend Intel routing to any remaining unnecessary GPU holders and measure battery savings | Routing/coarse D3cold work. Broader application coverage and matched discharge energy remain unmeasured. [Guide](12-mx150/05-use-and-validation.md) |
 | I02 | **GPU system sleep:** preserve live CUDA/graphics allocations across S3/S4 and failed transitions | Idle-GPU cycles passed; live allocation correctness, backing storage and one effective sleep owner remain unvalidated. [Sleep](12-mx150/04-sleep-and-firmware.md) |
 | I03 | **NVIDIA hook:** preserve actual helper/timeout errors and restore console state on failure | Status correction deployed 2026-10-10 (14 mock tests, one RTC S3 cycle). Nonzero exit alone does not cancel this elogind configuration. [Sleep](12-mx150/04-sleep-and-firmware.md) |
-| I04 | **Coreboot GPU power:** abort rail startup without PWRGD and investigate truthful power/link state contracts | Patch 0029 is AML-tested/source-only; electrical timing, `_STA`/request versus PWRGD and link-wait failure behavior remain open. [Power](12-mx150/04-sleep-and-firmware.md#acpi-power-on-timeout-defect) |
-| I05 | **VBIOS/CBFS:** prevent truncated/oversized source reads and use actual produced lengths | 0030/0031 are sanitizer-tested/source-only. On-device/RAM/generic/VFCT and short-image AML-generator paths are outside this fix. [ROM](12-mx150/03-vbios-and-ec.md) |
+| I04 | **Coreboot GPU power:** abort rail startup without PWRGD and investigate truthful power/link state contracts | Patch 0029 is AML-tested/source-only; separate October 10 compilation passed. Its new abort lacks stock `HGON` precedent and real fault validation; electrical timing/state/link contracts remain open. No measured benefit or flash justification established. [Power](12-mx150/04-sleep-and-firmware.md#acpi-power-on-timeout-defect) |
+| I05 | **VBIOS/CBFS:** prevent truncated/oversized source reads and use actual produced lengths | 0030/0031 are sanitizer-tested/source-only; separate source compilation passed. The valid uncompressed MX150 ROM's ordinary copy is unchanged. Wider ROM/AML contracts remain open; no speed/energy gain established. [ROM](12-mx150/03-vbios-and-ec.md) |
 | I06 | **Games/applications:** validate compatible DXVK/Proton, actual Vulkan feature/limit reports and OpenCL work | R580 clears current documented DXVK baseline version; device features and titles still need testing. Optional descriptor paths are not automatically faster. [Upgrade](12-mx150/07-driver-upgrade-and-pascal-support.md) |
 | I07 | **CUDA:** use CUDA 12.9 for `sm_61` builds, reduce transfers/allocations and choose working sets that fit VRAM | Useful workload-specific path. Framework/library architecture support and checked outputs must be verified separately. [CUDA guide](12-mx150/05-use-and-validation.md#cuda-build-compatibility) |
 | I08 | **GPU efficiency:** compare FPS limits, graphics settings, CPU/GPU balance and completed useful work | Needs matched performance/energy comparisons. Do not increase the retained offsets merely because getter ranges are larger. [Measurement](12-mx150/05-use-and-validation.md#measure-and-restore) |

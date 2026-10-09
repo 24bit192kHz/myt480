@@ -1,0 +1,129 @@
+{
+  "publication_date": "2026-10-10",
+  "scope": "Two authored offline readers and one guarded actual-source ordering fixture; not a backup of private evidence or complete reverse engineering.",
+  "dependency": "Readers: Python 3 standard library. Fixture: C compiler with GNU-compatible linker --wrap, Linux headers, nm, sha256sum and standard shell tools.",
+  "target_access": false,
+  "network_access": false,
+  "input_binary_execution": false,
+  "readers": [
+    {
+      "published_file": "inspect-closed-elf.py",
+      "original_path_relative_to_private_work_root": "audit-20261009-mx150-upgrade/inspect-closed-elf.py",
+      "original_bytes": 3597,
+      "original_sha256": "9da69ee63f7948b2bde510f73f1f4e2d00b221d83404b49431d9f4946e2cbf60",
+      "adaptations": [
+        "Explicit --version, --input and optional --output CLI; no absolute private paths.",
+        "Enforce exact artifact length and SHA256 before parsing.",
+        "Retain version-specific table symbols, offsets, counts and relocation-backed labels.",
+        "Add bounded ELF ranges/string parsing and resolve each RELA section through its referenced symbol table.",
+        "Exclude raw legacy record hex; output basename instead of absolute input path.",
+        "Default JSON to stdout; explicit output is create-only."
+      ],
+      "audited_inputs": [
+        {
+          "version": "580.178.04",
+          "package_member": "kernel/nvidia/nv-kernel.o_binary",
+          "bytes": 112677456,
+          "sha256": "5269a23ffba19a17fe16f076463e7ad4151254659441d1711bee6c6221ff6f4b",
+          "physical_table_rows": 113,
+          "legacy_records": 15
+        },
+        {
+          "version": "610.57.04",
+          "package_member": "kernel/nvidia/nv-kernel.o_binary",
+          "bytes": 120980872,
+          "sha256": "c90f58d59e8fef44fa07d057bd9ffb1e1b5ee38d3c51b35df71e05e0ad268cbf",
+          "physical_table_rows": 116,
+          "legacy_records": 19
+        },
+        {
+          "version": "615.78.08",
+          "package_member": "kernel/nvidia/nv-kernel.o_binary",
+          "bytes": 115570992,
+          "sha256": "8fed359e27d938fd90f0a027fbfe98f30737f97c9055f6f31b20d245b6b4ca2d",
+          "physical_table_rows": 116,
+          "legacy_records": 19
+        }
+      ],
+      "historical_comparison_relative_to_private_work_root": "audit-20261009-mx150-upgrade/closed-physical-tables.json",
+      "comparison": "All physical table rows, table symbol metadata, legacy offsets and legacy records match; rawhex excluded intentionally.",
+      "limitations": "Does not reproduce HAL registration/constructor disassembly, userspace ABI checks or all backend functions."
+    },
+    {
+      "published_file": "decode-ec-ini.py",
+      "original_path_relative_to_private_work_root": "audit-20261009-ec/decode_ini.py",
+      "original_bytes": 2521,
+      "original_sha256": "f1e263d4627eff98e937632bfa281627943cf9aec84a6f475a2750b559b5ed9c",
+      "adaptations": [
+        "Explicit --input and optional --output CLI; no absolute private paths.",
+        "Enforce exact N24HT37W payload length and SHA256 before parsing.",
+        "Retain INI3 record grammar, addresses, output hashes and six-halfword mapping.",
+        "Replace assertions with explicit errors and bound decompressed SRAM size.",
+        "Omit reconstructed SRAM binary output; emit derived metadata only.",
+        "Default JSON to stdout; explicit output is create-only."
+      ],
+      "audited_input": {
+        "version": "N24HT37W",
+        "format": "FL2 payload after 32-byte wrapper",
+        "bytes": 286720,
+        "sha256": "befcb425b9f2a83b959c0ef3ee490420b7c5e5ffa2a792fda821d0ff355e77cf"
+      },
+      "historical_comparison_relative_to_private_work_root": "audit-20261009-ec/ini-map-decoded.json",
+      "comparison": "Two initialized SRAM records, destinations, encoded/decoded lengths, hashes, addresses and six signed halfwords match.",
+      "limitations": "Static initialization only; retained runtime state, host eligibility and complete EC behavior remain separate questions."
+    }
+  ],
+  "fixtures": [
+    {
+      "published_file": "plain-root-harness.c",
+      "runner": "run-plain-root-fixture.sh",
+      "original_path_relative_to_private_work_root": "audit-20261009-cross-stack/plain-root-harness.c",
+      "original_bytes": 3717,
+      "original_sha256": "89bad22564ca9613e45ffb2447e63d0c64e51dcdc89581ad2e183f5e5e16a397",
+      "actual_source": "kernel/early-init/init.c",
+      "actual_source_sha256": "2f57dddb7ef6fd59b3bb14319866dc94998a83eceb9f96ecb2def64e96c8b95d",
+      "assumptions": [
+        "Synthetic plain root and swap headers.",
+        "Synthetic matching-policy sealed blob; TPM responses and successful unseal are assumed.",
+        "Synthetic file descriptors and successful mount/switch-root operations.",
+        "Alternative branches not exercised by this success fixture fail locally."
+      ],
+      "adaptations": [
+        "Relative include instead of an absolute workstation path.",
+        "Runner snapshots and hash-pins actual source before compiling in a private temporary tree.",
+        "Wrap every source-facing device/file/process/privileged call, including originally unwrapped dup2 and alternative paths.",
+        "Compile-time runner guard plus source-object external-symbol and executable real-operation checks.",
+        "Assert key-load/mount/init ordering and three mocked console descriptor duplications.",
+        "No real device/key/mount/exec operations; binary and temporary tree removed on exit."
+      ],
+      "wrapped_operations": [
+        "open", "access", "read", "write", "close", "syscall", "mount", "umount",
+        "umount2", "unlink", "chdir", "chroot", "execl", "reboot", "dup2", "ioctl",
+        "pread", "tcgetattr", "tcsetattr", "pipe", "fork", "waitpid", "sync", "pause",
+        "_exit", "stat", "clock_gettime", "nanosleep"
+      ],
+      "validation": {
+        "date": "2026-10-10",
+        "mode": "Workstation guarded actual-source fixture only",
+        "printed_path": "matched-policy master load -> plain root mount -> root init execution",
+        "negative_checks": [
+          "Changed init.c rejected before compiling or running.",
+          "Added unreviewed external operation rejected before linking or running."
+        ],
+        "hardware_or_key_access": false
+      },
+      "limitations": "Establishes source ordering under mocked successful unseal, not TPM cryptography, key extraction, a physical exploit, real mounts, complete boot-policy validation or a repair."
+    }
+  ],
+  "validation": {
+    "date": "2026-10-10",
+    "mode": "Workstation artifact copies; temporary private JSON outputs removed after comparison.",
+    "exact_historical_comparisons": 4,
+    "negative_checks": [
+      "Mismatched artifact size rejected without output creation.",
+      "Same-size invalid SHA256 rejected without output creation.",
+      "Existing explicit output refused without modification."
+    ],
+    "hardware_behavior_tests": 0
+  }
+}

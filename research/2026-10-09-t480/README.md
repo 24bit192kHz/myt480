@@ -10,11 +10,14 @@ starting at baseline `d89f79d`, followed by this organized publication. Read the
 [complete work log](00-work-log.md) for what was actually changed and tested.
 The October 10 [complete findings and improvement index](13-findings-and-improvement-index.md)
 collects every discussed improvement direction and its current evidence/status.
+The [unrecovered scope and preservation report](14-unrecovered-scope-and-preservation.md)
+states exactly what remains open and what a fresh clone or private archive preserves.
 
 | Subject | Research report |
 |---|---|
 | Complete work record | [Changes, deployments, tests, and commit history](00-work-log.md) |
 | Complete findings and improvements | [Established results and all 30 improvement directions](13-findings-and-improvement-index.md) |
+| Remaining scope and preservation | [Unrecovered internals, reusable tools and saved-project preservation](14-unrecovered-scope-and-preservation.md), [archive inventory](15-analysis-preservation.json) |
 | Firmware and boot trust | [Coreboot, GRUB NVMe, TPM early init, and build checks](01-firmware-and-boot-trust.md) |
 | Kernel and security | [Actual running configuration, DMA, mitigations, and sleep](02-kernel-and-security.md) |
 | Graphics | [NVIDIA reverse engineering, RTD3, PRIME, and Intel routing](03-nvidia-and-intel-graphics.md) |

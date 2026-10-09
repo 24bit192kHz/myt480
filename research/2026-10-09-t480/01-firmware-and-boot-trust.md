@@ -22,6 +22,12 @@ image can resume the legitimate system first; the clean-boot path still needs a
 stricter boundary. Extending PCR 8 prevents another matching-policy unseal but
 does not revoke the master already loaded.
 
+The October 10 preservation pass publishes a
+[guarded actual-source fixture](../../tools/re-audit/static-analysis/README.md#actual-source-plain-root-ordering-fixture)
+so this ordering check no longer depends on an unpublished workstation harness.
+It pins the reviewed source and strengthens the operation mocks; it does not
+implement the boot-trust repair or validate a real unseal.
+
 Daily boot should require the expected encrypted root before releasing production
 secrets. Preserve plain-disk provisioning in an explicit recovery path that does
 not automatically unseal them. The separate `kmk.next` migration blob has no PCR

@@ -5,6 +5,10 @@ The [research record](../../research/2026-10-09-t480/README.md) distinguishes
 prior live checks from the current workstation-only continuation. The user has
 required approval before any new T480 command.
 
+The [static-analysis readers](static-analysis/README.md) operate on exact local
+artifact copies only: EC initialization/map decoding and cross-branch NVIDIA
+physical/legacy tables. They never contact the laptop or execute an updater.
+
 | Tool | Purpose and effect |
 |---|---|
 | `mx150-capabilities.py` | Getter-only NVML support/range inventory. Initialization can wake an idle GPU; no voltage/clock/power setter. Approved queries ran over SSH without installation or tuning. |

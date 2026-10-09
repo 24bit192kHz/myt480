@@ -48,10 +48,13 @@ Use its [updated deployment restoration record](../../docs/wiki/rollback.md#late
 and matching hashes; the original audit script is not automatically valid for
 every later binary. Reverting repository source does not replace live executables.
 
-The [MX150 continuation](12-mx150/README.md) also leaves its replacement sleep
-hook, diagnostic and coreboot patches 0029–0031 source-only. They need no laptop
-rollback because they were not installed. Reverse 0031, 0030 and 0029 in a build
-source tree to remove the firmware proposals before rebuilding. An approved
+The [MX150 continuation](12-mx150/README.md) initially left its hook, diagnostic
+and coreboot patches source-only. The separate October 10 run subsequently
+installed the hook/diagnostic and lid-hook cleanup correction through `syswork`
+(`hooks-1010`); their restoration must use the matching deployment snapshots,
+not just a Git revert. See [the deployment record](../../docs/notes/2026-10-09-evening.md#2026-10-10-01000150-the-mx150-push-audited-three-files-deployed).
+Coreboot patches 0029–0031 remain unflashed and need no laptop rollback. Reverse
+0031, 0030 and 0029 in a build source tree before rebuilding. An approved
 getter may wake the GPU but assigns no tuning setting; the final observation
 returned to D3cold. Existing deployment backups apply to the earlier installed
 components, not to future installations with different hashes.

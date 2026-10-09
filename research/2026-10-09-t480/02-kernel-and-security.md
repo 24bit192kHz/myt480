@@ -57,8 +57,9 @@ reports subsequent changes and idle-GPU RTC S3/S4 tests:
 - The package NVIDIA hook was masking the site override. Removing it and adding
   `NoExtract` makes the site's hibernate mapping and bounded synchronous resume
   effective. The [later approved file observation](12-mx150/04-sleep-and-firmware.md)
-  confirmed those changes; truthful helper/timeout exit reporting is now fixed
-  only in repository source and is **not deployed**.
+  confirmed those changes. The separate October 10 record subsequently reports
+  deploying truthful helper/timeout status, the file diagnostic and the lid-hook
+  opt-out cleanup correction, followed by one successful idle-GPU RTC S3 cycle.
 - The watchdog hook now has a forced disarm fallback and checks keepalive startup
   before claiming rearming. Failure/cancellation sequencing and the final timer
   state still require broader validation.

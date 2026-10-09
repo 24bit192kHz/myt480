@@ -35,9 +35,12 @@ Raw driver disassembly, firmware captures and private projects remain outside
 the publication.
 
 The useful improvements prepared here are a getter-only capability inventory,
-a corrected sleep configuration diagnostic, truthful source-only hook status,
+a corrected sleep configuration diagnostic, truthful hook status,
 and firmware power-good/CBFS ROM bounds corrections. Their offline checks do
 not prove a successful hardware transition.
+Those began source-only; the separate October 10 record reports hook/diagnostic
+and lid opt-out cleanup deployment with one idle-GPU RTC S3 cycle. Firmware
+patches remain unflashed, with no demonstrated speed or energy benefit.
 The [coverage ledger](06-coverage-and-evidence.md) explicitly records unresolved
 areas, including alternative undervolt policy, VBIOS authentication, offset lifetime,
 EC policy meanings, MX150 Vulkan and allocation-preserving sleep. The approved

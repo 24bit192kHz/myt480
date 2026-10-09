@@ -21,7 +21,7 @@ the next evidence needed, rather than asserted failures.
 | Board voltage/rail/reset | Schematic + VBIOS PWM/throttle agreement; coreboot GPIO sequence | Installed drawing revision, active electrical/calibration behavior |
 | EC GPU policy | GPIO216 throttle mapping/gates; corrected thermal alert GPIO104/F9; optional EC UART disabled in production | Sensor/state meaning, GPIO104 consumer/mux, policy callers, arbitration and active transitions |
 | ACPI rail timeout | DGON discrepancy reproduced; patch 0029 passes actual AML and complete DSDT checks | Hardware unwind, OS failure propagation and DGLW result contract |
-| System sleep | Approved site-hook/files; separate evening idle S3/S4 and S4 lid results; source-only truthful hook status | Effective default owner, storage/locker/failure readiness and live-allocation preservation |
+| System sleep | Approved site-hook/files; separate evening idle S3/S4 and S4 lid results; October 10 hook status/diagnostic and opt-out cleanup deployment with one RTC S3 cycle | Effective default owner, storage/locker/failure readiness, retained baseline and live-allocation preservation |
 | PRIME/desktop | Previous MX150 OpenGL, Intel GLX/EGL/Vulkan, holder and routing evidence | MX150 Vulkan, Wayland, display/dock and application coverage |
 | CUDA/OpenCL/frameworks | Earlier checked CUDA rounds; Pascal compiler lifecycle and Nouveau GP108 constructors reviewed | Installed compiler/library architecture audit, alternative-driver power and workload-specific support |
 | Media | No supported NVENC; official decode documentation conflict recorded | Device profile queries and actual checked decode behavior |

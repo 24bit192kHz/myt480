@@ -138,6 +138,10 @@ its compiled control-flow fixture, `nvme-regression-vectors.json`,
 `live-driver-watchdog.txt`. The early-init harness assumes a successful matched
 unseal and mocks device/key/mount/exec operations; it establishes source ordering,
 not TPM cryptography or a live physical exploit.
+The later [public fixture](../../tools/re-audit/static-analysis/README.md#actual-source-plain-root-ordering-fixture)
+preserves that actual-source ordering check with exact-source guarding and
+strengthened operation mocks. Private originals and their manifests remain
+historical evidence; the adaptation has its own provenance.
 
 The archived C55 candidate ROM SHA256 is
 `63c5ddbe65a9c51da845b83dc4540df706488b76bcee49d8bbca0825ee6b1576`.

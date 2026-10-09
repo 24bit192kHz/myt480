@@ -60,11 +60,20 @@ Private evidence remains outside the repository under
 | `audit-20261009-cross-stack` | Mocked early-init harness, NVMe vectors, firmware checker fixtures and selected live-state logs |
 | `audit-20261009-ec` | Supplied ISO/EC extraction, hashes, ARC processor/build, Ghidra project/results, independent GNU code/table checks and publication review |
 | `audit-20261009-mx150` | Saved exact RM/X projects, corrected voltage dispatch/clamp, VBIOS/EC policy and primary-source hashes; later approved getter/file/X-session captures |
+| `audit-20261009-mx150-upgrade` | Exact 610/615 packages, saved selected 615 project, cross-branch table/relocation/disassembly checks, authored analysis scripts and source/manual snapshots |
+| `audit-20261010-preservation` | Checksum-verified snapshot of three saved Ghidra projects, pinned ARC processor and selected source/results from the nine original audit directories; same-workstation storage, not a full raw-artifact or independent backup |
 
 The publication boundary excludes proprietary DLLs, full firmware images,
 complete proprietary decompiler output, keys, laptop identities and biometric
 material. Private artifact paths document where evidence was retained; they are
 not downloadable repository assets.
+
+The [preservation report](14-unrecovered-scope-and-preservation.md) explains the
+`.gpr`/`.rep` requirements, archive selection, remaining identity gaps and
+version-specific reuse contract. Its [inventory](15-analysis-preservation.json)
+records the archive digest and member-verification scope. New public
+[static readers](../../tools/re-audit/static-analysis/README.md) preserve authored
+EC initialization and NVIDIA table analysis without hardcoded private input paths.
 
 ## Validation results and what they mean
 
@@ -85,7 +94,7 @@ These counts overlap where stated and should not be added into one score.
 | Later GPU policy fixes | **12 new fixtures passed**, existing **5 wrapper fixtures** and NVML checks passed; warning-free `-Werror` build | Hardware-free fixtures; separate evening record subsequently reports deployment. |
 | Later QEMU verdict fix | **6 fixtures passed** | Failure/unknown-selector exit contract checked without starting QEMU; no new firmware boot-policy result. |
 | EC static continuation | Independent ARC vector/INI3/table/branch agreement | Original static result; separate evening record reports two S4 lid wakes. Full retained baseline and rollback remain open. |
-| Later MX150 source checks | Query ABI, file diagnostic, hook lifecycle, actual AML/DSDT and actual-source ROM/CBFS sanitizer fixtures | Final combined count and limits are in the [work log](00-work-log.md#8-mx150-voltage-closed-driver-and-ec-protection-continuation); no replacement hook/firmware deployment. |
+| Later MX150 source checks | Query ABI, file diagnostic, hook lifecycle, actual AML/DSDT and actual-source ROM/CBFS sanitizer fixtures | Final combined count/limits are in the [work log](00-work-log.md#8-mx150-voltage-closed-driver-and-ec-protection-continuation). No deployment in the original source pass; separate October 10 record later installs hook/diagnostic, firmware remains unflashed. |
 | Approved MX150 queries | Frequency getters accepted, power usage/current limit unsupported, existing X lacks NV-CONTROL; D3cold before/after | Query-only scope explicitly approved; no tuning/EC/sleep/flash. |
 
 Desktop-file validation, shell syntax, local wiki links and whitespace checks
@@ -107,11 +116,11 @@ running it; the RTD3 script reloads NVIDIA and is not a passive inventory tool.
 The original audit established no recognition-accuracy, real sleep, dock,
 battery-transition or battery-runtime result. The separate evening record later
 adds idle-GPU S3/S4 and two owner-operated lid wakes, not live GPU allocations.
-The running Bitwarden
-instance retained NVIDIA handles at the earlier deployment check despite the new next-launch Intel override.
-Measure its ordinary relaunch separately before claiming improved idle behavior.
-The later approved getter pass observed D3cold; it did not stop/relaunch that app
-or establish a battery saving.
+The running Bitwarden instance retained NVIDIA handles at the earlier deployment
+check despite the new next-launch Intel override. The evening run later corrected
+the actual `bw-screen` session/restart route and reports D3cold with Bitwarden open.
+The approved getter pass also observed D3cold; it did not stop/relaunch that app.
+Broader application coverage and measured battery savings remain open.
 The [cross-stack review](../../docs/wiki/cross-stack-review.md) prioritizes mocked
 failure tests and reviewed fixes for boot trust, NVMe recovery and sleep ordering
 before further hardware experiments. The UCSI reconstruction still needs a

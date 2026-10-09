@@ -19,7 +19,7 @@ mistaken for broken drivers.
 | Security choice | CPU mitigations disabled | Live vulnerabilities explicitly report vulnerable states | Compare a recoverable boot profile with mitigations enabled |
 | Security choice | Thunderbolt domain has automatic connection and identity DMA mapping | Live NHI group13 `identity`, domain `none`, advertised protection0 | Test translated/strict host DMA with dock and VM coverage |
 | Feature gap | UCSI connector control/notifications absent | Live-matching kernel disables TYPEC; coreboot omits the recovered bridge | Implement serialized transport plus ACPI notifications; options alone are insufficient |
-| Fixed 2026-10-09 | Lid did not wake S4 hibernation | EC decode found the retained flag behind EC byte `0x01` bit 6; the `03-lid-wake-s4` hook sets it before each hibernate; owner-tested twice (wake by the EC's PWRBTN# pulse, no RTC) | Nothing further; no firmware change needed. Since 2026-10-10 the post phase clears the bit whenever the pre phase set it (the opt-out file only stops arming). The flag's initial value cannot be read from the host; the hook clears it regardless |
+| Fixed in two reported cycles | Lid did not wake S4 hibernation | EC decode found the retained flag behind EC byte `0x01` bit 6; the `03-lid-wake-s4` hook sets it before each hibernate; owner-tested twice (wake by the EC's PWRBTN# pulse, no RTC) | Basic S4 wake works without flashing. Since October 10 the opt-out file only stops arming and post clears the bit once armed. Host shadow cannot recover original retained state; broader baseline/rollback/S5 and cancellation validation remain open |
 
 ## 1. The TPM boot path needs a stricter root boundary
 
@@ -185,8 +185,9 @@ established here.
 The [separate evening record](../notes/2026-10-09-evening.md) supplies the later
 deployment status; it does not turn this original review into a live flash or
 QEMU test. The [MX150 firmware follow-up](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md)
-also adds source-only patch0029 for runtime power-good failure and the not-deployed
-NVIDIA hook exit-status correction. Firmware patches0029–0031 remain offline
+also adds source-only patch0029 for runtime power-good failure and the NVIDIA
+hook exit-status correction, subsequently deployed in the October 10 run.
+Firmware patches0029–0031 remain unflashed
 proposals rather than flashed fixes.
 
 The setuid GPU helper uses an exact command whitelist, fixed `execve` arguments

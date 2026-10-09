@@ -33,11 +33,11 @@ The observed site-hook SHA-256 is
 mode 0755. Its comments describe package exclusion, but current package-update
 enforcement/default owner precedence was not newly proved by these queries.
 The separate evening record identifies elogind 257 and the package-exclusion fix;
-the merged repository now contains that configuration. The hook still hides
+the merged repository now contains that configuration. That observed hook revision hid
 helper failure behind logging/exit 0 and logs `$?` after logical negation on the
 resume failure path.
 
-A source-only [replacement snapshot](../../../system/etc/elogind/system-sleep/nvidia)
+A [replacement snapshot](../../../system/etc/elogind/system-sleep/nvidia), initially source-only,
 preserves the observed action/phase dispatch and synchronous resume while saving
 the helper/timeout status before logging. It returns the real failure, restores
 the saved VT after failed resume, and prevents logger/cleanup failures from
@@ -74,9 +74,12 @@ can escape it. Hook discovery selects filenames containing `nvidia`, so arbitrar
 wrappers can be missed. Drop-in precedence/defaults, executable hook ordering,
 backing capacity, CUDA correctness and live transitions remain separate checks.
 The updated script was fed over SSH for the approved file observation; it was
-not installed. It reported 0 detected failures/unknown required observations,
+not installed during that query pass. It reported 0 detected failures/unknown required observations,
 with preservation=1, proc interface present, DPM 1 and KMS=N. This is not a passed
 sleep test; default owner behavior and VRAM/locker readiness remain unresolved.
+The separate October 10 run later installed this diagnostic alongside the
+corrected hook, as recorded in the evening notes. The query pass itself did not
+install it or authorize that later run.
 
 ## ACPI power-on timeout defect
 

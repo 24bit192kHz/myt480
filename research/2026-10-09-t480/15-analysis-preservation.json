@@ -1,0 +1,143 @@
+{
+  "schema": 2,
+  "date": "2026-10-10",
+  "repository_baseline": "8c12c987cd8c8d7b2f8b500fdfb21c5ff5d546dc",
+  "scope": "Three complete saved Ghidra project trees, pinned ARC processor, and selected small source/analysis/results from nine audit directories; not a full raw-artifact backup.",
+  "private_archive": {
+    "workstation_directory": "/home/btw/test/rea/work/audit-20261010-preservation",
+    "filename": "t480-analysis-projects-and-results-20261010-v2.tar",
+    "bytes": 860047360,
+    "sha256": "ad0bfe4d11575b12bfc6a6f9da201c9472e4814f65b51637fa8e4a7843152f27",
+    "source_members_verified": 763,
+    "embedded_manifest_verified": true,
+    "total_regular_members_verified": 764,
+    "manifest_filename": "archive-files-v2.json",
+    "manifest_sha256": "4171a326a7655b1cbad160939a765427497bd41efd47ef2da572cc7b715ff224",
+    "checksum_filename": "SHA256SUMS-v2",
+    "verification": "Every retained source member was streamed and compared with recorded source size/SHA-256; embedded manifest compared byte-for-byte. No Ghidra reopen or independent-device restore test.",
+    "independent_backup": false
+  },
+  "projects": [
+    {
+      "directory": "audit-20261009-ec",
+      "project": "ec-static",
+      "files": 9,
+      "bytes": 6063138,
+      "project_file_and_rep_present": true
+    },
+    {
+      "directory": "audit-20261009-mx150",
+      "project": "mx150-static",
+      "files": 12,
+      "bytes": 583485028,
+      "project_file_and_rep_present": true
+    },
+    {
+      "directory": "audit-20261009-mx150-upgrade",
+      "project": "mx150-upgrade-static",
+      "files": 10,
+      "bytes": 212976698,
+      "project_file_and_rep_present": true
+    }
+  ],
+  "selected_results": [
+    {
+      "directory": "audit-20261009",
+      "selected_small_files": 58,
+      "selected_bytes": 7004900
+    },
+    {
+      "directory": "audit-20261009-cross-stack",
+      "selected_small_files": 7,
+      "selected_bytes": 6396
+    },
+    {
+      "directory": "audit-20261009-ec",
+      "selected_small_files": 225,
+      "selected_bytes": 7410104
+    },
+    {
+      "directory": "audit-20261009-fingerprint",
+      "selected_small_files": 48,
+      "selected_bytes": 6927354
+    },
+    {
+      "directory": "audit-20261009-mx150",
+      "selected_small_files": 268,
+      "selected_bytes": 15917333
+    },
+    {
+      "directory": "audit-20261009-mx150-upgrade",
+      "selected_small_files": 82,
+      "selected_bytes": 12163050
+    },
+    {
+      "directory": "audit-20261009-power",
+      "selected_small_files": 4,
+      "selected_bytes": 71921
+    },
+    {
+      "directory": "audit-20261009-routing",
+      "selected_small_files": 12,
+      "selected_bytes": 25948
+    },
+    {
+      "directory": "audit-20261009-usbc",
+      "selected_small_files": 19,
+      "selected_bytes": 6284546
+    }
+  ],
+  "selection": {
+    "small_file_suffixes": [
+      ".c",
+      ".h",
+      ".json",
+      ".log",
+      ".md",
+      ".patch",
+      ".py",
+      ".sh",
+      ".txt"
+    ],
+    "max_small_file_bytes": 8388608,
+    "excluded_directory_names": [
+      ".git",
+      "ARC",
+      "__pycache__",
+      "backend-source",
+      "binutils-2.45",
+      "binutils-build",
+      "package",
+      "rust-target",
+      "target"
+    ],
+    "excluded_other_project_trees": true,
+    "explicit_full_tree_inclusions": [
+      "audit-20261009-ec/ARC"
+    ]
+  },
+  "raw_artifacts_and_toolchains": "Remain in their original private locations; are not all included in this archive or testing.",
+  "arc_processor": {
+    "directory": "audit-20261009-ec/ARC",
+    "files": 9,
+    "bytes": 184068,
+    "source_commit": "d3fbf109ada6d051750e973779170c1758622530",
+    "language": "ARCompact:LE:32:default",
+    "ghidra": "12.1.4",
+    "jdk_major": 21
+  },
+  "historical_manifest_discrepancies": [
+    {
+      "historical_manifest": "audit-20261009-mx150/evidence-sha256.json",
+      "historical_manifest_sha256": "1549ae0f9957be4d9933a4fb01b7060fce365d4c7f10ab4769acd81b138f3458",
+      "matching_entries": 136,
+      "total_entries": 137,
+      "changed_file": "closed-rm-static-notes.md",
+      "historical_expected_sha256": "a56a04d0cb15956ecfcc76a7b7950a02d8e750aa6c0d514843a7feab7393bef0",
+      "current_sha256": "ce5bd4927dc92768dcaf5d53f136838b1e6a490c79313dc0de2e8a919eea4fe2",
+      "explanation": "Later NVOC callback-offset/global-voltage-clamp correction is already recorded in12-mx150/02-closed-driver.md. Historical manifest retained; current note has a fresh archive entry."
+    }
+  ],
+  "publication_parent_revision": "fba110a9d428e97538a4c178fe20ddd8a08ca4e1",
+  "repository_baseline_note": "Archive created from the local evidence before integrating the separate deployment review; source/project member hashes bind its exact scope. Adapted public tools are preserved in Git."
+}

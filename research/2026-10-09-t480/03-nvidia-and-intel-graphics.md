@@ -2,7 +2,8 @@
 
 The subsequent [MX150 subject folder](12-mx150/README.md) extends this record
 with voltage controls, signed NV-CONTROL dispatch, selected closed RM, VBIOS,
-EC protections, CUDA/media limits and source-only power/sleep corrections.
+EC protections, CUDA/media limits and power/sleep corrections with deployment
+status recorded separately from the original source pass.
 It does not add new live undervolt, sleep, energy or performance results.
 
 ## Inspected baseline and recovered driver behavior
@@ -81,8 +82,10 @@ reproduced offline. See [sleep findings](../../docs/wiki/cross-stack-review.md#3
 
 The later approved file-only pass found a site hook with corrected hibernate
 mapping and synchronous resume, already present before this continuation's
-queries. Its error status is still hidden; a source-only correction and fourteen
-mock lifecycle fixtures are now included. No hook was installed or sleep tested.
+queries. That observed revision hid error status; a correction and fourteen
+mock lifecycle fixtures were added without deployment in that continuation.
+The separate October 10 record subsequently reports installing the corrected
+hook and diagnostic and passing one idle-GPU RTC S3 cycle.
 See [the current sleep record](12-mx150/04-sleep-and-firmware.md).
 
 The later workstation continuation fixes false success after node-wait or

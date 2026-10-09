@@ -333,3 +333,54 @@ fixes; no new hardware result is claimed. This pass changed only Markdown and
 Git publication: no T480 command, installation, tuning, EC access, sleep, reboot
 or flash occurred. Private/raw artifacts remain in their recorded evidence
 locations; derived findings, authored fixes and hashes remain published here.
+
+## 12. Coverage gaps and evidence preservation — 2026-10-10
+
+The user asked whether anything remained unrecovered and wanted the work
+preserved to avoid starting again. Independent local audits confirmed that all
+24 stored PCI functions (21 unique vendor/device pairs) and six physical USB
+devices (plus four root hubs) are represented. Inventory coverage is distinct
+from implementation reconstruction: large EC, RM/GPU, FSP/ME/microcode,
+controller/peripheral and lifecycle scopes remain open. The new
+[scope/preservation report](14-unrecovered-scope-and-preservation.md) states them
+explicitly, alongside missing identities and the historical boot/input work.
+Remaining stale desktop/sleep/lid descriptions were reconciled with the reported
+evening results, without treating those reports as new hardware tests.
+
+Two authored static readers were recovered from private analysis files and
+published with explicit input/output paths and exact version/size/SHA guards.
+The NVIDIA physical/legacy tables matched historical JSON for all three
+branches; the EC initialized-record hashes/map matched the prior decoder.
+Their provenance, adaptations, checked errors and scope are recorded in the
+[static-analysis directory](../../tools/re-audit/static-analysis/README.md).
+The authored plain-root fixture was also identified as missing from Git;
+its publication retains the successful matching-policy unseal assumption and
+adds exact-source guarding and strengthened workstation-only mocks.
+The guarded fixture reproduced the same ordering with 28 wrapped operations;
+changed-source and unreviewed-operation checks rejected execution. This is a
+source reproduction, not a new TPM/key or boot-security hardware result.
+
+A private snapshot was created under `audit-20261010-preservation`. Its final
+v2 archive retains three complete saved Ghidra project pairs, the pinned ARC
+processor and selected small source/results from nine original audit directories.
+All **763 source members plus the embedded manifest** were verified; the
+860,047,360-byte archive and its exact digest/selection are recorded in the
+[public inventory](15-analysis-preservation.json). It includes the original
+plain-root C fixture and selected reference headers omitted by the first draft
+selection. This remains same-workstation storage, not an independent backup,
+full raw-artifact archive or proven Ghidra restoration.
+
+The older MX150 137-entry manifest had one changed note; its later voltage
+correction is already public. Historical and current digests are retained rather
+than silently replacing the old manifest. Public Git contains the reusable tools,
+derived findings and archive metadata; private raw/project data remain outside it.
+No target command, EC transaction, installation, tuning, sleep, reboot or flash
+was performed during this preservation work.
+
+Before pushing, `testing` advanced through `fba110a9d428e97538a4c178fe20ddd8a08ca4e1`.
+That separate run deployed the status-corrected NVIDIA hook, diagnostic and
+lid opt-out cleanup through `syswork`, then recorded one idle-GPU RTC S3 cycle.
+It also reports independent source compilation of patches 0029–0031, unchanged
+normal uncompressed-ROM copying and no real PWRGD-abort test. The existing remote
+commit was preserved by fast-forwarding and reapplying this publication; current
+status descriptions were reconciled without repeating any target operation.

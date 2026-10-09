@@ -128,9 +128,11 @@ battery savings. NVML queries can wake the GPU and must not contaminate a passiv
 idle comparison. Undervolt claims additionally need reliable voltage readings
 at matched performance. Getter failures and placeholder caps remain explicit.
 
-All new repository diagnostics/patches are source-only. Git can restore their
-previous source; the
+The getter inventory and firmware patches remain source-only. The diagnostic
+and NVIDIA/lid hooks were subsequently installed in the separate October 10 run.
+Git restores source, not those live files; the
 [existing hash-checked deployment rollback](../09-rollback-and-next-work.md)
-applies to the earlier installed helper/thermal/routing changes. A later approved
+applies to the earlier installed helper/thermal/routing changes. Use the matching
+`hooks-1010` deployment snapshots for later installed files. Any further approved
 deployment needs fresh old-file hashes/backups and restoration checks.
 No EC/VBIOS flash, rail override, sleep or new tuning test has happened here.

@@ -16,7 +16,12 @@ The addresses/IDs below come from the repository's
 [PCI snapshot](../../hardware/lspci.txt) and
 [USB snapshot](../../hardware/lsusb.txt). They are inventory anchors, not a new
 live probe. USB bus/device numbers and PCI topology can change with attached
-hardware. Every PCI function in that snapshot is included in this table.
+hardware. The stored snapshot contains **24 PCI functions**, covering **21
+distinct vendor/device ID pairs**; the four Thunderbolt bridges share
+`8086:15c0`. Every PCI function in that snapshot is included in this table.
+The USB snapshot contains **10 entries**: four Linux root hubs and six physical
+USB devices. These counts describe the saved topology, not every optional or
+currently attached device the T480 could support.
 
 | Component / recorded PCI functions | Evidence already obtained | Remaining investigation |
 |---|---|---|
@@ -29,7 +34,7 @@ hardware. Every PCI function in that snapshot is included in this table.
 | LPC/eSPI `00:1f.0` | EC host interfaces and stock UCSI transport decode reconstructed | EC internal firmware, lid/wake handling, keyboard/battery/charger state machines |
 | PMC `00:1f.2` | Package residency and watchdog state inspected | Deep-state blockers across displays/devices and verified sleep transitions |
 | HDA `00:1f.3` | AC/battery idle policy inspected | Codec/pin routing, pops, headset detection, latency and suspend reliability |
-| SMBus `00:1f.4` | Controller and kernel support inventoried | Client topology and battery/sensor ownership; avoid competing raw transactions |
+| SMBus `00:1f.4` | Controller and kernel support inventoried; historical C12/C14 work records enabled `i801_smbus` and verified `rmi4_smbus` intertouch routing | Other client topology and battery/sensor ownership; avoid competing raw transactions |
 | Ethernet `00:1f.6` | I219-LM and existing wake policy recorded | Throughput, link power and wake/overnight discharge validation |
 | NVIDIA `01:00.0` | Prior CUDA/PRIME/RTD3; approved getters; selected RM voltage clamp/PM, VBIOS and board/EC protections; missing 610/615 GP108 physical selection/registration mapped in [MX150 research](12-mx150/README.md) | Alternative undervolt policy/calibration, remaining RM/microcode, sleep allocations, MX150 Vulkan, energy and display transitions; no working 610/615 port |
 | Wi-Fi `02:00.0` | Intel8265/8275 and source-dependent policy inspected | Firmware internals, roaming/reconnect, throughput/latency and measured power |
@@ -47,7 +52,7 @@ hardware. Every PCI function in that snapshot is included in this table.
 | Touchscreen `04f3:2398` | Present in stored inventory | HID descriptors, gesture/coordinate behavior, firmware and resume |
 | Card reader `0bda:0316` | Present in stored inventory | Removable-media integrity, power and resume |
 | USB root hubs | Controller inventory above | Port/device topology under actual docks and peripherals |
-| Keyboard, TrackPoint, touchpad and hotkeys | Coreboot EC/ACPI interfaces and kernel support available | Actual input-controller mapping, firmware/event paths and gesture/wake behavior |
+| Keyboard, TrackPoint, touchpad and hotkeys | Coreboot EC/ACPI interfaces and kernel support available; historical [input/boot work](../../docs/notes/2026-09-28-deepdive.md#evening-implementation-2026-09-28-1830-1950) verified touchpad/TrackPoint RMI4 intertouch, and [GRUB scan-code work](../../docs/notes/2026-09-28-deepdive.md#2015-hold-shiftesc-fixed-c15-live) recovered the EC set-1 mismatch | Exact input firmware/descriptor identity, remaining event/gesture/wake paths and failure/resume behavior; earlier routing fixes are not a complete input-controller reconstruction |
 | Panel/backlight | Brightness and display feature state observed | Panel capabilities, brightness/energy curve and flicker/resume |
 | Two batteries, charger, fan and lid | Source-dependent policy/fan watchdog deployed; retained lid gate recovered; evening owner record reports two S4 lid wakes | Remaining EC/pack/charger protocols, charging/transition accuracy, retained-state/cancellation cleanup and S5 separation |
 | TPM, RTC, watchdog, flash descriptor, ME and GbE data | Boot-key source and recovery mechanisms reviewed; RTC/watchdog behavior documented | Remaining TPM policy branches, ME/FSP internals, descriptor bounds and identity-preserving recovery |
@@ -64,7 +69,7 @@ architecture or undocumented pin assignments.
 | EC/stock BIOS | Selected transport/ARCompact lid gate; separate evening record reports deployed bit-6 hook and two S4 lid wakes | Remaining callbacks, full live-image identity, retained baseline/completion/cancellation/rollback, S5 separation, EC_WAKE output and other EC policies |
 | Built-in early init/TPM | Actual-source trust-boundary fixture, config and migration policy review | Reviewed fix and negative fixtures before signed-kernel replacement |
 | Kernel/security | Live-matching config, command line, module and DMA/mitigation choices distinguished | Separate diagnostic/hardened profile, measured cost, driver internals and confinement tests |
-| GPU/thermal helpers | Evening record reports GPU lock/error and thermal source/bounds guard deployment; new getter/diagnostic/hook status and PWRGD/ROM corrections checked offline | New source correction deployment, broader policy bounds and live-allocation/failure transitions |
+| GPU/thermal helpers | Evening record reports GPU lock/error and thermal source/bounds guard deployment; October 10 installs diagnostic/hook status and lid cleanup; getter and PWRGD/ROM corrections checked offline | Unflashed firmware proposals, broader policy bounds and live-allocation/failure transitions |
 | s6/elogind/power services | Selected service, watchdog, locker and NVIDIA sleep paths inspected | Coherent checked sleep transaction and full startup/failure dependency coverage |
 | Desktop/applications | Intel helper/desktop override and actual `bw-screen` session/restart route installed; evening record reports D3cold with Bitwarden open | Broader GPU holders, compositor/input/audio interactions and matched workload energy |
 | Network/storage/userspace | Targeted inventory and read-only diagnostics | Network services, package/update integrity, filesystem recovery and application-level performance |
