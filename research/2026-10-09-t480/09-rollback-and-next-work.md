@@ -42,7 +42,10 @@ The measurement/SMART tools are read-only and the UCSI model is offline; they
 need no hardware-policy restoration. The Rust fingerprint change is source-only,
 with the live libfprint backend retained. Its preceding source is available in
 Git history. The later cross-stack assessment and this publication are research
-and documentation changes.
+and documentation changes. The later GPU policy and QEMU verdict fixes are
+source-only; no laptop rollback is needed for them. Revert their commit before
+building to restore the preceding source. Installed executables are not replaced
+by a Git checkout.
 
 ## What to address next
 
@@ -51,12 +54,12 @@ and documentation changes.
 | 1 | Require expected encrypted root before production-secret unseal; separate provisioning | Actual-source fixtures for plain/wrong/missing headers, valid encrypted root, passphrase and hibernation; then a recoverable signed-kernel test |
 | 2 | Repair GRUB NVMe status checking and timeout/queue recovery | Inject full status, queue-full, late completion and timeout cases; verify controller quiescence and buffer lifetime before cold boots |
 | 3 | Make sleep hooks a checked sequence | Mock suspend/hibernate/failure mapping, synchronous NVIDIA resume, session-lock readiness, TCO disarm/rearm and supported elogind cancellation/recovery |
-| 4 | Make firmware checkers and wrappers truthful | Exact extracted config/key/auth checks; nonzero failed-test/flash status; bounded malformed option-ROM fixtures; preserve recovery and reseal policy |
-| 5 | Close policy-helper failure gaps | GPU node/unload failure and users-lock fixtures; conservative thermal AC-detection and full numeric validation |
+| 4 | Make firmware checkers and wrappers truthful | QEMU verdict exit/selector contract is now fixed offline; exact config/key/auth, flash status and malformed option-ROM checks remain |
+| 5 | Close policy-helper failure gaps | GPU node/unload status and users-lock fixes passed twelve offline fixtures, deployment pending; conservative thermal AC-detection and numeric validation remain |
 | 6 | Restore native UCSI connector control | Serialized bounded EC transport, recovered packet ordering, ACPI notifications and a compatible kernel; validate on recoverable hardware without assuming the model proves it |
 | 7 | Compare a tracing/security kernel profile | Mitigations, translated host DMA, supported signatures/confinement; compare workload cost and dock/VM behavior while retaining the tuned profile |
 | 8 | Measure practical performance and energy | App restart/holders, controlled battery discharge, fixed completed jobs, display/dock/radio consistency and real sleep/resume |
-| 9 | Continue fingerprint and wake research | Selected-backend cancellation/resume traces without biometric publication; phase deadlines/drain limits; lid-S4 EC/SMM behavior |
+| 9 | Continue fingerprint and wake research | Selected-backend cancellation/resume without biometric publication; lid gate now traced in supplied EC, with host route/rollback eligibility checks and approval required before testing |
 
 The first three entries address concrete trust/reliability findings; later tuning
 depends on measured constraints. Full rationale and evidence are in the

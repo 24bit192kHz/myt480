@@ -22,7 +22,7 @@ repository.
 | 0010 | soc/intel/skylake: the GbE ACPI device (Wake-on-LAN in /proc/acpi/wakeup) |
 | 0011 | soc/intel/skylake: FSP gets the board's subsystem IDs (Kconfig, else the devicetree) |
 | 0012 | T480: sets `no_wireless_switch` |
-| 0013 | T480: the lid wakes from S4 |
+| 0013 | T480: declare lid wake as S4-capable in ACPI; actual S4 lid wake remains unimplemented |
 | 0014 | T480: GMM device 00:08.0 on |
 | 0015 | T480: subsystem IDs 17aa:225d in the override tree |
 

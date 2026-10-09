@@ -74,11 +74,13 @@ mapping and synchronous resume need mocked coverage before real sleep with GPU
 allocations. The vendor VT helper can lose a failed `chvt` status; this was
 reproduced offline. See [sleep findings](../../docs/wiki/cross-stack-review.md#3-make-sleep-one-coherent-checked-operation).
 
-The setuid policy helper still has paths reporting success after node-wait or
-unload failure. Manual `off` bypasses the shared wrapper lock, creating a launch
-race candidate; it was not reproduced live. Exact whitelisted commands, fixed
-arguments/environment and root-controlled paths were inspected without finding
-an injection exploit. Add failure/lock fixtures before changing these paths.
+The later workstation continuation fixes false success after node-wait or
+automatic unload failure, and guards manual `off` with the users lock before
+unloading. Twelve fake-device/modprobe/lock tests passed, including a held launch
+lock before device open. These fixes are source-only; the installed helper still
+uses the earlier deployed version. Exact whitelisted commands, fixed arguments/
+environment and root-controlled paths were inspected without finding an
+injection exploit. See the [NVIDIA update](../../docs/wiki/nvidia.md#later-source-only-policy-fixes).
 
 Real suspend/hibernate, battery transitions, MX150 Vulkan and external-display
 coverage remain open. Measure the relaunched application/device state and battery

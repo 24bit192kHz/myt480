@@ -51,6 +51,16 @@ T=[("S1 corrupted sig no key","disk-badsig.img",[],["Failed to boot both default
    ("S11 menu shell c wrong password","disk.img",[esc,(MENU,["sendkey c"]),(ASK,keys("btw\n")),("Enter password",keys("wrong\n"))],[ASK],[BOOT,"grub>"]),
    ("S12 menu corrupted sig t","disk-badsig.img",[esc,(MENU,["sendkey t"])],["signature."],[BOOT]),
    ("S13 menu tampered kernel t","disk-tamper.img",[esc,(MENU,["sendkey t"])],["signature."],[BOOT])]
-sel=sys.argv[1:]
-fails=[t[0] for t in T if (not sel or t[0].split()[0] in sel) and not run(*t)]
-print("ALL PASS" if not fails else "FAILURES: "+", ".join(fails))
+def main(argv=None):
+    sel = sys.argv[1:] if argv is None else argv
+    unknown = sorted(set(sel) - {t[0].split()[0] for t in T})
+    if unknown:
+        print("Unknown scenario(s): " + ", ".join(unknown), file=sys.stderr)
+        return 2
+    fails = [t[0] for t in T if (not sel or t[0].split()[0] in sel) and not run(*t)]
+    print("ALL PASS" if not fails else "FAILURES: " + ", ".join(fails))
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

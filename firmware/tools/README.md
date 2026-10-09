@@ -18,4 +18,4 @@
 | `bootmeasure.sh LABEL` | one line per boot: firmware time, GRUB kernel load, power-on to chadwm, PCR 2 |
 | `idlepower.py LABEL [s]` | idle power of the current state: battery draw, RAPL, package C-states, GPU and root port power state |
 | `speedgate.sh` | raw partition against LUKS2/dm-crypt with `fio`, interleaved; it was run on the swap partition before the disk was encrypted |
-| `qtest52.py` | QEMU scenarios for the GRUB boot policy: bad, missing and tampered signatures, password prompts |
+| `qtest52.py` | QEMU scenarios for the GRUB boot policy: bad, missing and tampered signatures, password prompts; exits1 on a failed scenario and2 on an unknown selector |

@@ -100,8 +100,8 @@ flashprog -p internal -r backup.rom
 flashprog -p internal --fmap-file build/coreboot.rom -i FMAP -i RW_SPD_CACHE -i COREBOOT -w build/coreboot.rom
 ```
 
-A boot that hangs: hold the power button for 4 s. That clears the dGPU request and
-asks GRUB for its menu on the next boot.
+A boot that hangs: hold the power button for 4 s. C55 skips the MX150 for one boot,
+preserves the stored GPU choice, and asks GRUB for its menu on the next boot.
 
 ### 3. System
 

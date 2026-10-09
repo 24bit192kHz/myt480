@@ -92,11 +92,27 @@ and any battery improvement remain to be measured.
 MX150 Vulkan, docks, real suspend/hibernate, and battery transitions were not
 tested in this session. Retest after driver or firmware updates.
 
+## Later source-only policy fixes
+
+The workstation continuation fixes three further paths in `gpu-power.c`:
+driver load fails if the NVIDIA device node never appears; automatic policy
+returns the unload result; and manual `off` takes the users lock exclusively
+without waiting before unloading. A held `prime-run` lock now refuses manual
+unload with exit 3, including the interval before the launcher opens the device.
+The manual off request is retained and can take effect when the program ends.
+The nonblocking check avoids waiting for a launcher that needs the policy lock.
+
+Twelve fake-device/modprobe/lock fixtures passed, along with the existing five
+wrapper fixtures, NVML checks and a warning-free source build. These new fixes
+are **source-only**: the installed helper has not been replaced in this
+continuation. Existing live RTD3 results above apply to the preceding deployment.
+
 Local checks and repeatable hardware test:
 
 ```sh
 python3 src/gpu-power/tests/prime-run.py
 python3 src/gpu-power/tests/tune.py
+python3 src/gpu-power/tests/policy.py
 # On this T480, on AC, with no GPU applications:
 sudo sh tools/re-audit/test-rtd3.sh
 ```

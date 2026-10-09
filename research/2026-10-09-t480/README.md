@@ -21,6 +21,8 @@ starting at baseline `d89f79d`, followed by this organized publication. Read the
 | Storage and other hardware | [NVMe health, display, peripherals, and remaining checks](07-storage-and-other-hardware.md) |
 | Tools and evidence | [REA/Ghidra workflow, validation record, and evidence limits](08-tools-evidence-and-validation.md) |
 | Recovery and next work | [Verified rollback paths and prioritized remaining fixes](09-rollback-and-next-work.md) |
+| EC and lid wake | [Supplied EC image, ARCompact decoding and selected wake paths](10-ec-firmware-and-lid-wake.md) |
+| Whole-machine coverage | [Every recorded PCI function, other hardware and feature roadmap](11-coverage-and-feature-roadmap.md) |
 
 ## What improved
 
@@ -35,6 +37,15 @@ The continuation also added passive power/SMART tools, an offline UCSI model,
 and a source-only fingerprint cancellation fix. The later cross-stack review
 identified remaining early-init, bootloader, sleep, and build-check defects;
 those findings are documented and are not presented as completed fixes.
+The workstation continuation also fixes GPU node/unload error reporting and
+manual-off locking, plus the QEMU scenario runner's failure/selector exit status.
+Twelve GPU policy and six runner-verdict fixtures passed; those fixes remain
+source-only.
+
+The EC continuation uses the supplied Lenovo ISO for static Ghidra MCP and
+independent GNU analysis. It identifies a retained lid gate and conditional
+power-button path while keeping
+the requested hardware-test approval boundary. Lid wake from S4 is not restored.
 
 ## Reading the evidence
 

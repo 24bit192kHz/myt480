@@ -128,6 +128,57 @@ before this work-log/link update. The original `re-audit-20261009` branch and
 the public equivalents; no remote history was rewritten and email protection
 was retained.
 
+## 6. Supplied EC image and whole-machine coverage
+
+Extracted the supplied `N24UR36W` ISO's full El Torito disk image and the two
+identical FL2 copies. Hashed the ISO, container and payload; version `N24HT37W`
+is present. Used the explicitly requested Ghidra MCP with a pinned local ARC
+processor contribution, then independently checked selected instructions and
+tables with a private GNU Binutils 2.45 ARC build. The payload is little-endian
+ARCompact, not an H8 CPU merely because the compatibility driver has that name.
+
+The [EC report](10-ec-firmware-and-lid-wake.md) records physical lid/PWRBTN#/wake
+signals, VCI configuration, the power-button sequencer and a conditional deep-state
+lid-open request. Ordinary channel-0 commands reach a host-bit setter:
+EC byte `0x01`, bit 6 (`BTPC`) controls a retained flag at `0xf0cd08` bit 0.
+The flag gates VCI lid detection and the lid request, while other power-policy
+predicates still control the eventual pulse. This is a reviewable `_PTS(4)`
+candidate, not a demonstrated S4 wake fix.
+
+Independent review caught and corrected two important interpretation hazards:
+vendor channel-1 command semantics alone did not prove ordinary ACPI access;
+the separate channel-0 handler/BAR trace does. Host byte `0x01` reads a resettable
+shadow, not the retained flag, so saving that bit alone does not prove reversible
+restoration. S4/S5 separation and active complete-image identity remain open.
+The supplied earlier SMM/GPE/HWLO experiment results were retained without repeats.
+
+The [coverage ledger](11-coverage-and-feature-roadmap.md) accounts for all 24 PCI
+functions in the stored inventory, recorded USB devices, other hardware and
+software layers. Each entry distinguishes evidence already obtained from open
+work; inventory is not called complete reverse engineering. It links useful
+feature opportunities to their remaining implementation/validation requirements.
+
+The private Ghidra project/results were saved; its temporary server stopped and
+processor link removed. **No T480 command, EC transaction or hardware test was
+performed in this continuation.** The user's read-only and ask-before-test rules
+remain in force. Public changes contain derived findings, not raw firmware dumps.
+
+## 7. Additional source-only reliability fixes
+
+| Change | Offline validation | Deployment |
+|---|---|---|
+| GPU load fails when its node never appears; automatic policy propagates unload failure | Fake sysfs/modprobe fixtures and warning-free `-Werror` build | Not installed on the T480 |
+| Manual GPU off checks the users lock before unloading, refusing a starting/active wrapper without a blocking lock inversion | Real advisory-lock fixtures cover the launch interval before device open and later policy application | Not installed on the T480 |
+| QEMU scenario runner returns1 on failure and2 on unknown selectors | Six verdict/entrypoint fixtures, without starting a VM | Source-only; no firmware build/flash |
+
+The GPU suite passed **12 new policy fixtures**, the existing **5 wrapper
+fixtures**, and the NVML checks. The firmware-runner suite passed **6 new
+fixtures**. These 18 new tests are separate from the earlier 79-test continuation;
+they are not new hardware, QEMU boot or battery results. The installed GPU helper
+still has the preceding deployed version. Git history provides source rollback.
+Updated the wiki and corrected the old missing-SMM lid attribution and forced
+power-off GPU-choice description. All continuation work is published on `testing`.
+
 ## Final recorded state and preserved boundaries
 
 The thermal daemon, GPU helper/wrapper, coarse RTD3 configuration, Intel helper

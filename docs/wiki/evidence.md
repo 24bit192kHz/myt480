@@ -103,7 +103,9 @@ cc -O2 -Wall -Wextra -Wno-missing-field-initializers \
 cc -O2 -Wall -Wextra -std=c99 src/gpu-power/gpu-power.c -o /tmp/test-gpu-power
 python3 src/gpu-power/tests/prime-run.py
 python3 src/gpu-power/tests/tune.py
+python3 src/gpu-power/tests/policy.py
 python3 src/gpu-power/tests/igpu-run.py
+python3 -m unittest discover -s firmware/tools/tests -v
 python3 -m unittest discover -s tools/re-audit/tests -v
 python3 firmware/tools/ucsi-model.py --self-test
 # Hardware-free Rust tests; run inside src/validity-rs:
@@ -145,3 +147,17 @@ the exact reviewed `nvme.mod` occurs at ELF offset143708, SHA256
 `541e4ab0b0be8106ebbbac5a901414cfb0d6e498569286a66627f101d1e3eeee`.
 This binds the latent NVMe findings to the archived build. A fresh live SPI dump,
 controller timeout, flash, hibernation or key-release experiment was not performed.
+
+## EC and source-only continuation
+
+The [EC research](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md)
+records exact ISO/FL2/payload hashes, ARCompact import settings, independent GNU
+checks, retained lid flag and conditional power-button path. Private artifacts
+are under `/home/btw/test/rea/work/audit-20261009-ec`. These are static findings;
+no T480 command or EC transaction was performed in that continuation.
+
+Later GPU node/unload/launch-lock fixes passed twelve policy fixtures and the
+existing five wrapper fixtures, NVML checks and warning-free build. The QEMU
+scenario runner's exit/selector fix passed six verdict fixtures without a VM.
+Both fixes are source-only; they do not change the earlier deployed binary or
+establish another live wake/sleep result.

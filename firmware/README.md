@@ -31,7 +31,8 @@ the next boot trains the memory again for about 14 s.
 ## When a boot hangs
 
 Hold the power button for 4 s, then power on. coreboot sees the forced power-off,
-clears the dGPU request and asks GRUB to show its menu. If that does not help, write
+skips the MX150 for one boot while preserving the stored GPU choice, and asks
+GRUB to show its menu. If that does not help, write
 your last good image, or the dump of the stock firmware, with the external programmer.
 
 The kernel command line has `panic=10`: after a kernel panic the machine restarts. A hang

@@ -315,6 +315,10 @@ static int on(int quiet)
 	/* udev creates the device nodes */
 	for (i = 0; i < 60 && !exists(NVIDIA_DEVICE); i++)
 		nanosleep(&ts, NULL);
+	if (!exists(NVIDIA_DEVICE)) {
+		fputs("gpu-power: NVIDIA device node did not appear\n", stderr);
+		return 1;
+	}
 	tune(quiet);
 	if (rtd3)
 		allow_runtime_pm();
@@ -341,6 +345,8 @@ static int off(int quiet)
    under a running program (prime-run holds USERS shared). */
 static int apply(int users_fd, int retune)
 {
+	int rc;
+
 	if (!gpu_present())
 		return 0;
 	if (!strcmp(wanted(), "on")) {
@@ -357,9 +363,29 @@ static int apply(int users_fd, int retune)
 		}
 		return 1;
 	}
-	off(1);
+	rc = off(1);
 	flock(users_fd, LOCK_UN);
-	return 0;
+	return rc;
+}
+
+/* A launcher takes USERS before loading the driver/opening its device. Checking
+   modprobe alone leaves that interval unprotected. Never wait for USERS while
+   holding the policy lock: the launcher needs that lock to finish starting. */
+static int manual_off(int users_fd)
+{
+	int rc;
+
+	if (flock(users_fd, LOCK_EX | LOCK_NB)) {
+		if (errno == EWOULDBLOCK) {
+			fputs("gpu-power: a prime-run program is using or starting the GPU, left on\n", stderr);
+			return 3;
+		}
+		perror("gpu-power: users lock");
+		return 1;
+	}
+	rc = off(0);
+	flock(users_fd, LOCK_UN);
+	return rc;
 }
 
 int main(int argc, char **argv)
@@ -398,7 +424,7 @@ int main(int argc, char **argv)
 		rc = on(0);
 	} else if (!strcmp(argv[1], "off")) {
 		set_manual("off");
-		rc = off(0);
+		rc = manual_off(users);
 	} else if (!strcmp(argv[1], "auto")) {
 		set_manual(NULL);
 		rc = apply(users, 1);

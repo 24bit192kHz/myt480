@@ -51,16 +51,17 @@ records the cumulative source and recovery requirements.
 
 ## Make the build and flash gates truthful
 
-| Current weakness | Reversible next step before use |
+| Finding | Current status / next step before use |
 |---|---|
 | [Debug defconfig](../../firmware/coreboot/site-local/t480-debug.defconfig) selects older GRUB branch `t480`, omits production PGP modules and measured boot, although described as the same image with logging | Derive it from [production](../../firmware/coreboot/site-local/t480.defconfig) and compare boot policy offline |
 | [romcheck.sh](../../firmware/tools/romcheck.sh) accepts matching UUID text without verifying actual config/key/auth contents | Compare explicit extracted artifacts; a deliberately stale fixture already returned `OK` |
 | [Option-ROM patch](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines 80–81, can choose a header length beyond its CBFS bound | Reject oversized copies and test truncated ROMs; the current VBIOS fits and did not trigger this defect |
-| [qtest52.py](../../firmware/tools/qtest52.py) reports failures but exits 0 | Return nonzero; the failing-stub fixture reproduced the problem |
+| [qtest52.py](../../firmware/tools/qtest52.py) reported failures but exited 0 | Fixed source-only: failed scenarios exit1, unknown selectors exit2; six offline verdict fixtures passed, no new QEMU boot validation |
 | [Cold](../../firmware/tools/flashrom.sh) and [warm](../../firmware/tools/flashrom-warm.sh) flash wrappers finish failed-verification branches successfully | Propagate failure and resolve any pending migration blob; no flash was run |
 
-The first publication-ready deliverable is the evidence and a repair plan, not a
-new ROM. Preserve the known working image and passphrase recovery while testing
+The continuation fixes the scenario runner's verdict contract; the other gates
+still need repairs. No new ROM was prepared. Preserve the known working image
+and passphrase recovery while testing
 changes offline, then validate a candidate through the ordinary recovery workflow.
 Archived ROM/module hashes, harness assumptions and private evidence locations
 are in [evidence](../../docs/wiki/evidence.md#cross-stack-assessment). No proprietary

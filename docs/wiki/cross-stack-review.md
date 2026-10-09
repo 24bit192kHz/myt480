@@ -155,10 +155,10 @@ established here.
 | Debug firmware | Stored debug defconfig selects older GRUB branch and omits production PGP modules/measured boot | Derive it from production and check equivalent boot policy before use |
 | Pre-flash checker | [`romcheck.sh`](../../firmware/tools/romcheck.sh) accepts matching UUID text without checking actual config/key/auth | Stale/missing-policy fixture returned OK; compare exact extracted artifacts |
 | Option ROM | [`coreboot patch0013`](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines80–81, can select a copy length exceeding CBFS file size | Malformed-input defect; current VBIOS fits. Reject oversized lengths and test truncated images |
-| Firmware tests | [`qtest52.py`](../../firmware/tools/qtest52.py) prints failures but exits0 | Failing-stub fixture reproduced; return nonzero on failure |
+| Firmware tests | [`qtest52.py`](../../firmware/tools/qtest52.py) printed failures but exited0 | Later source fix returns1 for scenario failures and2 for unknown selectors; six hardware-free verdict fixtures passed, no new QEMU boot run |
 | Flash wrappers | [`flashrom.sh`](../../firmware/tools/flashrom.sh) and [`flashrom-warm.sh`](../../firmware/tools/flashrom-warm.sh) end failed verification branches successfully | Propagate failure and resolve the open migration blob; no flash was run |
-| GPU policy | [`gpu-power.c`](../../src/gpu-power/gpu-power.c), lines316–321/360–362, can report success after missing node or failed unload | Return truthful failure; add injected failure fixtures |
-| GPU launch race | Manual `off` bypasses the wrapper's shared users lock | Respect the lock; candidate race before wrapper device-open, not reproduced live |
+| GPU policy | [`gpu-power.c`](../../src/gpu-power/gpu-power.c) reported success after missing node or failed automatic unload | Later source fix returns failure; twelve fake-device/modprobe/lock fixtures passed, not deployed |
+| GPU launch race | Manual `off` bypassed the wrapper's shared users lock | Later source fix refuses unload while the launch/job lock is held; hardware-free launch-window fixture passed, not deployed |
 | Thermal failure path | [`thermald.c`](../../src/thermald-t480/thermald.c), line320, defaults to AC on detection failure; numeric config lacks complete bounds | Retain last valid source/default conservatively; reject invalid values before hardware writes |
 | Reference consistency | Kernel README omitted enabled VFIO/IOMMU; package description advertises disabled AutoFDO/Propeller | README corrected in this review; use final config for feature claims |
 

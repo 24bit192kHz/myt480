@@ -22,6 +22,8 @@ links the subject reports.
 | REA NVIDIA native workflow | Timed out after 330 seconds on the 143,576,728-byte `nvidia.ko`. |
 | [bethington/ghidra-mcp](https://github.com/bethington/ghidra-mcp) fallback | Built dev version 7.0.0 at checkout `9cc29c0f1efb6c63a7d6898c9a23aff39397f992` with its Gradle wrapper. A localhost headless server, 8 GiB heap, imported without auto-analysis and served targeted function requests. Full auto-analysis subsequently completed. |
 | [awesome-reverse-engineering](https://github.com/alphaSeclab/awesome-reverse-engineering) | Inspected as a tool index. Ghidra, ELF symbols/objdump, UEFI extraction, `iasl` and `innoextract` were useful; every linked tool was not installed or evaluated. |
+| Later EC Ghidra MCP continuation | Supplied N24HT37W imported with a locally built, pinned ARC processor contribution; selected vectors, host/cache tables, lid callbacks and power-button sequence analyzed. |
+| GNU Binutils 2.45 ARC decoder | Private workstation build independently corroborated vectors, conditional instructions, INI3 initialization, dispatch tables and selected wake paths. |
 
 The fallback recovered 61,109 symbol-backed NVIDIA functions. This count is not
 61,109 independently verified implementations. ELF relocation warnings, including
@@ -56,6 +58,7 @@ Private evidence remains outside the repository under
 | `audit-20261009-power` | Identity-free 20-second AC capture/report and manifest |
 | `audit-20261009-routing` | GLX/EGL/Vulkan, SMART, routing rollback/reapply and final checks |
 | `audit-20261009-cross-stack` | Mocked early-init harness, NVMe vectors, firmware checker fixtures and selected live-state logs |
+| `audit-20261009-ec` | Supplied ISO/EC extraction, hashes, ARC processor/build, Ghidra project/results, independent GNU code/table checks and publication review |
 
 The publication boundary excludes proprietary DLLs, full firmware images,
 complete proprietary decompiler output, keys, laptop identities and biometric
@@ -78,6 +81,9 @@ These counts overlap where stated and should not be added into one score.
 | Live GPU checks | **5 cold-wake rounds** passed CUDA `vectorAdd`/`scan`, held-job offsets and idle D3cold; PRIME OpenGL passed; no new Xid found | Confirms this firmware/driver/GPU combination. Wrapper-plus-job times **1.249–1.277 seconds** are not isolated hardware wake latencies. |
 | Power observation | **21 snapshots**, **19.995 seconds**, CPU package **63.678 J / 3.185 W** on AC | CPU-package observation only; system discharge was correctly unavailable. No whole-laptop watts or battery-runtime gain claimed. |
 | Cross-stack fixtures | Early-init ordering, NVMe status/queue vectors and failing firmware-checker cases reproduced offline | Early-init assumes successful matching-policy unseal and mocks hardware; no live TPM exploit, controller timeout or flash was performed. |
+| Later GPU policy fixes | **12 new fixtures passed**, existing **5 wrapper fixtures** and NVML checks passed; warning-free `-Werror` build | Fake sysfs/modprobe and real users locks; source-only, no laptop deployment or NVIDIA hardware access. |
+| Later QEMU verdict fix | **6 fixtures passed** | Failure/unknown-selector exit contract checked without starting QEMU; no new firmware boot-policy result. |
+| EC static continuation | Independent ARC vector/INI3/table/branch agreement | Selected firmware paths recovered; live flag state, rollback and successful S4 wake remain unverified. |
 
 Desktop-file validation, shell syntax, local wiki links and whitespace checks
 passed in the recorded continuation. Original hash restoration and post-restoration

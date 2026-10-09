@@ -15,6 +15,11 @@ Start with [getting the most out of this T480](getting-the-most.md) for daily
 profiles, GPU selection, repeatable measurements and recovery.
 The [cross-stack review](cross-stack-review.md) ranks remaining boot-trust,
 firmware, kernel and sleep-path defects with evidence and next validation steps.
+The [EC continuation](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md)
+records the supplied firmware's architecture and selected lid/wake traces.
+The [coverage ledger](../../research/2026-10-09-t480/11-coverage-and-feature-roadmap.md)
+accounts for every recorded PCI function and distinguishes analyzed paths from
+remaining hardware and feature work.
 
 | Area | Result | Status |
 |---|---|---|

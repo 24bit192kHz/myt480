@@ -4,6 +4,8 @@
 firmware, kernel, NVIDIA/Intel graphics, thermal/power, USB-C/Thunderbolt,
 fingerprint, storage and other hardware. Includes the complete work log, tools,
 validation, reversible deployments and remaining priorities. Published on `testing`.
+The continuation includes static EC/lid-wake analysis and a whole-machine
+coverage ledger; no EC hardware test or deployment is implied.
 
 The [improvement wiki](../docs/wiki/README.md) contains the detailed technical
 findings and the [daily-use guide](../docs/wiki/getting-the-most.md).
