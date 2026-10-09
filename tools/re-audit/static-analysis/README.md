@@ -80,10 +80,13 @@ reader-reproduction checks, with no new hardware or firmware behavior test.
 [`plain-root-harness.c`](plain-root-harness.c) includes the exact reviewed
 [`kernel/early-init/init.c`](../../../kernel/early-init/init.c) through a relative
 path. It supplies plain root/swap headers and a synthetic sealed-key blob, then
-assumes a successful matching-policy TPM unseal. It demonstrates the existing
-source ordering: the master-key load precedes mounting a plain root and handing
-control to that root's init. It does not test TPM cryptography, extract any key,
-mount a partition, execute a root init or demonstrate a physical exploit.
+assumes a successful matching-policy TPM unseal. It runs the source twice: with
+the production command line the master key must stay sealed while the plain root
+is still mounted and its init executed (the fix of 2026-10-10); with
+`T480_FIXTURE_PROVISION` set the command line carries `t480.provision` and the
+master load precedes the plain-root mount, as the conversion's check boot needs.
+It does not test TPM cryptography, extract any key, mount a partition, execute a
+root init or demonstrate a physical exploit.
 
 Run only through the guarded runner:
 
@@ -94,8 +97,8 @@ sh tools/re-audit/static-analysis/run-plain-root-fixture.sh
 The runner requires a C compiler with GNU-compatible `--wrap`, Linux development
 headers, `nm`, `sha256sum` and standard shell tools. It copies the source/fixture
 into a private temporary directory and rejects a source hash other than
-`2f57dddb7ef6fd59b3bb14319866dc94998a83eceb9f96ecb2def64e96c8b95d` before
-compiling. All source-facing device/file/process/privileged operations use an
+`59840d7b9a8a8485be5803ee7ef48c522511ea81ffcff2694e5c5c6ad8894628` (the fixed
+source; the audited original was `2f57dddb…8b95d`) before compiling. All source-facing device/file/process/privileged operations use an
 explicit linker wrapper list, including `dup2` and the alternative ioctl,
 passphrase, child-process, resume and failure paths. Alternative paths not part
 of this fixture stop locally. Formatting/memory helpers and fixture verdict
@@ -107,13 +110,19 @@ The temporary binary is removed on exit. Never compile or run the C file without
 its runner's wrappers. A compile-time guard rejects ordinary compilation, but
 that guard alone cannot replace the linker wrapper list.
 
-On October 10, 2026 the guarded fixture printed:
+On October 10, 2026 the guarded fixture printed, for the audited original source:
 
 ```text
 Confirmed source path: matched-policy master load -> plain root mount -> root init execution.
-Device, file, mount, key, process, reboot and exec calls were mocked; no hardware/key access performed.
+```
+
+and, later the same day, for the fixed source (two runs):
+
+```text
+Confirmed production path: plain root -> master key left sealed -> plain root mount -> root init execution.
+Confirmed provisioning path: t480.provision -> matched-policy master load -> plain root mount -> root init execution.
 ```
 
 Copies with a changed `init.c` and an added unreviewed external operation were
-rejected before execution. This preserves the narrowly scoped source finding;
-it is not a repaired boot policy or a live TPM/boot/security result.
+rejected before execution. The fixture checks control flow in the source; the
+live boot of the fixed kernel is a separate, attended step.

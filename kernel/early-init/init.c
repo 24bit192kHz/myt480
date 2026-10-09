@@ -483,6 +483,20 @@ static void passphrase_unlock(int need_root, int need_swap, int *root_minor, int
 
 /* ---- main ---- */
 
+/* a bare word on the command line (t480.provision), not part of another word or value */
+static int cmdline_flag(const char *cl, const char *word)
+{
+	const char *p = cl;
+	int wl = strlen(word);
+
+	while ((p = strstr(p, word))) {
+		if ((p == cl || p[-1] == ' ') && (p[wl] == 0 || p[wl] == ' ' || p[wl] == '\n' || p[wl] == '='))
+			return 1;
+		p += wl;
+	}
+	return 0;
+}
+
 static void cmdline_arg(const char *cl, const char *key, char *out, int max, const char *dflt)
 {
 	const char *p = cl;
@@ -505,7 +519,7 @@ int main(void)
 {
 	static char cl[4096], initp[256], res[32];
 	const char *keydir = NULL, *rootdev = P_ROOT;
-	int root_luks, swap_luks, tpm, root_minor = -1, swap_minor = -1, have_keys = 0;
+	int root_luks, swap_luks, tpm, root_minor = -1, swap_minor = -1, have_keys = 0, provision;
 	double t0;
 
 	mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, "mode=0755");
@@ -530,11 +544,28 @@ int main(void)
 	else if (!root_luks && !mount(P_ROOT, "/boot", "ext4", MS_RDONLY | MS_NOEXEC | MS_NOSUID | MS_NODEV, "noload"))
 		keydir = "/boot/boot/t480";
 
+	/*
+	 * The master key is released only to open a LUKS2 root. With a plain root the next
+	 * code to run is that root's init, which nothing has measured or signed, and the key
+	 * would sit in its keyring: a swapped-in plain disk next to the real /boot would get
+	 * it (found by the 2026-10-09 audit). The one exception is provisioning, the check
+	 * boot of the conversion on the still plain disk ("TPM key released" in the log):
+	 * the kernel command line must carry t480.provision. The command line comes from
+	 * the GRUB configuration that coreboot measures into PCR 2, so only an entry or the
+	 * shell behind the GRUB password can add a word the default entry does not have.
+	 * A plain root next to an encrypted swap therefore asks the passphrase for the swap.
+	 */
+	provision = cmdline_flag(cl, "t480.provision");
+
 	/* one attempt at the TPM, then PCR 8 is extended whatever happened */
 	wait_for("/dev/tpm0", 2000);
 	tpm = open("/dev/tpm0", O_RDWR);
-	if (keydir && !access(keydir, F_OK))
-		have_keys = !load_trusted(keydir, tpm);
+	if (keydir && !access(keydir, F_OK)) {
+		if (root_luks || provision)
+			have_keys = !load_trusted(keydir, tpm);
+		else
+			say("plain root: TPM key left sealed (no t480.provision on the command line)");
+	}
 	if (tpm < 0 || tpm_extend_pcr8(tpm)) {
 		/* without the extend a later system could unseal: only go on if nothing was unsealed */
 		say("PCR 8 extend FAILED");

@@ -11,7 +11,8 @@ laptop uses.
 | `config-7.2.8-2-t480` | adds GVT-g (mediated iGPU for a Windows VM), `i915.enable_gvt=1` built into the command line |
 | `config-7.2.8-3-t480` | adds the TPM 2.0 driver (`tpm_tis`, the Infineon chip coreboot declares as MSFT0101) and the PCH TCO watchdog (`iTCO_wdt`) |
 | `config-7.2.8-4-t480` | hibernation image compressed with LZ4 (resume 1.5 s faster than LZO) |
-| `config-7.2.8-7-t480` | the running build: dm-crypt, AES-NI and the TPM trusted/encrypted key types built in, and `early/` embedded as the initramfs (`CONFIG_INITRAMFS_SOURCE`) |
+| `config-7.2.8-7-t480` | dm-crypt, AES-NI and the TPM trusted/encrypted key types built in, and `early/` embedded as the initramfs (`CONFIG_INITRAMFS_SOURCE`) |
+| `config-7.2.8-8-t480` | the current build (2026-10-10): same configuration, built with clang 23.1.1 instead of 22.1.8; the embedded early init releases the TPM key only for a LUKS2 root (`early-init/README.md`) |
 | `early/nodes.list`, `early-init/` | the early init that opens the encrypted disk; `early-init/README.md` |
 | `modprobed.db` | module list for `localmodconfig`, made from the two files below |
 | `lsmod.t480` | modules seen loaded |

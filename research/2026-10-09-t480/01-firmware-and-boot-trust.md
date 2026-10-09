@@ -38,6 +38,14 @@ The [early-init README](../../kernel/early-init/README.md) and
 explain the current design and the required encrypted/plain-root, passphrase,
 missing-disk and hibernation fixtures.
 
+**Repaired on 2026-10-10** (kernel 7.2.8-8): the early init releases the master
+only for a LUKS2 root, or when the measured, password-protected kernel command
+line carries `t480.provision` for the conversion's check boot. The published
+fixture now runs both paths (no master load on the production path), and the
+QEMU rehearsal gained a stage that boots sealed keys on a plain root with the
+production command line. See the
+[cross-stack review](../../docs/wiki/cross-stack-review.md#1-the-tpm-boot-path-needs-a-stricter-root-boundary).
+
 ## GRUB defects are tied to the archived C55 build
 
 The final GRUB source revision was `fb40995250874853982cb5cc8416cad4fce11706`.

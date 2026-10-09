@@ -63,7 +63,7 @@ components, not to future installations with different hashes.
 
 | Order | Work | Evidence required before deployment |
 |---|---|---|
-| 1 | Require expected encrypted root before production-secret unseal; separate provisioning | Actual-source fixtures for plain/wrong/missing headers, valid encrypted root, passphrase and hibernation; then a recoverable signed-kernel test |
+| 1 | Require expected encrypted root before production-secret unseal; separate provisioning | Done in source 2026-10-10 (LUKS2 root required; `t480.provision` on the measured command line for the check boot), two-path offline fixture and QEMU rehearsal stage, built as 7.2.8-8. Left: the attended reboot into it |
 | 2 | Repair GRUB NVMe status checking and timeout/queue recovery | Inject full status, queue-full, late completion and timeout cases; verify controller quiescence and buffer lifetime before cold boots |
 | 3 | Make sleep hooks a checked sequence | Evening run fixes action/synchronous resume, TCO checks and `rtc-hibernate`; truthful NVIDIA hook status deployed 2026-10-10. Locker, failure/cancellation recovery and live allocations remain open |
 | 4 | Make firmware checkers and wrappers truthful | QEMU verdict installed and flash failure status fixed; CBFS ROM probe/copy/actual-size bounds now repaired offline. Exact config/key/auth, wider ROM/AML and firmware hardware validation remain |

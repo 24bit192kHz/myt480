@@ -12,7 +12,7 @@ mistaken for broken drivers.
 
 | Priority | Finding | Evidence/status | Useful next action |
 |---|---|---|---|
-| High | TPM master can be loaded before executing an unauthenticated plain root | Actual early-init control flow reproduced with mocked hardware; physical exploit not performed | Separate provisioning from daily boot; require the expected encrypted root before unsealing |
+| Fixed 2026-10-10 | TPM master could be loaded before executing an unauthenticated plain root | The early init now releases the key only for a LUKS2 root; the conversion's check boot needs `t480.provision` on the measured, password-protected command line. Offline fixture (both paths) and the QEMU rehearsal with a software TPM; kernel 7.2.8-8 | Attended reboot into 7.2.8-8 with the passphrase at hand; see section 1 |
 | High | GRUB NVMe timeout/retry can dereference `NULL`; some errors pass as success | Final source and matching archived C55 module; no live timeout observed | Inject failures offline, repair queue recovery and status checking before the next payload build |
 | Fixed 2026-10-09 | NVIDIA sleep hook requests `suspend` for hibernation and backgrounds resume (an `/etc` override existed but elogind masked it with the package file) | Package hook removed and kept out by `NoExtract`; `system/etc/elogind/system-sleep/nvidia`: hibernate mapping, synchronous bounded resume, VT put back on failure | Exercised by RTC-wake S3 and S4 cycles the same evening, see `docs/notes/2026-10-09-evening.md` |
 | Partly fixed | Sleep proceeds without proving locker readiness or successful watchdog disarm | Disarm now has a forced fallback and the re-arm checks that the keepalive started; locker readiness unchanged | elogind cancellation deliberately not enabled: with `AllowSuspendInterrupts=yes` any failing pre-hook cancels and the post hooks never run |
@@ -58,6 +58,21 @@ is the one-shot mechanism, so a previously copied unbound blob has no TPM-enforc
 single-use guarantee. No such file remains on the laptop now. Prefer a migration
 policy bound to approved measurements/authorization; handle flash failure and
 reseal failure explicitly. This review did not copy blobs or change the TPM.
+
+**Fixed 2026-10-10.** `init.c` loads the master only when the root carries a
+LUKS2 header, or when the kernel command line carries the bare word
+`t480.provision`; otherwise it logs "plain root: TPM key left sealed" and boots
+the plain root without the key. The word is safe to trust because the command
+line is part of the GRUB configuration coreboot measures into PCR 2, and only
+the password-protected GRUB shell or entry editor can add a word the default
+entry lacks; the one-shot `kmk.next` path is unchanged. A plain root next to an
+encrypted swap now asks the passphrase for the swap, which is the conservative
+outcome. Verified by the two-path offline fixture
+(`tools/re-audit/static-analysis/run-plain-root-fixture.sh`: production path
+without a master load, provisioning path with it) and by the QEMU rehearsal,
+whose new stage boots sealed keys on a plain root with the production command
+line and checks that nothing is released before the conversion continues with
+the word. Built as kernel 7.2.8-8; the attended reboot is the owner's step.
 
 ## 2. Repair the bootloader failure paths before more firmware experiments
 

@@ -5,7 +5,7 @@ umask 077
 
 fixture_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 source_path="$fixture_dir/../../../kernel/early-init/init.c"
-expected_hash=2f57dddb7ef6fd59b3bb14319866dc94998a83eceb9f96ecb2def64e96c8b95d
+expected_hash=59840d7b9a8a8485be5803ee7ef48c522511ea81ffcff2694e5c5c6ad8894628
 
 for tool in cc nm sha256sum mktemp cp mkdir rm awk; do
     command -v "$tool" >/dev/null 2>&1 || {
@@ -37,7 +37,7 @@ cc -std=c11 -O0 -Wall -Wextra -fno-builtin -fno-lto \
 # Reject additional external operations before running the compiled fixture.
 # Harmless libc formatting/memory/error helpers remain real; all source-facing
 # device/file/process/privileged operations must use the reviewed wrappers.
-allowed="$wrapped __assert_fail __errno_location __stack_chk_fail _setjmp setjmp longjmp abort puts fputs stderr memcmp memcpy memset snprintf vsnprintf strlen strcmp strncmp strcpy strncpy strstr sscanf __isoc99_sscanf __isoc23_sscanf gnu_dev_major gnu_dev_minor"
+allowed="$wrapped getenv __assert_fail __errno_location __stack_chk_fail _setjmp setjmp longjmp abort puts fputs stderr memcmp memcpy memset snprintf vsnprintf strlen strcmp strncmp strcpy strncpy strstr sscanf __isoc99_sscanf __isoc23_sscanf gnu_dev_major gnu_dev_minor"
 for symbol in $(nm -u "$fixture_work/fixture.o" | awk '{print $NF}'); do
     case " $allowed " in
         *" $symbol "*) ;;
@@ -57,3 +57,4 @@ for symbol in $(nm -u "$fixture_work/fixture" | awk '{print $NF}'); do
     esac
 done
 "$fixture_work/fixture"
+T480_FIXTURE_PROVISION=1 "$fixture_work/fixture"

@@ -19,13 +19,19 @@ key it asks for the LUKS passphrase on the console.
   and nothing that runs later can get it again.
 - Each partition is looked at on its own (LUKS2 header or not), so the same kernel boots
   the machine before and after the conversion.
+- The master key is released only to open a LUKS2 root (since 2026-10-10, kernel
+  7.2.8-8). With a plain root the next code to run would be that root's init, which
+  nothing has measured or signed, and the key would sit in its keyring: a plain disk
+  swapped in next to the real `/boot` would have got it (found by the 2026-10-09 audit,
+  [cross-stack review](../../docs/wiki/cross-stack-review.md)). The one exception is
+  the check boot of the conversion, which needs the word `t480.provision` on the kernel
+  command line. The command line comes from the GRUB configuration that coreboot
+  measures into PCR 2, so only the GRUB shell or an entry behind the GRUB password
+  can add a word the default entry does not have. A plain root next to an encrypted
+  swap asks the passphrase for the swap.
 
-The plain-root compatibility path is a trust-boundary gap for daily TPM unlock:
-the master can be loaded before a replacement plain root's init is executed.
-The [cross-stack review](../../docs/wiki/cross-stack-review.md) records an offline
-control-flow reproduction and the required separation of provisioning from
-production boot. The `kmk.next` migration blob also relies on file deletion rather
-than TPM-enforced single use. These limitations remain unfixed in the live kernel.
+The `kmk.next` migration blob still relies on file deletion rather than TPM-enforced
+single use; it exists only between `t480-reseal next-boot` and the next boot.
 
 ## Files
 
@@ -38,7 +44,7 @@ than TPM-enforced single use. These limitations remain unfixed in the live kerne
 | `t480-reseal` | TPM side at runtime, installed as `/usr/local/sbin/t480-reseal` (see below) |
 | `convert/t480-init.convert`, `convert/convert.sh` | the in-place conversion: a one-shot stand-in for `t480-init` copies the toolbox into RAM, leaves the root file system and encrypts it |
 | `fallback/` | mkinitcpio hook `t480crypt` for the distro kernels: one passphrase opens root and swap |
-| `qemu/` | the rehearsal: `go.sh` builds a replica disk with the same odd partition layout and walks through sealing, conversion, TPM boot, hibernate, one-shot blob, changed firmware, passphrase, re-key; `grubpath.py` and `stocktest.py` cover GRUB and the distro kernel |
+| `qemu/` | the rehearsal: `go.sh` builds a replica disk with the same odd partition layout and walks through sealing, the plain-root refusal without `t480.provision`, the check boot with it, conversion, TPM boot, hibernate, one-shot blob, changed firmware, passphrase, re-key; `grubpath.py` and `stocktest.py` cover GRUB and the distro kernel |
 
 Blobs in `/boot/t480/`: `kmk.blob` (trusted key, policy PCR 2 + 8), `kmk.next` (one-shot,
 no policy), `root.key`, `swap.key` (encrypted keys), `root.dm`, `swap.dm` (data offset and
@@ -63,7 +69,9 @@ the whole procedure with a software TPM; run it before touching a real disk.
 2. A backup you have verified.
 3. As root: two 64-byte volume keys and a passphrase file in `/var/lib/t480-convert/`,
    then `t480-reseal init`, `wrap root`, `wrap swap` into `/var/lib/t480-convert/t480/`,
-   copy them to `/boot/t480/` and reboot once: the log must say "TPM key released".
+   copy them to `/boot/t480/` and reboot once with `t480.provision` added to the kernel
+   line (GRUB shell, password): the log must say "TPM key released". Without the word a
+   plain root leaves the key sealed ("plain root: TPM key left sealed").
 4. Unpack the toolbox image to `/var/lib/t480-convert/toolbox`, copy `convert.sh` there,
    install `t480-init.convert` as `t480-init` (keep the original as `t480-init.real`),
    `swapoff -a`, `touch /var/lib/t480-convert/armed`, reboot.

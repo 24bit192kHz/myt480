@@ -67,7 +67,7 @@ architecture or undocumented pin assignments.
 |---|---|---|
 | Coreboot/GRUB | C55 source/build policy and selected NVMe/ROM/checker paths reviewed | Wider FSP, memory training, payload recovery and exhaustive failure coverage |
 | EC/stock BIOS | Selected transport/ARCompact lid gate; separate evening record reports deployed bit-6 hook and two S4 lid wakes | Remaining callbacks, full live-image identity, retained baseline/completion/cancellation/rollback, S5 separation, EC_WAKE output and other EC policies |
-| Built-in early init/TPM | Actual-source trust-boundary fixture, config and migration policy review | Reviewed fix and negative fixtures before signed-kernel replacement |
+| Built-in early init/TPM | Actual-source trust-boundary fixture, config and migration policy review; fix of 2026-10-10 with two-path fixture and rehearsal stage, kernel 7.2.8-8 built | Attended reboot into the new kernel; migration blob policy |
 | Kernel/security | Live-matching config, command line, module and DMA/mitigation choices distinguished | Separate diagnostic/hardened profile, measured cost, driver internals and confinement tests |
 | GPU/thermal helpers | Evening record reports GPU lock/error and thermal source/bounds guard deployment; October 10 installs diagnostic/hook status and lid cleanup; getter and PWRGD/ROM corrections checked offline | Unflashed firmware proposals, broader policy bounds and live-allocation/failure transitions |
 | s6/elogind/power services | Selected service, watchdog, locker and NVIDIA sleep paths inspected | Coherent checked sleep transaction and full startup/failure dependency coverage |
@@ -89,8 +89,9 @@ architecture or undocumented pin assignments.
    Bitwarden restart path and coarse D3cold is recorded. Finish checked sleep
    ordering/failure cleanup, test live allocations/resume, cover remaining GPU
    holders and measure battery energy.
-4. **Safer boot and recovery:** fix the encrypted-root trust boundary, NVMe failure
-   recovery and checker exit/status contracts before preparing new boot images.
+4. **Safer boot and recovery:** the encrypted-root trust boundary is fixed in
+   7.2.8-8 (2026-10-10); NVMe failure recovery and checker exit/status contracts
+   remain before preparing new boot images.
 5. **A diagnostic/security boot profile:** retain the tuned kernel while adding
    tracing/mitigation/translated-DMA comparisons supported by dock and VM tests.
 6. **Measured peripheral tuning:** use repeatable completed jobs and valid battery

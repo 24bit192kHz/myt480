@@ -75,7 +75,7 @@ USB-C role swaps and battery discharge comparisons still need validation.
 
 ## What to work on next
 
-1. Repair the encrypted-root trust boundary and GRUB NVMe failure recovery, then
+1. Boot the repaired early init (kernel 7.2.8-8, 2026-10-10) and repair GRUB NVMe failure recovery, then
    validate coherent sleep preparation, locker readiness and cancellation cleanup.
    These are the highest-priority correctness/security findings in the
    [complete index](../../research/2026-10-09-t480/13-findings-and-improvement-index.md).

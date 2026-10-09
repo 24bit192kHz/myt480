@@ -38,7 +38,15 @@ case $stage in
 	# some data to compare afterwards
 	head -c 300000000 /dev/urandom > /payload.bin; md5sum /payload.bin $(command -v cryptsetup) /etc/passwd > $S/payload.md5
 	ok "keys sealed: $(ls $C/t480 | tr '\n' ' ')"; next 1 ;;
-1)	early "root plain, swap plain, TPM key released"
+1)	# production command line on a plain root with sealed keys in /boot/t480: nothing may be released
+	early "root plain, swap plain, TPM key not released"
+	early "plain root: TPM key left sealed"
+	keyctl link @u @s; ! keyctl search @u trusted t480-kmk >/dev/null 2>&1 || fail "kmk released on a plain root without t480.provision"
+	[ "$(cat /sys/class/tpm/tpm0/pcr-sha256/8)" != 0000000000000000000000000000000000000000000000000000000000000000 ] || fail "PCR 8 not extended"
+	ok "sealed keys + plain root + production command line: key left sealed. The harness now adds t480.provision"
+	# a power-off, not a reboot: the harness changes the kernel command line only when it starts QEMU again
+	echo 8 > $S/stage; sync; mount -o remount,ro /; echo T480-TEST-PROVISION-ON; poweroff -f ;;
+8)	early "root plain, swap plain, TPM key released"
 	keyctl link @u @s; keyctl search @u trusted t480-kmk >/dev/null || fail "kmk not in the keyring"
 	[ "$(cat /sys/class/tpm/tpm0/pcr-sha256/8)" != 0000000000000000000000000000000000000000000000000000000000000000 ] || fail "PCR 8 not extended"
 	# the sealed policy must no longer match this boot's PCRs (PCR 8 is extended)
@@ -46,9 +54,11 @@ case $stage in
 	[ "$(xxd -p -c 64 /run/now.pol)" != "$(cat $S/policy)" ] || fail "policy still satisfiable after the early init"
 	T480_KEYDIR=/boot/t480 t480-reseal || fail "reseal"
 	cp /boot/t480/kmk.blob $C/t480/kmk.blob
-	touch $C/armed; ok "unseal on a plain root, second unseal refused, reseal"; next 2 ;;
+	touch $C/armed; ok "unseal on a plain root with t480.provision, second unseal refused, reseal"; next 2 ;;
 2)	[ -s $C/convert.log ] || fail "no conversion log: $(cat $C/convert-failed.log 2>/dev/null | tail -5)"
 	early "root opened, swap opened, TPM key released"; enc_checks
+	grep -q "t480.provision" /proc/cmdline || fail "the harness dropped t480.provision too early"
+	echo T480-TEST-PROVISION-OFF	# from the next boot on: the production command line on the encrypted disk
 	t480-reseal status; t480-reseal || fail "reseal on the encrypted system"
 	ok "conversion: $(tail -2 $C/convert.log | head -1)"
 	echo 3 > $S/stage; sync

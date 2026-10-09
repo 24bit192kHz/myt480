@@ -3,6 +3,12 @@
  * Assumes successful matching-policy TPM unseal; does not test cryptography.
  * Run only through run-plain-root-fixture.sh, which pins the source and linker
  * wrappers. Never compile this fixture without the required --wrap options.
+ *
+ * Two runs. Without T480_FIXTURE_PROVISION in the environment the production
+ * command line meets a plain root next to sealed keys: the master key must stay
+ * sealed and the plain root's init still runs (the fix of 2026-10-10). With it
+ * the command line carries t480.provision, the word of the conversion's check
+ * boot, and the master key is released as before.
  */
 #ifndef T480_OFFLINE_FIXTURE_WRAPPERS
 #error "Use run-plain-root-fixture.sh with the reviewed linker wrapper list"
@@ -14,7 +20,7 @@
 #include <setjmp.h>
 
 static jmp_buf done;
-static int master_loaded, mounted_plain_root, executed_root_init, last_tpm_command;
+static int provision_run, master_loaded, mounted_plain_root, executed_root_init, last_tpm_command;
 static int console_duplications;
 static struct { char name[128]; int read; } files[64];
 static int nextfd = 10;
@@ -52,7 +58,9 @@ ssize_t __wrap_read(int fd, void *buf, size_t len)
     }
     if (files[fd].read++) return 0;
     const char *data = "";
-    if (!strcmp(name, "/proc/cmdline")) data = "rw init=/usr/local/sbin/t480-init";
+    if (!strcmp(name, "/proc/cmdline"))
+        data = provision_run ? "rw init=/usr/local/sbin/t480-init t480.provision"
+                             : "rw init=/usr/local/sbin/t480-init";
     else if (strstr(name, "kmk.blob")) data = "matching-sealed-blob-fixture";
     else if (!strcmp(name, P_ROOT) || !strcmp(name, P_SWAP)) {
         memset(buf, 0, len); /* Both partitions are plain, not LUKS2. */
@@ -89,6 +97,7 @@ long __wrap_syscall(long number, ...)
     const char *type = va_arg(args, const char *);
     const char *desc = va_arg(args, const char *);
     assert(!strcmp(type, "trusted") && !strcmp(desc, "t480-kmk"));
+    assert(provision_run); /* the production command line must never get here */
     master_loaded++;
     va_end(args);
     return 123; /* Assumed successful matched-policy unseal, not a real key. */
@@ -98,7 +107,7 @@ int __wrap_mount(const char *source, const char *target, const char *type,
 {
     (void)type; (void)flags; (void)data;
     if (source && !strcmp(source, P_ROOT) && !strcmp(target, "/newroot")) {
-        assert(master_loaded == 1);
+        assert(master_loaded == provision_run);
         mounted_plain_root++;
     }
     return 0;
@@ -120,7 +129,7 @@ int __wrap_execl(const char *path, const char *arg, ...)
 {
     (void)arg;
     assert(!strcmp(path, "/usr/local/sbin/t480-init"));
-    assert(master_loaded == 1 && mounted_plain_root == 1);
+    assert(master_loaded == provision_run && mounted_plain_root == 1);
     executed_root_init++;
     longjmp(done, 1);
 }
@@ -133,7 +142,7 @@ int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
 }
 
 /* These alternative branches are compiled from the source but are not part of
- * the plain-root success case. Fail locally rather than perform real work. */
+ * the plain-root cases. Fail locally rather than perform real work. */
 int __wrap_reboot(int how) { (void)how; unexpected(); return -1; }
 int __wrap_ioctl(int fd, unsigned long request, ...) { (void)fd; (void)request; unexpected(); return -1; }
 ssize_t __wrap_pread(int fd, void *buf, size_t count, off_t offset)
@@ -154,10 +163,14 @@ int __wrap_nanosleep(const struct timespec *request, struct timespec *remaining)
 
 int main(void)
 {
+    provision_run = getenv("T480_FIXTURE_PROVISION") != NULL;
     if (!setjmp(done)) early_main();
-    assert(master_loaded == 1 && mounted_plain_root == 1 && executed_root_init == 1);
+    assert(master_loaded == provision_run && mounted_plain_root == 1 && executed_root_init == 1);
     assert(console_duplications == 3);
-    puts("Confirmed source path: matched-policy master load -> plain root mount -> root init execution.");
+    if (provision_run)
+        puts("Confirmed provisioning path: t480.provision -> matched-policy master load -> plain root mount -> root init execution.");
+    else
+        puts("Confirmed production path: plain root -> master key left sealed -> plain root mount -> root init execution.");
     puts("Device, file, mount, key, process, reboot and exec calls were mocked; no hardware/key access performed.");
     return 0;
 }

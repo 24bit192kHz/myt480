@@ -36,6 +36,9 @@ while verdict is None and boots<12 and time.time()-t_start<1500:
             seen=len(buf); time.sleep(0.3); p.stdin.write(b"test-pass-phrase-1\n"); p.stdin.flush(); print("  (harness typed the passphrase)")
         if "T480-TEST-CHANGE-FIRMWARE" in buf and not extra:
             extra=["-device","virtio-net-pci"]   # another option ROM -> another PCR 2 from the next start on
+        # the provisioning word of the early init: on for the check boot and the conversion, off again after it
+        if "T480-TEST-PROVISION-ON" in buf and " t480.provision" not in CMD: CMD+=" t480.provision"
+        if "T480-TEST-PROVISION-OFF" in buf and " t480.provision" in CMD: CMD=CMD.replace(" t480.provision","")
         if "T480-TEST-ALL-PASS" in buf: verdict="PASS"
         if "T480-TEST-FAILED" in buf or "Kernel panic" in buf: verdict="FAIL"
         if verdict: time.sleep(1); break
