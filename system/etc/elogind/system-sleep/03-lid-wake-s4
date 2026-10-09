@@ -1,0 +1,48 @@
+#!/bin/sh
+# Lid-open wake from hibernation, EXPERIMENT 2026-10-09 (elogind hook: $1=pre|post, $2=verb).
+#
+# Lenovo's EC firmware (N24HT37W, decoded in myt480 research/2026-10-09-t480/
+# 10-ec-firmware-and-lid-wake.md) keeps a retained flag that enables lid detection in its
+# S4/S5 state and turns a lid open into a power-button pulse, the same pulse that wakes S3.
+# The host sets it through EC RAM byte 0x01 bit 6 (BTPC in Lenovo's DSDT, which never writes
+# it on this model; the GPE, HWLO and SMM-replica attempts of 2026-10-08 did nothing).
+# pre hibernate: set the bit, remember that it was clear. post: clear it again. Only bit 6 is
+# touched; the other bits of the byte are written back as they are read at that moment.
+# The EC's shadow of byte 0x01 is zeroed when the EC itself restarts, so the readback is the
+# host view, not proof of the retained flag. Status: untested with a real lid open.
+# Disable: touch /etc/elogind/no-lid-wake-s4. Writes use coreboot's ectool (ports 0x62/0x66).
+PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
+ECTOOL=/usr/local/sbin/ectool
+MARK=/run/lid-wake-s4.was-clear
+case "$2" in
+	hibernate|hybrid-sleep) act=hibernate ;;
+	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
+	*) act=suspend ;;
+esac
+[ -x "$ECTOOL" ] && [ ! -e /etc/elogind/no-lid-wake-s4 ] || exit 0
+
+ec01() { # EC RAM byte 0x01 as a decimal number, from ectool's dump line "00: a6 05 ..."
+	v=$("$ECTOOL" -d 2>/dev/null | sed -n 's/^00: [0-9a-f][0-9a-f] \([0-9a-f][0-9a-f]\) .*/\1/p' | head -n1)
+	[ -n "$v" ] || return 1
+	printf '%d' "0x$v"
+}
+hex() { printf '0x%02x' "$1"; }
+
+case "$1" in
+pre)
+	[ "$act" = hibernate ] || exit 0
+	cur=$(ec01) || { logger -t lid-wake-s4 "EC byte 0x01 unreadable, left alone"; exit 0; }
+	if [ $((cur & 0x40)) -eq 0 ]; then
+		"$ECTOOL" -w 0x01 -z "$(hex $((cur | 0x40)))" >/dev/null 2>&1 && touch "$MARK"
+	fi
+	new=$(ec01) || new=-1
+	logger -t lid-wake-s4 "pre $2: EC 0x01 $(hex "$cur") -> $(hex "$new") (bit 6 set = lid may wake S4)" ;;
+post)
+	[ -e "$MARK" ] || exit 0
+	rm -f "$MARK"
+	cur=$(ec01) || exit 0
+	"$ECTOOL" -w 0x01 -z "$(hex $((cur & 0xbf)))" >/dev/null 2>&1
+	new=$(ec01) || new=-1
+	logger -t lid-wake-s4 "post $2: EC 0x01 $(hex "$cur") -> $(hex "$new") (bit 6 cleared)" ;;
+esac
+exit 0

@@ -51,6 +51,12 @@ alone. Quit and relaunch it normally to adopt the policy; sending a new URI to
 an already running single-instance application does not change its environment.
 The override is reproduced under `home/local-share/applications/` in the repo.
 
+On this laptop the desktop file is not the usual launch path: the session script
+(`home/config/chadwm/scripts/run.sh`) and the hibernate-later hook start Bitwarden
+through [`bw-screen boot`](../../system/usr-local/bin/bw-screen), which since
+2026-10-09 runs it through `igpu-run` too. After the reboot of that evening the
+driver was loaded with the GPU in D3cold and no process holding `/dev/nvidia*`.
+
 ## Validation and limitations
 
 GLX reported accelerated Mesa Intel UHD620, with direct rendering. Vulkan

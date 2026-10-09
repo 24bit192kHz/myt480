@@ -1,0 +1,88 @@
+#!/bin/sh
+# suspend-then-hibernate while Bitwarden runs (elogind hook: $1=pre|post, $2=verb).
+#
+# Bitwarden desktop holds memfd_secret memory, so the kernel turns hibernation off
+# (/sys/power/state lacks "disk") and elogind falls back from the lid's
+# suspend-then-hibernate to a plain suspend that never ends (2026-10-04: 11 h in S3).
+# For a plain suspend with the lid closed this hook does the timer part itself:
+#   pre:  RTC alarm in HibernateDelaySec (1 h; /run/hibernate-later.delay overrides it
+#         in seconds for a test)
+#   post: woken by that alarm and the lid still closed -> detached job: quit Bitwarden,
+#         hibernate, and after the resume start it again as the session does
+#         (bw-screen boot: waits for the screen unlock, tray, unlock) - the same as the
+#         Hibernate menu entry (~btw/.local/bin/hibernate-safe).
+# A real suspend-then-hibernate (Bitwarden not running) is elogind's own and left alone.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+RTC=/sys/class/rtc/rtc0/wakealarm
+MARK=/run/hibernate-later.armed
+LOG=/var/log/hibernate-later.log
+log() { echo "$(date '+%F %T') $*" >>"$LOG"; }
+lid_closed() { grep -qs closed /proc/acpi/button/lid/*/state; }
+delay() {
+	d=$(cat /run/hibernate-later.delay 2>/dev/null) && [ "$d" -gt 0 ] 2>/dev/null && { echo "$d"; return; }
+	echo 3600
+}
+
+hibernate_now() {
+	sleep 3 # let elogind finish this wake (remaining post hooks) first
+	lid_closed || { log "job: lid opened meanwhile, staying awake"; exit 0; }
+	pid=$(pgrep -u btw -x -o bitwarden-app)
+	envf=/run/hibernate-later.env
+	if [ -n "$pid" ]; then
+		# Electron blanks its own /proc/PID/environ: take the session's from the window manager
+		wm=$(pgrep -u btw -x -o dwm || pgrep -u btw -x -o chadwm)
+		tr '\0' '\n' </proc/"${wm:-$pid}"/environ |
+			grep -E '^(DISPLAY|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR|HOME|PATH|LANG)=' |
+			sed "s/'/'\\\\''/g; s/=/='/; s/\$/'/" >"$envf"
+		pkill -u btw -x bitwarden-app
+		i=0; while pgrep -u btw -x bitwarden-app >/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+		pkill -9 -u btw -x bitwarden-app 2>/dev/null
+		log "job: quit Bitwarden"
+	fi
+	back() {
+		[ -n "$pid" ] || return 0
+		su -s /bin/sh btw -c "set -a; . $envf; set +a; setsid /usr/local/bin/bw-screen boot >/dev/null 2>&1 </dev/null &"
+		log "job: Bitwarden started again (after the screen unlock)"
+		rm -f "$envf"
+	}
+	i=0; while ! grep -qw disk /sys/power/state && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+	grep -qw disk /sys/power/state || { log "job: hibernation still off (another memfd_secret holder?)"; back; exit 1; }
+	n=0
+	until loginctl hibernate 2>>"$LOG"; do # elogind may still be busy with the wake
+		n=$((n+1)); [ $n -ge 10 ] && { log "job: loginctl hibernate failed"; back; exit 1; }
+		sleep 1
+	done
+	log "job: hibernating"
+	prev=$(date +%s); n=0 # the resume shows as a jump of the wall clock
+	while :; do
+		sleep 1; now=$(date +%s)
+		[ $((now - prev)) -gt 5 ] && break
+		prev=$now; n=$((n+1)); [ $n -gt 120 ] && break
+	done
+	log "job: resumed"
+	back
+}
+
+case "$1" in
+job) hibernate_now; exit 0 ;;
+pre)
+	[ "$2" = suspend ] && [ "${SYSTEMD_SLEEP_ACTION:-suspend}" = suspend ] || exit 0
+	grep -qw disk /sys/power/state && exit 0 # nothing blocks hibernation: elogind's own path
+	lid_closed || exit 0
+	d=$(delay)
+	echo 0 >"$RTC"; echo "+$d" >"$RTC" || { log "pre: cannot set the RTC alarm"; exit 0; }
+	date +%s >"$MARK"
+	log "pre: lid closed, hibernation blocked, RTC alarm in ${d}s" ;;
+post)
+	[ -s "$MARK" ] || exit 0
+	t0=$(cat "$MARK"); rm -f "$MARK"
+	echo 0 >"$RTC" 2>/dev/null
+	slept=$(( $(date +%s) - t0 ))
+	if [ $slept -ge $(( $(delay) - 30 )) ] && lid_closed; then
+		log "post: woke after ${slept}s with the lid closed, hibernating"
+		setsid "$0" job >/dev/null 2>&1 </dev/null &
+	else
+		log "post: woke after ${slept}s (lid $(lid_closed && echo closed || echo open)), staying awake"
+	fi ;;
+esac
+exit 0

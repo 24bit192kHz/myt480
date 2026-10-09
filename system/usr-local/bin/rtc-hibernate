@@ -1,5 +1,8 @@
 #!/bin/sh
 # RTC self-wake hibernate. Usage: rtc-hibernate [seconds, default 75]
+# Goes through elogind so every sleep hook runs: lock screen, TCO disarm/re-arm, the NVIDIA
+# "hibernate" call (a raw write to /sys/power/state is refused while the driver is loaded,
+# which on AC it now always is), fingerprint, lid-wake flag, battwatch marks.
 set -eu
 SECS=${1:-75}
 RTC=/sys/class/rtc/rtc0/wakealarm
@@ -9,8 +12,7 @@ T=$(($(date +%s)+SECS))
 echo "$T" > "$RTC"
 echo "alarm: $(cat $RTC) now: $(date +%s) (+$SECS)"
 grep -E "alrm|pending" /proc/driver/rtc || true
-echo platform > /sys/power/disk
-echo 8 > /sys/power/hibernate_compression_threads
-date +%s > /tmp/hib-t0
+echo 8 > /sys/power/hibernate_compression_threads 2>/dev/null || true
+date +%s > /run/hib-t0
 sync
-echo disk > /sys/power/state
+exec loginctl hibernate

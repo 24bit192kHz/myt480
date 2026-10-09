@@ -167,9 +167,9 @@ remain in force. Public changes contain derived findings, not raw firmware dumps
 
 | Change | Offline validation | Deployment |
 |---|---|---|
-| GPU load fails when its node never appears; automatic policy propagates unload failure | Fake sysfs/modprobe fixtures and warning-free `-Werror` build | Not installed on the T480 |
-| Manual GPU off checks the users lock before unloading, refusing a starting/active wrapper without a blocking lock inversion | Real advisory-lock fixtures cover the launch interval before device open and later policy application | Not installed on the T480 |
-| QEMU scenario runner returns1 on failure and2 on unknown selectors | Six verdict/entrypoint fixtures, without starting a VM | Source-only; no firmware build/flash |
+| GPU load fails when its node never appears; automatic policy propagates unload failure | Fake sysfs/modprobe fixtures and warning-free `-Werror` build | Installed 2026-10-09 19:01 (built on the laptop, through `syswork`; `docs/notes/2026-10-09-evening.md`) |
+| Manual GPU off checks the users lock before unloading, refusing a starting/active wrapper without a blocking lock inversion | Real advisory-lock fixtures cover the launch interval before device open and later policy application | Installed with the above |
+| QEMU scenario runner returns1 on failure and2 on unknown selectors | Six verdict/entrypoint fixtures, without starting a VM | Copied to `~/t480-build/tools/qemu/` the same evening; no firmware build/flash |
 
 The GPU suite passed **12 new policy fixtures**, the existing **5 wrapper
 fixtures**, and the NVML checks. The firmware-runner suite passed **6 new

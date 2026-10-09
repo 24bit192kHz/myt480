@@ -15,4 +15,5 @@ if [ $rc -eq 0 ] && grep -q "VERIFIED" $L; then
   sh /home/btw/t480-build/work/coldboot.sh "" 25
 else
   echo "$(date +%T) NOT VERIFIED - no power-off" >> $L
+  exit 1
 fi

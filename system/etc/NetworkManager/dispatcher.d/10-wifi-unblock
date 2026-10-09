@@ -1,0 +1,8 @@
+#!/bin/sh
+# Re-enable wifi radio when a connection goes down (idempotent).
+case "$2" in
+  down|vpn-down)
+    /usr/bin/rfkill unblock wifi || true
+    /usr/bin/nmcli radio wifi on || true
+    ;;
+esac

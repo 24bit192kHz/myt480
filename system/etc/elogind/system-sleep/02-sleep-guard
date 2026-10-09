@@ -52,9 +52,20 @@ stop_keepalive() { # magic close through the keepalive's own descriptor; 1 if it
 	fi
 }
 
+force_disarm() { # the loop would not exit: drop it without its magic close, then stop the timer
+	# from a fresh descriptor (open, 'V', close = magic close; nowayout is off on this kernel)
+	pkill -9 -f 'watchdog-keepalive$' 2>/dev/null
+	i=0; while pgrep -f 'watchdog-keepalive$' >/dev/null && [ $i -lt 30 ]; do sleep 0.1; i=$((i+1)); done
+	i=0; until printf V >/dev/watchdog0 2>/dev/null || [ $i -ge 20 ]; do sleep 0.1; i=$((i+1)); done
+	[ "$(cat /sys/class/watchdog/watchdog0/state 2>/dev/null)" = inactive ]
+}
+
 disarm_watchdog() {
 	pgrep -f 'watchdog-keepalive$' >/dev/null || return 0 # not armed
-	stop_keepalive || return 1
+	if ! stop_keepalive; then
+		logger -t sleep-guard "forcing the TCO disarm before $1"
+		force_disarm || { logger -t sleep-guard "TCO watchdog STILL ARMED before $1: an image write over 30 s will reset the machine"; return 1; }
+	fi
 	touch "$WDOFF"
 	logger -t sleep-guard "TCO watchdog disarmed for $1 (the keepalive is frozen while the image is written)"
 }
@@ -73,6 +84,11 @@ rearm_watchdog() {
 		return 1
 	fi
 	/etc/local.d/watchdog.start
+	i=0; while ! pgrep -f 'watchdog-keepalive$' >/dev/null && [ $i -lt 30 ]; do sleep 0.1; i=$((i+1)); done
+	if ! pgrep -f 'watchdog-keepalive$' >/dev/null; then
+		logger -t sleep-guard "keepalive did not start after $1: TCO watchdog left disarmed"
+		return 1
+	fi
 	logger -t sleep-guard "TCO watchdog re-armed after $1 (${t} s, $have ticks)"
 }
 

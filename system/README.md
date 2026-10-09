@@ -39,6 +39,13 @@ Artix Linux with s6.
 | `initcpio/` (`t480crypt`), `mkinitcpio*.conf` | the distro kernels ask the LUKS passphrase and open root and swap |
 | `X11/xorg.conf.d/10-serverflags.conf` | no VT switch and no server kill by key, so a locked X session cannot be left from the keyboard |
 | `pacman.d/hooks/96-strip-setuid.hook` | keeps the setuid bit off two mount helpers nothing here uses |
+| `elogind/system-sleep/nvidia`, `pacman.conf` (`NoExtract`) | replaces the package hook, which elogind would otherwise run instead (it reads `/usr/lib` first and masks by name): the driver is told `hibernate` for S4 (video memory is saved across the power cut) and the resume runs synchronously. Remove `/usr/lib/elogind/system-sleep/nvidia` once; `NoExtract` keeps it away |
+| `elogind/system-sleep/03-lid-wake-s4` | experiment: sets EC RAM byte 0x01 bit 6 before a hibernate so the EC may turn a lid open into a power-button pulse (`docs/wiki/cross-stack-review.md`, research 10); needs `/usr/local/sbin/ectool` from coreboot's `util/ectool` |
+| `elogind/system-sleep/20-hibernate-later` | with Bitwarden running the kernel cannot hibernate (memfd_secret): a lid-closed suspend gets an RTC alarm and hibernates after quitting Bitwarden |
+| `elogind/system-sleep/90-battwatch-marks` | battery readings at every sleep edge for battwatch |
+| `elogind/logind.conf.d/10-lid-suspend.conf` | lid = suspend-then-hibernate |
+| `udev/rules.d/90-rapl-power-group.rules`, `99-cs9711-no-autosuspend.rules`, `80-vfio-kvm.rules` | RAPL energy counters readable by group `power`; the USB fingerprint reader never autosuspends; vfio devices for the VM |
+| `sudoers.d/50-bootmenu`, `60-ps2-mode` | the boot menu request and the PCSX2 plan switch without a password |
 | `usr-local/libexec/slock-keyring` | opens the login keyring after a fingerprint unlock with a key sealed in the TPM; must stay mode 0755 (slock checks it with the real uid) |
 
 `/etc` and `/usr/local` are git repositories on the laptop and are changed through

@@ -1,0 +1,27 @@
+#!/bin/sh
+# battwatch: mark the edges of every sleep phase (elogind hook: $1=pre|post, $2=verb).
+# Install as root: /etc/elogind/system-sleep/90-battwatch-marks (0755).
+#
+# suspend-then-hibernate runs the hooks once per phase with SYSTEMD_SLEEP_ACTION
+# = suspend, then hibernate; the daemon cannot tick in between and would see one
+# gap. It splits that gap with these lines (see crates/battwatch-core/src/marks.rs):
+#   <pre|post> <action> <wall s> <BOOTTIME ms> <MONOTONIC ms> BATn=<charge_now|energy_now> ...
+# /run is tmpfs: the pre line of a hibernation is in the image, so it survives the resume.
+F=/run/battwatch-sleep.marks
+case "$1" in pre|post) ;; *) exit 0 ;; esac
+
+read -r up _ </proc/uptime
+boot=$(echo "$up" | awk '{ printf "%d", $1 * 1000 }')
+mono=$(sed -n 's/^now at \([0-9]*\) nsecs$/\1/p; 3q' /proc/timer_list)
+mono=$((${mono:-0} / 1000000))
+line="$1 ${SYSTEMD_SLEEP_ACTION:-$2} $(date +%s) $boot $mono"
+for b in /sys/class/power_supply/BAT*; do
+	[ -e "$b" ] || continue
+	q=$(cat "$b/charge_now" 2>/dev/null || cat "$b/energy_now" 2>/dev/null) || continue
+	line="$line ${b##*/}=$q"
+done
+
+umask 022
+[ -f "$F" ] && [ "$(wc -l <"$F")" -gt 400 ] && { tail -n 200 "$F" >"$F.new" && mv "$F.new" "$F"; }
+echo "$line" >>"$F"
+exit 0

@@ -1,0 +1,3 @@
+# chadpower (Ctrl+Alt+BackSpace session menu): "Boot menu" sets the CMOS
+# boot-menu request byte; it reboots through loginctl itself.
+btw ALL=(root) NOPASSWD: /usr/local/bin/bootmenu --no-reboot

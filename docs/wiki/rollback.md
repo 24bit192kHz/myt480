@@ -50,6 +50,29 @@ Changing the config alone does not change an already loaded NVIDIA module.
 Check `gpu-power status` afterward. The original AC setting shows parameter
 `0x03`, active/D0; the audited idle state shows parameter `0x01`, suspended/D3cold.
 
+## Later deployment (2026-10-09 evening)
+
+The second round went through `syswork` (commits in the laptop's `/etc` and
+`/usr/local` git repositories, "syswork apply fix-1009"), after the audit's own
+direct installs were committed there as well. Rollback of these is therefore
+`git -C /usr/local checkout <previous> -- bin/<file>` and the same in `/etc`,
+or the audit directory above for the originals.
+
+| Deployed file | SHA256 |
+|---|---|
+| `gpu-power` (source of `d69ed06`, built on the laptop) | `da0f739e25bd7b77cdaad676d0e497b86f663c9575be503d6525227d83f00644` |
+| `thermald-t480` (AC fallback, config bounds) | `4e9d6b4b3bdbe46e6c8346291f1a350b9859e81de8470d5955c64cc753823ea7` |
+
+Also installed: `bw-screen` (Bitwarden through `igpu-run`), `rtc-hibernate`
+(through `loginctl`), the `nvidia`, `02-sleep-guard` and new `03-lid-wake-s4`
+sleep hooks, and `/usr/local/sbin/ectool` (coreboot's `util/ectool`, needed by the
+lid-wake hook). `touch /etc/elogind/no-lid-wake-s4` disables the EC experiment
+without removing anything. The package file
+`/usr/lib/elogind/system-sleep/nvidia` was removed (copy in
+`/root/myt480-audit-20261009/nvidia-hook-from-usr-lib`) and `pacman.conf` got
+`NoExtract = usr/lib/elogind/system-sleep/nvidia`; putting the copy back and
+dropping that line restores the package behaviour.
+
 ## Original hashes
 
 | Backup | SHA256 |

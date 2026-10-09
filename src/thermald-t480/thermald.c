@@ -164,7 +164,16 @@ static void set_key(struct conf *c, const char *k, const char *v)
     size_t i;
     for (i = 0; i < sizeof num / sizeof *num; i++)
         if (!strcmp(k, num[i].k)) {
-            *(long long *)((char *)c + num[i].off) = milli(v, 0);
+            long long x = milli(v, 0);
+            /* bounds before anything reaches an MSR: undervolt 0..-250 mV, power limits
+               1..200 W, trip points 40..105 C; an out-of-range value keeps the default */
+            if ((strstr(k, "uv_") && (x > 0 || x < -250 * K)) ||
+                (strstr(k, "_w") && strstr(k, "pl") && (x < 1 * K || x > 200 * K)) ||
+                (strstr(k, "trip") && (x < 40 * K || x > 105 * K))) {
+                logs("conf: out of range, ignored: ", k);
+                return;
+            }
+            *(long long *)((char *)c + num[i].off) = x;
             if (!strncmp(k, "ac_uv_", 6)) c->ac.uv_set = 1;
             if (!strncmp(k, "batt_uv_", 8)) c->batt.uv_set = 1;
             return;
@@ -315,11 +324,12 @@ static void ac_open(const struct conf *c)
 }
 static int on_ac(const struct conf *c)
 {
+    static int last; /* unknown: keep the last reading; battery (the smaller undervolt, PL1 15 W) at start */
     long v;
     ac_open(c);
-    if (ac_fd < 0) return 1; /* unknown: assume AC */
-    if (read_long(ac_fd, &v)) { close(ac_fd); ac_fd = -1; return 1; }
-    return v != 0;
+    if (ac_fd < 0) return last;
+    if (read_long(ac_fd, &v)) { close(ac_fd); ac_fd = -1; return last; }
+    return last = v != 0;
 }
 
 /* ---------------- MSR (package scope, via cpu0) ---------------- */

@@ -14,8 +14,8 @@ mistaken for broken drivers.
 |---|---|---|---|
 | High | TPM master can be loaded before executing an unauthenticated plain root | Actual early-init control flow reproduced with mocked hardware; physical exploit not performed | Separate provisioning from daily boot; require the expected encrypted root before unsealing |
 | High | GRUB NVMe timeout/retry can dereference `NULL`; some errors pass as success | Final source and matching archived C55 module; no live timeout observed | Inject failures offline, repair queue recovery and status checking before the next payload build |
-| High | NVIDIA sleep hook requests `suspend` for hibernation and backgrounds resume | Current installed hook; preservation parameter is 1 | Correct action/phase mapping and wait for resume completion |
-| High | Sleep proceeds without proving locker readiness or successful watchdog disarm | Current source paths; unlocked resume/disarm failure not induced | Add bounded readiness/state checks and supported elogind cancellation |
+| Fixed 2026-10-09 | NVIDIA sleep hook requests `suspend` for hibernation and backgrounds resume (an `/etc` override existed but elogind masked it with the package file) | Package hook removed and kept out by `NoExtract`; `system/etc/elogind/system-sleep/nvidia`: hibernate mapping, synchronous bounded resume, VT put back on failure | Exercised by RTC-wake S3 and S4 cycles the same evening, see `docs/notes/2026-10-09-evening.md` |
+| Partly fixed | Sleep proceeds without proving locker readiness or successful watchdog disarm | Disarm now has a forced fallback and the re-arm checks that the keepalive started; locker readiness unchanged | elogind cancellation deliberately not enabled: with `AllowSuspendInterrupts=yes` any failing pre-hook cancels and the post hooks never run |
 | Security choice | CPU mitigations disabled | Live vulnerabilities explicitly report vulnerable states | Compare a recoverable boot profile with mitigations enabled |
 | Security choice | Thunderbolt domain has automatic connection and identity DMA mapping | Live NHI group13 `identity`, domain `none`, advertised protection0 | Test translated/strict host DMA with dock and VM coverage |
 | Feature gap | UCSI connector control/notifications absent | Live-matching kernel disables TYPEC; coreboot omits the recovered bridge | Implement serialized transport plus ACPI notifications; options alone are insufficient |
@@ -85,16 +85,24 @@ and buffer lifetime before hardware cold-boot tests.
 
 ## 3. Make sleep one coherent, checked operation
 
-The live `/usr/lib/elogind/system-sleep/nvidia` calls `nvidia-sleep.sh suspend`
+The packaged `/usr/lib/elogind/system-sleep/nvidia` calls `nvidia-sleep.sh suspend`
 for every `pre` event and `resume &` for `post`. It ignores the requested sleep
 method. The live driver reports `PreserveVideoMemoryAllocations: 1`, so correct
 proc-interface sequencing matters. NVIDIA distinguishes hibernate from suspend
 and requires resume immediately after a successful or failed transition.
 [NVIDIA 580 power-management documentation](https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/README/powermanagement.html).
 
-Back up and override the package hook with explicit action/phase mapping and
-synchronous resume. A mocked command test should establish each event's action,
-ordering and failure propagation before a real sleep test with GPU allocations.
+Follow-up (2026-10-09 evening): an override
+[`/etc/elogind/system-sleep/nvidia`](../../system/etc/elogind/system-sleep/nvidia)
+with the hibernate mapping had existed since 2026-10-05, but it had never run.
+elogind 257 executes `/usr/lib/elogind/system-sleep` first and masks `/etc` by
+file name (`dirs[]` in its `sleep.c`), the opposite of what the override assumed;
+no `nvidia-sleep` syslog line had ever been written. The finding above was
+therefore right in effect. The package file is now removed and kept out by
+`NoExtract = usr/lib/elogind/system-sleep/nvidia` in `pacman.conf`, and the
+override runs the resume synchronously with a 30 s bound, switching the VT back
+itself if the helper is cut short. Checked with RTC-wake S3 and S4 cycles the
+same evening (`docs/notes/2026-10-09-evening.md`).
 The vendor helper also has an exit-status defect: after failed `chvt`, its
 `exit $?` can return the condition test's success rather than the original error.
 That was reproduced with mocked commands, without switching a real VT.
@@ -104,14 +112,16 @@ Other sleep-path issues are:
 | Path | Current defect / limitation | Remedy |
 |---|---|---|
 | [`00-slock`](../../system/etc/elogind/system-sleep/00-slock), lines5/9/12 | Accepts any `slock` process, starts locking in the background, always succeeds | Confirm the intended session's successful input grabs with a bounded handshake |
-| [`02-sleep-guard`](../../system/etc/elogind/system-sleep/02-sleep-guard), line86 | Ignores watchdog-disarm failure before hibernate preparation | Validate disarm and stop sleep when it fails |
-| Same hook, lines75–76 | Logs successful rearming without verifying keepalive startup | Verify helper result and resulting timer/keepalive state |
-| [`rtc-hibernate`](../../system/usr-local/bin/rtc-hibernate), line16 | Direct sysfs entry bypasses elogind's NVIDIA, locker and watchdog hooks | Keep RTC setup, enter ordinary hibernation through `loginctl`; reserve raw entry for explicit diagnostics |
+| [`02-sleep-guard`](../../system/etc/elogind/system-sleep/02-sleep-guard) | Ignored a watchdog-disarm failure before hibernate preparation | Fixed 2026-10-09: a keepalive that will not exit is killed and the timer stopped from a fresh descriptor (magic close); a still-armed watchdog is logged loudly |
+| Same hook | Logged successful rearming without verifying keepalive startup | Fixed 2026-10-09: waits for the keepalive and logs "left disarmed" if it did not start |
+| [`rtc-hibernate`](../../system/usr-local/bin/rtc-hibernate) | Direct sysfs entry bypassed elogind's NVIDIA, locker and watchdog hooks (and is refused outright while the driver is loaded) | Fixed 2026-10-09: arms the RTC, then `loginctl hibernate` |
 
 An ordinary hook failure does not cancel elogind sleep. Its supported mechanism
 requires `AllowSuspendInterrupts=yes` in sleep configuration plus a stdout error
-message beginning with a supported cancellation keyword. Recovery must also
-restore earlier pre-hook changes after cancellation.
+message beginning with a supported cancellation keyword. In elogind 257 that
+setting also makes any non-zero hook exit cancel the sleep, and a cancelled sleep
+runs no `post` hooks, so earlier pre-hook changes (stopped fingerprint driver,
+paused VM, RTC alarm) would stay in place. It was therefore left off.
 [Official elogind hook documentation](https://raw.githubusercontent.com/elogind/elogind/main/man/loginctl.xml).
 
 The currently observed TCO watchdog and soft/NMI detectors are working. These

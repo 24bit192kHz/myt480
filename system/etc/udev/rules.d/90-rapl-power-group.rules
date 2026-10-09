@@ -1,0 +1,4 @@
+# battwatch: let group "power" read RAPL energy counters (CPU package / iGPU
+# power on battery). Root-only by default since the Platypus side channel;
+# only members of "power" (btw) gain access, not every local user.
+SUBSYSTEM=="powercap", KERNEL=="intel-rapl:*", RUN+="/bin/chgrp power /sys%p/energy_uj", RUN+="/bin/chmod 0440 /sys%p/energy_uj"

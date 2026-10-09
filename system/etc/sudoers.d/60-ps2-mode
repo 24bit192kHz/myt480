@@ -1,0 +1,1 @@
+btw ALL=(root) NOPASSWD: /usr/local/sbin/ps2-mode-root [0-9]*

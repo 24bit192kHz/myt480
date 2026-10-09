@@ -15,4 +15,5 @@ if [ $rc -eq 0 ] && grep -q "VERIFIED" $L; then
   sync; reboot
 else
   echo "$(date +%T) NOT VERIFIED - no power-off" >> $L
+  exit 1
 fi

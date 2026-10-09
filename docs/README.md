@@ -23,3 +23,5 @@ author's machine; their sources are in this repository under `firmware/` and `sr
 | `notes/mx150-freeze.md` | the GPU-load freezes: what was tested and that the undervolt was the cause |
 | `notes/2026-09-28-*.md` to `notes/2026-10-01-*.md` | what changed on those days (the undervolt and the MX150 clock offsets have their own) |
 | `notes/2026-10-04-disk-encryption.md` | measured boot, signed kernel, LUKS with the TPM: the design, the numbers and what went wrong on the way |
+| `notes/2026-10-08-port-fixes.md` | firmware C55, the lid-wake-from-S4 experiments and Lenovo's SMM |
+| `notes/2026-10-09-evening.md` | what of the 2026-10-09 audit (`research/2026-10-09-t480/`) was deployed, the fixes added the same evening, the RTC-wake S3/S4 tests and the EC lid-wake experiment |

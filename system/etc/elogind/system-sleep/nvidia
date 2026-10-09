@@ -1,0 +1,33 @@
+#!/bin/sh
+# Replaces /usr/lib/elogind/system-sleep/nvidia (nvidia-580xx-utils). elogind runs the /usr/lib
+# directory FIRST and masks /etc by file name, so the package file must be absent: removed and
+# kept out by NoExtract in /etc/pacman.conf (2026-10-09; until then this file had never run).
+# The packaged hook always runs "nvidia-sleep.sh suspend", also before a hibernate.
+# With NVreg_PreserveVideoMemoryAllocations=1 the driver has to be told "hibernate"
+# for S4 (coreboot cuts the GPU power in both, the saved video memory must survive a
+# power-off). elogind: $2 = suspend | hibernate | hybrid-sleep | suspend-then-hibernate;
+# for the last one SYSTEMD_SLEEP_ACTION names the phase (suspend, then hibernate).
+# nvidia-sleep.sh is a no-op when the driver is not loaded (gpu-power unloads it).
+case "$2" in
+	hibernate|hybrid-sleep) act=hibernate ;;
+	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
+	*) act=suspend ;;
+esac
+# The resume is synchronous (the package backgrounds it): the driver wants it right after
+# the transition, and the hooks after this one (fingerprint, hibernate-later's S3->S4 chain)
+# must not run while video memory is still being restored. Bounded, and the VT is put back
+# even if the helper was cut short, so a stuck resume cannot leave a black console.
+VTF=/var/run/nvidia-sleep/Xorg.vt_number
+case "$1" in
+	pre)
+		[ -e /proc/driver/nvidia/suspend ] || exit 0
+		logger -t nvidia-sleep "pre $2: $act"
+		/usr/bin/nvidia-sleep.sh "$act" || logger -t nvidia-sleep "pre $2: $act failed (rc $?)" ;;
+	post)
+		[ -e /proc/driver/nvidia/suspend ] || exit 0
+		if ! timeout 30 /usr/bin/nvidia-sleep.sh resume; then
+			logger -t nvidia-sleep "post $2: resume failed or took over 30 s (rc $?)"
+			[ -f "$VTF" ] && { vt=$(cat "$VTF"); rm -f "$VTF"; chvt "$vt" 2>/dev/null; }
+		fi ;;
+esac
+exit 0

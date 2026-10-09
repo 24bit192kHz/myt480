@@ -1,0 +1,3 @@
+# Chipsailing CS9711 (USB fingerprint): libfprint hwdb enables autosuspend; the sensor
+# stops answering touches after runtime suspend/resume (2026-10-05).
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2541", ATTRS{idProduct}=="0236", ATTR{power/control}="on"

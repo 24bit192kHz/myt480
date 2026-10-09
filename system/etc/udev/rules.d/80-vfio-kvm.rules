@@ -1,0 +1,3 @@
+# VFIO group devices (the GVT-g vGPU from /etc/local.d/gvt-vgpu.start) usable by the kvm group, so the
+# Win10 VM can run as btw. Docker (WinApps) runs as root and is unaffected.
+SUBSYSTEM=="vfio", KERNEL!="vfio", GROUP="kvm", MODE="0660"

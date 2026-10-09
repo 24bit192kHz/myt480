@@ -11,3 +11,4 @@ bin/super-tap-c
 bin/thermald
 bin/thermald-t480
 bin/tinygreet
+sbin/ectool

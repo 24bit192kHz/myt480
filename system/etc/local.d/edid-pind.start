@@ -1,0 +1,8 @@
+#!/bin/sh
+# HDMI sinks on flaky DDC links (an LG TV flapped connected/disconnected every
+# few seconds, i915 "HPD interrupt storm"): edid-pind takes presence from the
+# HPD pin and pins each sink's EDID while it is plugged, so nothing re-reads
+# DDC. Run by rc-local at boot; detached, logs to /var/log/edid-pind.log, and
+# removes its pins on TERM. Safe to run again (one daemon at most).
+pgrep -f "^/usr/bin/python3 -I /usr/local/sbin/edid-pind$" > /dev/null && exit 0
+setsid /usr/local/sbin/edid-pind > /dev/null 2>&1 < /dev/null &

@@ -103,9 +103,17 @@ The manual off request is retained and can take effect when the program ends.
 The nonblocking check avoids waiting for a launcher that needs the policy lock.
 
 Twelve fake-device/modprobe/lock fixtures passed, along with the existing five
-wrapper fixtures, NVML checks and a warning-free source build. These new fixes
-are **source-only**: the installed helper has not been replaced in this
-continuation. Existing live RTD3 results above apply to the preceding deployment.
+wrapper fixtures, NVML checks and a warning-free source build. **Deployed on
+2026-10-09 at 19:01** (built on the laptop from this source, installed through
+`syswork`, SHA256 `da0f739e…f00644`, see [rollback](rollback.md)). The audit's
+original RTD3 results were taken with the preceding build; the reboot that
+followed the deployment came up with the driver loaded, the GPU in D3cold and no
+device holders.
+
+The Bitwarden holder had a second cause: the laptop starts Bitwarden from
+`bw-screen boot` (session script and the hibernate-later hook), never from the
+desktop file, so the desktop override alone would have changed nothing after a
+reboot. `bw-screen` now launches it through `igpu-run` as well.
 
 Local checks and repeatable hardware test:
 

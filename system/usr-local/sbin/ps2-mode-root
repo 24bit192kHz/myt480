@@ -1,0 +1,77 @@
+#!/bin/bash
+# ps2-mode-root PID — run as root (via sudo) by ps2-mode while PCSX2 runs.
+# Switches the thermald-t480 plan to performance (PL1 64 W / PL2 90 W, turbo,
+# performance governor, also on battery), moves every other task to core 0
+# (cpus 0,4), pins PCSX2's EE / MTVU / GS threads to cores 1 / 2 / 3 (software
+# renderer threads to the hyperthreads 5-7), and
+# restores the previous plan and affinities when PID exits.
+set -u
+PATH=/usr/bin:/bin
+pid=${1:-}
+[[ $pid =~ ^[0-9]+$ ]] || { echo "usage: ps2-mode-root PID" >&2; exit 2; }
+[[ -d /proc/$pid ]] || { echo "no process $pid" >&2; exit 1; }
+owner=$(stat -c %u /proc/$pid)
+[[ $(cat /proc/$pid/comm) == pcsx2-qt && $owner == "${SUDO_UID:-x}" ]] \
+	|| { echo "pid $pid is not your pcsx2-qt" >&2; exit 1; }
+
+st=/run/ps2-mode; mkdir -p $st; chmod 755 $st  # battwatch-gui shows ps2-mode while $st/plan exists
+exec 9>$st/lock; flock -n 9 || { echo "ps2-mode already active" >&2; exit 1; }
+HOUSE=0,4 SIBS=5-7 ALL=0-7 PLAN=/var/lib/thermald-t480/plan
+declare -A PIN=([CPU Thread]=1 [MTVU]=2 [GS]=3)
+
+# Userspace tasks only; kernel threads (no exe link) are left alone.
+user() { [[ -e ${1%/task/*}/exe ]]; }
+save() {
+	read -r w <$PLAN 2>/dev/null; echo "${w:-auto}" >$st/plan
+	: >$st/affinity
+	for t in /proc/[0-9]*/task/[0-9]*; do
+		user $t || continue
+		echo "${t##*/} $(awk '/^Cpus_allowed_list/{print $2}' $t/status 2>/dev/null)" >>$st/affinity
+	done
+}
+restore() {
+	trap - EXIT INT TERM HUP
+	cat $st/plan >$PLAN
+	declare -A old
+	while read -r tid list; do old[$tid]=$list; done <$st/affinity
+	# Two passes: threads spawned by a still-housed thread during pass 1 are caught by pass 2.
+	for pass in 1 2; do for t in /proc/[0-9]*/task/[0-9]*; do
+		user $t || continue
+		tid=${t##*/}
+		cur=$(awk '/^Cpus_allowed_list/{print $2}' $t/status 2>/dev/null) || continue
+		[[ $cur == "$HOUSE" ]] && taskset -cp "${old[$tid]:-$ALL}" $tid >/dev/null 2>&1
+	done; done
+	rm -f $st/plan $st/affinity
+	echo "ps2-mode: restored"
+}
+# Only the oldest thread of each name is the real EE / MTVU / GS thread:
+# threads they start inherit the name (and the pinned core), so later
+# namesakes go back to the house cores. GS-SW-* (software renderer) use the
+# idle hyperthreads 5-7 instead of crowding core 0.
+pin() {
+	local -A seen=()
+	local tid name
+	for tid in $(ls /proc/$pid/task | sort -n); do
+		name=$(cat /proc/$pid/task/$tid/comm 2>/dev/null) || continue
+		if [[ -n ${PIN[$name]:-} && -z ${seen[$name]:-} ]]; then
+			seen[$name]=1
+			taskset -cp ${PIN[$name]} $tid >/dev/null 2>&1 && renice -n -15 -p $tid >/dev/null 2>&1
+		elif [[ $name == GS-SW-* ]]; then
+			taskset -cp $SIBS $tid >/dev/null 2>&1
+		else
+			taskset -cp $HOUSE $tid >/dev/null 2>&1
+		fi
+	done
+}
+
+save
+trap restore EXIT INT TERM HUP
+echo performance >$PLAN
+# Housekeeping: every movable task outside PCSX2 goes to core 0 (per-cpu kthreads refuse, fine).
+for t in /proc/[0-9]*/task/[0-9]*; do
+	[[ ${t%/task/*} == /proc/$pid ]] && continue
+	user $t || continue
+	taskset -cp $HOUSE ${t##*/} >/dev/null 2>&1
+done
+echo "ps2-mode: on (plan performance, EE→cpu1 MTVU→cpu2 GS→cpu3, rest→cpu0,4)"
+while [[ -d /proc/$pid ]]; do pin; sleep 2; done

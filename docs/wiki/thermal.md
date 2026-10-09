@@ -26,6 +26,13 @@ daemon; this matches the documented [thinkpad_acpi fan watchdog](https://www.ker
   in `/etc/thermald.conf` continue to apply.
 - `--test` performs no fan writes. `--once` leaves the manual setting protected
   by the watchdog, which expires after the process exits.
+- 2026-10-09 evening: when the AC state cannot be read the daemon keeps the last
+  reading, and battery (the smaller undervolt, PL1 15 W) before any reading,
+  instead of assuming AC. Undervolt values outside 0..-250 mV, power limits
+  outside 1..200 W and trip points outside 40..105 C are logged and ignored
+  before anything reaches an MSR. Built with the musl static recipe
+  (`Makefile`), SHA256 `4e9d6b4b…23ea7`, dry-run checked against the live
+  configuration, installed through `syswork`.
 
 Sources: [`thermald.c`](../../src/thermald-t480/thermald.c),
 [`fan-control.c`](../../src/thermald-t480/tests/fan-control.c).
