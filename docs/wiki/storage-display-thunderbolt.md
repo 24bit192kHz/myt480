@@ -91,6 +91,9 @@ the platform's IOMMU DMA protection. The captured domain does not advertise that
 protection. Review this policy when connecting untrusted PCIe-capable docks; do
 not add blanket auto-authorization rules as a performance optimization.
 No authorization or security policy was changed here.
+The subsequent [cross-stack review](cross-stack-review.md) confirmed VT-d is
+enabled but the NHI's current group uses an identity mapping; these are separate
+observations from the domain's advertised protection flag.
 
 The missing UCSI ACPI device is a separate firmware problem. A working
 Thunderbolt host does not restore USB-C connector status, role control, or the

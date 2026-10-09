@@ -20,6 +20,13 @@ key it asks for the LUKS passphrase on the console.
 - Each partition is looked at on its own (LUKS2 header or not), so the same kernel boots
   the machine before and after the conversion.
 
+The plain-root compatibility path is a trust-boundary gap for daily TPM unlock:
+the master can be loaded before a replacement plain root's init is executed.
+The [cross-stack review](../../docs/wiki/cross-stack-review.md) records an offline
+control-flow reproduction and the required separation of provisioning from
+production boot. The `kmk.next` migration blob also relies on file deletion rather
+than TPM-enforced single use. These limitations remain unfixed in the live kernel.
+
 ## Files
 
 | File | Use |

@@ -11,6 +11,8 @@ routing, deeper protocol recovery and better measurement tools.
 
 Start with [getting the most out of this T480](getting-the-most.md) for daily
 profiles, GPU selection, repeatable measurements and recovery.
+The [cross-stack review](cross-stack-review.md) ranks remaining boot-trust,
+firmware, kernel and sleep-path defects with evidence and next validation steps.
 
 | Area | Result | Status |
 |---|---|---|
@@ -22,6 +24,7 @@ profiles, GPU selection, repeatable measurements and recovery.
 | [Fingerprint protocol](fingerprint-protocol.md) | Recovered reset `05 02 00`, stop `04`, secure transport and worker ordering | Static recovery; source cancellation regression addressed separately from live backend |
 | [Power measurement](power-measurement.md) | Passive counters, correct dual-battery/source handling, repeatable capture | 21 fixture tests; live AC CPU-package observation, no whole-system watts claim |
 | [Storage/display/Thunderbolt](storage-display-thunderbolt.md) | SMART health, working FBC/DMC, NVM 23.0 and domain policy | Read-only checks; no firmware or power-policy changes |
+| [Cross-stack review](cross-stack-review.md) | Early-init trust boundary, C55 NVMe failure paths, live sleep hooks and kernel tradeoffs | Offline/source defects and current settings distinguished; live changes deferred to validated fixes |
 | [Other subsystems](subsystems.md) | CPU, iGPU, NVMe, Wi-Fi, audio, Thunderbolt, sleep, firmware and crash diagnostics inspected | Inventory and next experiments documented |
 | [Evidence and tools](evidence.md) | REA used successfully; Ghidra MCP fallback used on NVIDIA | Reproduction details and artifact hashes recorded |
 | [Rollback](rollback.md) | Original binaries/configs retained; checksum-checked restoration script | Backup preflight passed on the laptop |

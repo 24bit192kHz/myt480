@@ -6,7 +6,7 @@ laptop uses.
 | File | Meaning |
 |---|---|
 | `PKGBUILD` | the package; `makepkg -si` builds `linux-t480` and `linux-t480-headers` |
-| `config` | kernel configuration |
+| `config` | CachyOS base configuration before the PKGBUILD's T480 tailoring |
 | `config-7.2.8-1-t480` | configuration of the first build, before the MX150 work |
 | `config-7.2.8-2-t480` | adds GVT-g (mediated iGPU for a Windows VM), `i915.enable_gvt=1` built into the command line |
 | `config-7.2.8-3-t480` | adds the TPM 2.0 driver (`tpm_tis`, the Infineon chip coreboot declares as MSFT0101) and the PCH TCO watchdog (`iTCO_wdt`) |
@@ -23,8 +23,14 @@ initramfs is the built-in early init, which hands over to `firmware/tools/t480-i
 Before `makepkg`, build `early/root/init` and `early/root/bin/cryptsetup` as
 `early-init/README.md` describes. The headers package is needed for the NVIDIA DKMS module.
 
-Not enabled, in case you look for them: `VFIO_PCI` (GPU passthrough) and
-`INTEL_IOMMU_DEFAULT_ON`.
+The running `config-7.2.8-7-t480` enables `VFIO_PCI=m` and
+`INTEL_IOMMU_DEFAULT_ON=y`, plus `IOMMU_DEFAULT_PASSTHROUGH=y` for host devices.
+GVT-g and VFIO support are intentional VM features; an enabled IOMMU does not
+alone establish translated DMA isolation. The final snapshot is authoritative
+for running features, rather than the base config or package description.
+
+The [cross-stack review](../docs/wiki/cross-stack-review.md) records the boot-trust,
+hardening and driver/sleep issues still needing validated fixes.
 
 A module that is missing: add its name to `extra-modules.txt`, rebuild `modprobed.db`,
 rebuild the kernel.

@@ -49,7 +49,7 @@ first, so that those commits exist.
 | File | Meaning |
 |---|---|
 | `t480.defconfig` | the configuration: board, blobs, libgfxinit, payloads, TPM measured boot (PCR 2; the MX150 option ROM is listed as runtime data and goes to PCR 3, because it is only loaded while the GPU is on) |
-| `t480-debug.defconfig`, `t480-debug.fmd` | the same with coreboot's log written to the flash, see below |
+| `t480-debug.defconfig`, `t480-debug.fmd` | older debug profile with flash logging; GRUB/signature/measured-boot settings differ from production, see below |
 | `grub.cfg` | GRUB menu, the kernel command line and the boot policy: signature enforced on the default kernel, password on everything that can start something else |
 | `Makefile.mk` | adds the data files below to CBFS |
 | `data/boot.pub`, `data/auth.cfg` | public key the kernel is signed with, and GRUB superuser + password hash. Not included: make your own (main README, step 3a). Without them the build still works and GRUB checks nothing |
@@ -77,6 +77,13 @@ sh ../myt480/firmware/tools/romcheck.sh build/coreboot.rom   # prints "romcheck:
 ```
 
 ## Debug build
+
+The stored debug defconfig predates the production boot policy: it selects the
+older `t480` GRUB branch, omits PGP modules and does not enable measured boot.
+Before using the commands below, derive the debug profile from the production
+configuration, add its logging region, and verify equivalent boot policy. The
+[cross-stack review](../../docs/wiki/cross-stack-review.md) records this mismatch
+and the pre-flash checker's remaining limitations.
 
 A boot that hangs leaves nothing behind: the log is in RAM and the way out is a
 forced power-off. The debug build writes the log to a 128 KiB region `CONSOLE` of the

@@ -125,3 +125,23 @@ tests conditional on that private data do not provide fresh cross-language
 validation in this run. The seven new USB cancellation fixtures ran without a
 device. Desktop-file validation, shell syntax, local wiki links, whitespace,
 Intel GLX/EGL/Vulkan, SMART access and routing rollback/reapply also passed.
+
+## Cross-stack assessment
+
+The [cross-stack review](cross-stack-review.md) follows the deployed continuation.
+Its private artifacts are under
+`/home/btw/test/rea/work/audit-20261009-cross-stack`: `plain-root-harness.c`,
+its compiled control-flow fixture, `nvme-regression-vectors.json`,
+`firmware-fixtures.json`, `live-selected-state.txt` and
+`live-driver-watchdog.txt`. The early-init harness assumes a successful matched
+unseal and mocks device/key/mount/exec operations; it establishes source ordering,
+not TPM cryptography or a live physical exploit.
+
+The archived C55 candidate ROM SHA256 is
+`63c5ddbe65a9c51da845b83dc4540df706488b76bcee49d8bbca0825ee6b1576`.
+Its extracted payload SHA256 is
+`54ae37370502e782acbed9d84c90e53034457aa0217c5a22e435b7312b961eea`;
+the exact reviewed `nvme.mod` occurs at ELF offset143708, SHA256
+`541e4ab0b0be8106ebbbac5a901414cfb0d6e498569286a66627f101d1e3eeee`.
+This binds the latent NVMe findings to the archived build. A fresh live SPI dump,
+controller timeout, flash, hibernation or key-release experiment was not performed.
