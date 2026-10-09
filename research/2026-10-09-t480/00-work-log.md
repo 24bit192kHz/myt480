@@ -23,7 +23,7 @@ appropriate tools. Tool versions and artifact hashes are in the
 
 ## 2. Fan and NVIDIA improvements — `2cb13a3`
 
-[Commit: Make T480 fan and GPU control fail safely; document driver audit](https://github.com/24bit 192kHz/myt480/commit/2cb13a3c133df037f55a46a4bb4493fdc34f0c20).
+[Commit: Make T480 fan and GPU control fail safely; document driver audit](https://github.com/24bit192kHz/myt480/commit/2cb13a3c133df037f55a46a4bb4493fdc34f0c20).
 
 | Change | Repository | Laptop |
 |---|---|---|
@@ -52,7 +52,7 @@ files and driver mode. The application was left running.
 
 ## 3. Protocol recovery, Intel routing, and diagnostics — `fe58a80`
 
-[Commit: Extend T480 protocol audit, Intel routing and measurement wiki](https://github.com/24bit 192kHz/myt480/commit/fe58a802fc08913b1d7c9147196d1dd1e6756527).
+[Commit: Extend T480 protocol audit, Intel routing and measurement wiki](https://github.com/24bit192kHz/myt480/commit/fe58a802fc08913b1d7c9147196d1dd1e6756527).
 
 | Change | Repository | Laptop |
 |---|---|---|
@@ -91,7 +91,7 @@ syntax, relative wiki links and whitespace checks also passed.
 
 ## 4. Cross-stack assessment — `7f5a430`
 
-[Commit: Document cross-stack boot, driver and sleep defects](https://github.com/24bit 192kHz/myt480/commit/7f5a430d6091280f9c8d127a1b17096dbf1a0b78).
+[Commit: Document cross-stack boot, driver and sleep defects](https://github.com/24bit192kHz/myt480/commit/7f5a430d6091280f9c8d127a1b17096dbf1a0b78).
 
 This pass added the [cross-stack review](../../docs/wiki/cross-stack-review.md)
 and corrected the coreboot, kernel and early-init READMEs. It inspected the
@@ -307,3 +307,29 @@ application requirements. JSON structure/hashes, local Markdown links and
 whitespace were checked for this publication. The earlier 102-test result
 remains attached to the earlier authored fixes, not to this driver research.
 Owned temporary Ghidra MCP server/client processes were stopped after saving.
+
+## 11. Complete findings publication — 2026-10-10
+
+At the user's request to push all findings to `testing`, publication coverage was
+checked against the subject reports, evening deployment record and NVIDIA
+upgrade research. The [complete index](13-findings-and-improvement-index.md)
+preserves all 26 previously discussed improvement directions and adds explicit
+memory/platform, EC/controller, service/integrity and media coverage, for 30
+total. Each entry links its evidence, current status and remaining validation.
+
+Firmware, kernel, thermal, desktop and cross-stack descriptions were reconciled
+with the recorded evening deployments. GPU lock/error guards, thermal bounds,
+QEMU/flash-wrapper status, effective NVIDIA hook, watchdog/RTC and `bw-screen`
+routing are distinguished from the later source-only status/firmware corrections
+and the still-open boot-trust, NVMe, live-allocation and sleep-cleanup defects.
+The separate owner S4 lid successes remain reported results; retained-state,
+cancellation and S5 limits remain explicit. Older malformed commit links were
+corrected, and both research/wiki entry points link the full index.
+
+Independent review checked the inventory for omissions and stale status. Local
+Markdown targets/heading anchors and whitespace were checked for this
+documentation update. Earlier test counts remain attributed to their original
+fixes; no new hardware result is claimed. This pass changed only Markdown and
+Git publication: no T480 command, installation, tuning, EC access, sleep, reboot
+or flash occurred. Private/raw artifacts remain in their recorded evidence
+locations; derived findings, authored fixes and hashes remain published here.

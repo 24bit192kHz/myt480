@@ -8,10 +8,13 @@ record rather than an automatic deployment procedure.
 The `testing` branch includes all three audit commits from `re-audit-20261009`,
 starting at baseline `d89f79d`, followed by this organized publication. Read the
 [complete work log](00-work-log.md) for what was actually changed and tested.
+The October 10 [complete findings and improvement index](13-findings-and-improvement-index.md)
+collects every discussed improvement direction and its current evidence/status.
 
 | Subject | Research report |
 |---|---|
 | Complete work record | [Changes, deployments, tests, and commit history](00-work-log.md) |
+| Complete findings and improvements | [Established results and all 30 improvement directions](13-findings-and-improvement-index.md) |
 | Firmware and boot trust | [Coreboot, GRUB NVMe, TPM early init, and build checks](01-firmware-and-boot-trust.md) |
 | Kernel and security | [Actual running configuration, DMA, mitigations, and sleep](02-kernel-and-security.md) |
 | Graphics | [NVIDIA reverse engineering, RTD3, PRIME, and Intel routing](03-nvidia-and-intel-graphics.md) |

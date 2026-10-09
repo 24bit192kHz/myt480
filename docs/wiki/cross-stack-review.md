@@ -172,13 +172,20 @@ established here.
 |---|---|---|
 | Debug firmware | Stored debug defconfig selects older GRUB branch and omits production PGP modules/measured boot | Derive it from production and check equivalent boot policy before use |
 | Pre-flash checker | [`romcheck.sh`](../../firmware/tools/romcheck.sh) accepts matching UUID text without checking actual config/key/auth | Stale/missing-policy fixture returned OK; compare exact extracted artifacts |
-| Option ROM | [`coreboot patch0013`](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines80–81, can select a copy length exceeding CBFS file size | Malformed-input defect; current VBIOS fits. Reject oversized lengths and test truncated images |
-| Firmware tests | [`qtest52.py`](../../firmware/tools/qtest52.py) printed failures but exited0 | Later source fix returns1 for scenario failures and2 for unknown selectors; six hardware-free verdict fixtures passed, no new QEMU boot run |
-| Flash wrappers | [`flashrom.sh`](../../firmware/tools/flashrom.sh) and [`flashrom-warm.sh`](../../firmware/tools/flashrom-warm.sh) end failed verification branches successfully | Propagate failure and resolve the open migration blob; no flash was run |
-| GPU policy | [`gpu-power.c`](../../src/gpu-power/gpu-power.c) reported success after missing node or failed automatic unload | Later source fix returns failure; twelve fake-device/modprobe/lock fixtures passed, not deployed |
-| GPU launch race | Manual `off` bypassed the wrapper's shared users lock | Later source fix refuses unload while the launch/job lock is held; hardware-free launch-window fixture passed, not deployed |
-| Thermal failure path | [`thermald.c`](../../src/thermald-t480/thermald.c), line320, defaults to AC on detection failure; numeric config lacks complete bounds | Retain last valid source/default conservatively; reject invalid values before hardware writes |
+| Option ROM | [`coreboot patch0013`](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines80–81, can select a copy length exceeding CBFS file size | Source-only patches0030/0031 bound CBFS metadata/image copies and actual produced size; actual-source sanitizer fixtures passed. Wider on-device/RAM/generic-load/VFCT and AML contracts remain open; [ROM follow-up](../../research/2026-10-09-t480/12-mx150/03-vbios-and-ec.md) |
+| Firmware tests | [`qtest52.py`](../../firmware/tools/qtest52.py) printed failures but exited0 | Fixed and installed in the evening run: returns1 for scenario failures and2 for unknown selectors; six hardware-free verdict fixtures passed, no new QEMU boot run |
+| Flash wrappers | [`flashrom.sh`](../../firmware/tools/flashrom.sh) and [`flashrom-warm.sh`](../../firmware/tools/flashrom-warm.sh) end failed verification branches successfully | Failure exits fixed and installed in the evening run; no flash was run. Any future migration blob still needs an explicit recovery plan |
+| GPU policy | [`gpu-power.c`](../../src/gpu-power/gpu-power.c) reported success after missing node or failed automatic unload | Fixed and installed in the evening run; returns failure, with twelve fake-device/modprobe/lock fixtures passed |
+| GPU launch race | Manual `off` bypassed the wrapper's shared users lock | Fixed and installed in the evening run; refuses unload while the launch/job lock is held, with a hardware-free launch-window fixture |
+| Thermal failure path | [`thermald.c`](../../src/thermald-t480/thermald.c) formerly defaulted to AC on detection failure; numeric config lacked reviewed bounds | Fixed and installed in the evening run: retains last valid source, defaults to battery initially, and rejects out-of-range undervolt, power-limit and trip values |
 | Reference consistency | Kernel README omitted enabled VFIO/IOMMU; package description advertises disabled AutoFDO/Propeller | README corrected in this review; use final config for feature claims |
+
+The [separate evening record](../notes/2026-10-09-evening.md) supplies the later
+deployment status; it does not turn this original review into a live flash or
+QEMU test. The [MX150 firmware follow-up](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md)
+also adds source-only patch0029 for runtime power-good failure and the not-deployed
+NVIDIA hook exit-status correction. Firmware patches0029–0031 remain offline
+proposals rather than flashed fixes.
 
 The setuid GPU helper uses an exact command whitelist, fixed `execve` arguments
 and environment, an absolute NVML path, and root-controlled parents/config.
@@ -201,9 +208,11 @@ TSC-adjust restoration and a DP adapter warning need event correlation before
 being assigned a fault. The inactive `/etc/default/grub` reference does not
 describe current PSR/APST settings.
 
-The Intel launcher is deployed, but the existing Bitwarden process still holds
-NVIDIA handles. Adopt it on the next normal app restart and compare device state
-and energy. [Routing](gpu-routing.md), [measurement](power-measurement.md),
+At the original review, the Intel launcher was deployed but the existing
+Bitwarden process still held NVIDIA handles. The evening run corrected the actual
+session/restart route, `bw-screen boot`, to use `igpu-run`; it reports Bitwarden
+open without NVIDIA holders and the GPU in D3cold. Broader application-holder
+coverage and matched energy comparisons remain open. [Routing](gpu-routing.md), [measurement](power-measurement.md),
 [UCSI reconstruction](usb-c.md) and [fingerprint source work](fingerprint-protocol.md)
 contain their own limitations and restoration steps.
 

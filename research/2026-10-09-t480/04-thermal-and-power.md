@@ -121,9 +121,13 @@ correctness tests found silent CUDA errors at +250 MHz core. This audit did not
 raise those values. See the [retained configs](../../system/etc/gpu-power.conf)
 and [NVIDIA results](../../docs/wiki/nvidia.md).
 
+The [evening record](../../docs/notes/2026-10-09-evening.md) reports deployment
+of the later source guards: AC-detection failure keeps the last source, starting
+conservatively on battery, and out-of-range undervolt, power-limit and trip values
+are logged and ignored. Those concrete review findings are fixed.
 Open work is repeatable battery/source-transition testing, sustained mixed
-CPU/GPU thermals, and the cross-stack review's still-unfixed AC-detection
-failure fallback and numeric configuration bounds. Those limits are documented
-in the [cross-stack review](../../docs/wiki/cross-stack-review.md). Measure one
+CPU/GPU thermals and wider policy/failure coverage. The
+[cross-stack review](../../docs/wiki/cross-stack-review.md) retains the original
+findings and their status. Measure one
 change at a time and retain the original policy; keep ordinary applications on
 [Intel](../../docs/wiki/gpu-routing.md) and use PRIME deliberately.

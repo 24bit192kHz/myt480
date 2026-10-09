@@ -15,6 +15,9 @@ Start with [getting the most out of this T480](getting-the-most.md) for daily
 profiles, GPU selection, repeatable measurements and recovery.
 The [cross-stack review](cross-stack-review.md) ranks remaining boot-trust,
 firmware, kernel and sleep-path defects with evidence and next validation steps.
+The October 10 [complete findings and improvement index](../../research/2026-10-09-t480/13-findings-and-improvement-index.md)
+collects all 30 directions, with deployed, source-only and open results linked
+to their evidence and recovery instructions.
 The [EC continuation](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md)
 records the supplied firmware's architecture and selected lid/wake traces.
 The [coverage ledger](../../research/2026-10-09-t480/11-coverage-and-feature-roadmap.md)
@@ -69,14 +72,18 @@ USB-C role swaps and battery discharge comparisons still need validation.
 
 ## What to work on next
 
-1. Implement the recovered USB-C mailbox through a serialized kernel/firmware EC
-   transport, with timeouts and proper notifications. This addresses a missing
-   interface that userspace tuning cannot supply.
+1. Repair the encrypted-root trust boundary and GRUB NVMe failure recovery, then
+   validate coherent sleep preparation, locker readiness and cancellation cleanup.
+   These are the highest-priority correctness/security findings in the
+   [complete index](../../research/2026-10-09-t480/13-findings-and-improvement-index.md).
 2. Extend the recorded idle-GPU sleep cycles to live checked allocations and
    AC/battery transitions; verify errors, storage, ownership and restoration.
-3. Capture fingerprint cancellation/resume USB traces using the selected backend,
+3. Implement the recovered USB-C mailbox through a serialized kernel/firmware EC
+   transport, with timeouts and proper notifications. This addresses a missing
+   interface that userspace tuning cannot supply.
+4. Capture fingerprint cancellation/resume USB traces using the selected backend,
    then compare them with the recovered worker lifecycle.
-4. Measure energy on battery with charging stopped and a repeatable workload;
+5. Measure energy on battery with charging stopped and a repeatable workload;
    only change CPU/iGPU/NVMe policies when the measurement identifies a bottleneck.
 
 This is an audit of the observable system and selected relevant binary paths,

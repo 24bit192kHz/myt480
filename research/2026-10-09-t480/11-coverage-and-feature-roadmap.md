@@ -6,6 +6,9 @@ reverse engineered merely because its driver loads. Selected paths are complete
 enough to explain particular behavior; many proprietary components remain open.
 The [work log](00-work-log.md) records completed work and
 [daily-use guide](../../docs/wiki/getting-the-most.md) explains the tested settings.
+The [complete findings and improvement index](13-findings-and-improvement-index.md)
+collects the established results and all 30 improvement directions discussed
+through the NVIDIA 610/615 continuation.
 
 ## Hardware coverage
 
@@ -28,7 +31,7 @@ hardware. Every PCI function in that snapshot is included in this table.
 | HDA `00:1f.3` | AC/battery idle policy inspected | Codec/pin routing, pops, headset detection, latency and suspend reliability |
 | SMBus `00:1f.4` | Controller and kernel support inventoried | Client topology and battery/sensor ownership; avoid competing raw transactions |
 | Ethernet `00:1f.6` | I219-LM and existing wake policy recorded | Throughput, link power and wake/overnight discharge validation |
-| NVIDIA `01:00.0` | Prior CUDA/PRIME/RTD3; approved current getters; selected RM voltage clamp/PM, VBIOS and board/EC protections mapped in [MX150 research](12-mx150/README.md) | Alternative undervolt policy/calibration, remaining RM/microcode, sleep allocations, MX150 Vulkan, energy and display transitions |
+| NVIDIA `01:00.0` | Prior CUDA/PRIME/RTD3; approved getters; selected RM voltage clamp/PM, VBIOS and board/EC protections; missing 610/615 GP108 physical selection/registration mapped in [MX150 research](12-mx150/README.md) | Alternative undervolt policy/calibration, remaining RM/microcode, sleep allocations, MX150 Vulkan, energy and display transitions; no working 610/615 port |
 | Wi-Fi `02:00.0` | Intel8265/8275 and source-dependent policy inspected | Firmware internals, roaming/reconnect, throughput/latency and measured power |
 | Thunderbolt bridges `03:00.0`, `04:00.0`, `04:01.0`, `04:02.0` | Topology, NVM23, security/DMA policy inspected | Dock hotplug, authorization, PCIe tunneling and recovery with translated DMA |
 | Thunderbolt NHI `05:00.0` | Correct function/group identified; identity mapping documented | Host/controller firmware protocol and dock/sleep coverage |
@@ -46,7 +49,7 @@ hardware. Every PCI function in that snapshot is included in this table.
 | USB root hubs | Controller inventory above | Port/device topology under actual docks and peripherals |
 | Keyboard, TrackPoint, touchpad and hotkeys | Coreboot EC/ACPI interfaces and kernel support available | Actual input-controller mapping, firmware/event paths and gesture/wake behavior |
 | Panel/backlight | Brightness and display feature state observed | Panel capabilities, brightness/energy curve and flicker/resume |
-| Two batteries, charger, fan and lid | Source-dependent policy, fan watchdog and stock lid constraints recorded | EC firmware paths, pack/controller protocol, charging/transition accuracy and lid-S4 eligibility |
+| Two batteries, charger, fan and lid | Source-dependent policy/fan watchdog deployed; retained lid gate recovered; evening owner record reports two S4 lid wakes | Remaining EC/pack/charger protocols, charging/transition accuracy, retained-state/cancellation cleanup and S5 separation |
 | TPM, RTC, watchdog, flash descriptor, ME and GbE data | Boot-key source and recovery mechanisms reviewed; RTC/watchdog behavior documented | Remaining TPM policy branches, ME/FSP internals, descriptor bounds and identity-preserving recovery |
 
 These open entries are not known failures. They identify where direct evidence
@@ -63,7 +66,7 @@ architecture or undocumented pin assignments.
 | Kernel/security | Live-matching config, command line, module and DMA/mitigation choices distinguished | Separate diagnostic/hardened profile, measured cost, driver internals and confinement tests |
 | GPU/thermal helpers | Evening record reports GPU lock/error and thermal source/bounds guard deployment; new getter/diagnostic/hook status and PWRGD/ROM corrections checked offline | New source correction deployment, broader policy bounds and live-allocation/failure transitions |
 | s6/elogind/power services | Selected service, watchdog, locker and NVIDIA sleep paths inspected | Coherent checked sleep transaction and full startup/failure dependency coverage |
-| Desktop/applications | Intel launch policy and Bitwarden future-launch override installed | App restart/holders, compositor/input/audio interactions and matched workload energy |
+| Desktop/applications | Intel helper/desktop override and actual `bw-screen` session/restart route installed; evening record reports D3cold with Bitwarden open | Broader GPU holders, compositor/input/audio interactions and matched workload energy |
 | Network/storage/userspace | Targeted inventory and read-only diagnostics | Network services, package/update integrity, filesystem recovery and application-level performance |
 
 ## Features worth pursuing
@@ -77,8 +80,10 @@ architecture or undocumented pin assignments.
 2. **Native USB-C status/PD control:** implement the recovered serialized transport
    and notifications after proving capability/status behavior. An offline mailbox
    model or TYPEC option alone does not restore the feature.
-3. **Reliable GPU sleep and desktop idle:** repair sleep ordering, adopt Intel routing
-   on ordinary app restart, then test allocations/resume and measure battery energy.
+3. **Reliable GPU sleep and desktop idle:** Intel routing now covers the actual
+   Bitwarden restart path and coarse D3cold is recorded. Finish checked sleep
+   ordering/failure cleanup, test live allocations/resume, cover remaining GPU
+   holders and measure battery energy.
 4. **Safer boot and recovery:** fix the encrypted-root trust boundary, NVMe failure
    recovery and checker exit/status contracts before preparing new boot images.
 5. **A diagnostic/security boot profile:** retain the tuned kernel while adding

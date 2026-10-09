@@ -48,24 +48,31 @@ changing the default. See [USB-C and Thunderbolt](05-usb-c-and-thunderbolt.md).
 
 ## Sleep is a cross-driver operation
 
-Current installed/source paths expose failures that ordinary boot and idle tests
-do not cover:
+The original review found incorrect NVIDIA hibernate mapping/asynchronous resume,
+unverified locker readiness, watchdog error gaps and a raw `rtc-hibernate` entry
+that bypassed hooks. That review did not induce an unlocked resume, failed disarm
+or hardware sleep transition. The separate [evening record](../../docs/notes/2026-10-09-evening.md)
+reports subsequent changes and idle-GPU RTC S3/S4 tests:
 
-- The installed NVIDIA elogind hook uses `suspend` for every pre-event, including
-  hibernation, and backgrounds resume. With video-memory preservation enabled,
-  use the correct requested action and wait for resume completion.
-- The locker hook accepts an existing `slock` process or launches one in the
+- The package NVIDIA hook was masking the site override. Removing it and adding
+  `NoExtract` makes the site's hibernate mapping and bounded synchronous resume
+  effective. The [later approved file observation](12-mx150/04-sleep-and-firmware.md)
+  confirmed those changes; truthful helper/timeout exit reporting is now fixed
+  only in repository source and is **not deployed**.
+- The watchdog hook now has a forced disarm fallback and checks keepalive startup
+  before claiming rearming. Failure/cancellation sequencing and the final timer
+  state still require broader validation.
+- `rtc-hibernate` now arms the RTC and enters through `loginctl hibernate`, so the
+  ordinary sleep hooks run.
+- The locker still accepts an existing `slock` process or launches one in the
   background without proving that the intended session has acquired its grabs.
-- The sleep guard ignores watchdog-disarm failure and can log rearming without
-  confirming the helper and timer state.
-- Direct sysfs entry in `rtc-hibernate` bypasses the ordinary NVIDIA, locker and
-  watchdog hooks.
 
-These defects remain proposed fixes; this pass did not induce an unlocked resume,
-failed disarm or hardware sleep transition. Correct action mapping, bounded locker
-readiness, verified watchdog state and supported elogind cancellation should be
-tested with mocked failures before real suspend/hibernate workloads. A nonzero
-hook exit alone does not cancel elogind sleep. The
+Locker readiness, live GPU-allocation preservation and coherent failure cleanup
+remain open. `AllowSuspendInterrupts` was deliberately left off: enabling it can
+cancel sleep on a failed pre-hook without running post hooks, leaving earlier
+preparations undone. A nonzero hook exit alone therefore does not cancel current
+elogind sleep. Review transaction/unwind behavior with mocked failures before a
+separately approved hardware trial. The
 [sleep-path review](../../docs/wiki/cross-stack-review.md#3-make-sleep-one-coherent-checked-operation)
 links exact paths and the vendor/elogind contracts.
 

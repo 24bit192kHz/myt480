@@ -55,12 +55,16 @@ records the cumulative source and recovery requirements.
 |---|---|
 | [Debug defconfig](../../firmware/coreboot/site-local/t480-debug.defconfig) selects older GRUB branch `t480`, omits production PGP modules and measured boot, although described as the same image with logging | Derive it from [production](../../firmware/coreboot/site-local/t480.defconfig) and compare boot policy offline |
 | [romcheck.sh](../../firmware/tools/romcheck.sh) accepts matching UUID text without verifying actual config/key/auth contents | Compare explicit extracted artifacts; a deliberately stale fixture already returned `OK` |
-| [Option-ROM patch](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines 80–81, can choose a header length beyond its CBFS bound | Reject oversized copies and test truncated ROMs; the current VBIOS fits and did not trigger this defect |
-| [qtest52.py](../../firmware/tools/qtest52.py) reported failures but exited 0 | Fixed source-only: failed scenarios exit1, unknown selectors exit2; six offline verdict fixtures passed, no new QEMU boot validation |
-| [Cold](../../firmware/tools/flashrom.sh) and [warm](../../firmware/tools/flashrom-warm.sh) flash wrappers finish failed-verification branches successfully | Propagate failure and resolve any pending migration blob; no flash was run |
+| [Option-ROM patch](../../firmware/coreboot/patches/0013-local-dGPU-wait-for-the-link-before-FSP-S-bound-the-.patch), lines 80–81, can choose a header length beyond its CBFS bound | Source-only patches 0030/0031 now bound CBFS metadata/image copies and the actual produced size. Wider on-device/RAM/generic-load/VFCT and AML contracts remain open; see [the ROM follow-up](12-mx150/03-vbios-and-ec.md) |
+| [qtest52.py](../../firmware/tools/qtest52.py) reported failures but exited 0 | Fixed: failed scenarios exit1, unknown selectors exit2; six offline verdict fixtures passed. Installed in the separate evening run, with no new QEMU boot validation |
+| [Cold](../../firmware/tools/flashrom.sh) and [warm](../../firmware/tools/flashrom-warm.sh) flash wrappers finish failed-verification branches successfully | Failure exits fixed and installed in the separate evening run; no flash was run. Any future migration blob still needs its own recovery plan |
 
-The continuation fixes the scenario runner's verdict contract; the other gates
-still need repairs. No new ROM was prepared. Preserve the known working image
+The [evening record](../../docs/notes/2026-10-09-evening.md) reports installation
+of the runner and flash-wrapper fixes. The later [MX150 firmware follow-up](12-mx150/04-sleep-and-firmware.md)
+adds source-only patch 0029 for failed runtime GPU power-on, alongside the ROM
+bounds proposals. No new ROM was prepared or flashed. Debug-policy equivalence,
+exact config/key/auth checking and the wider ROM contracts still need work.
+Preserve the known working image
 and passphrase recovery while testing
 changes offline, then validate a candidate through the ordinary recovery workflow.
 Archived ROM/module hashes, harness assumptions and private evidence locations
