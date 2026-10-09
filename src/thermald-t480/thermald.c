@@ -117,8 +117,7 @@ static void conf_defaults(struct conf *c)
     c->plan[PLAN_PERF] = (struct plan){ 64*K, 90*K, 95*K, 1150*K, 1*K, "performance" };
     c->plan[PLAN_BAL]  = (struct plan){ 25*K, 44*K, 90*K, 1150*K, 1*K, "balance_performance" };
     c->plan[PLAN_SAVE] = (struct plan){ 10*K, 20*K, 80*K,  700*K, 0,   "power" };
-    c->uv[PL_CORE] = c->uv[PL_CACHE] = -100*K;
-    c->uv[PL_GPU] = c->uv[PL_UNCORE] = -50*K;
+    /* A missing config must not assume another CPU's undervolt margin. */
     c->nfan = 4;
     c->fan[0].lvl = 2; c->fan[0].lo = 0;  c->fan[0].hi = 44;
     c->fan[1].lvl = 4; c->fan[1].lo = 42; c->fan[1].hi = 54;
@@ -188,12 +187,13 @@ static void set_key(struct conf *c, const char *k, const char *v)
             lo = milli(e + 1, &e);
             if (*e != ':') goto skip;
             hi = milli(e + 1, &e);
+            if (l < 0 || l > 8*K || l % K || lo < 0 || hi < lo) goto skip;
             c->fan[n].lvl = l / K; c->fan[n].lo = lo / K; c->fan[n].hi = hi / K; n++;
         skip:
             while (*p && *p != ',') p++;
             if (*p == ',') p++;
         }
-        c->nfan = n;
+        if (n) c->nfan = n;
     }
 }
 static int load_conf(struct conf *c, const char *path)
@@ -584,38 +584,65 @@ static int plan_read(const struct conf *c)
 
 /* ---------------- fan (thinkfan-style hysteresis) ---------------- */
 static int fan_idx = -1;
+static int fan_owned;
 static time_t last_fan_write;
-static void fan_cmd(const char *cmd)
+static int fan_cmd(const char *cmd)
 {
     int fd = open(FAN_PATH, O_WRONLY | O_CLOEXEC);
-    if (fd < 0) { loge("fan open"); return; }
-    if (write(fd, cmd, strlen(cmd)) < 0) { ls_("fan "); loge(cmd); }
+    ssize_t n;
+    size_t len = strlen(cmd);
+    if (fd < 0) { loge("fan open"); return -1; }
+    n = write(fd, cmd, len);
+    if (n != (ssize_t)len) {
+        if (n >= 0) errno = EIO;
+        ls_("fan "); loge(cmd);
+    }
     close(fd);
+    return n == (ssize_t)len ? 0 : -1;
+}
+static void fan_auto(void)
+{
+    if (dry_run) return;
+    if (!fan_cmd("level auto")) {
+        fan_cmd("watchdog 0");
+        if (fan_owned) logs("fan returned to EC automatic control", 0);
+        fan_owned = 0;
+    }
+    fan_idx = -1;
+}
+static void fan_release(void)
+{
+    if (fan_owned) fan_auto();
 }
 static void fan_write(const struct conf *c, int i, long tempc, time_t now)
 {
     char cmd[24] = "level ";
-    fan_idx = i;
     if (c->fan[i].lvl >= 8) strcpy(cmd + 6, "full-speed"); /* max regulated RPM */
     else { cmd[6] = '0' + c->fan[i].lvl; cmd[7] = 0; }
     ls_(dry_run ? "DRY fan <- " : "fan <- "); ls_(cmd); ls_(" ("); li_(tempc); ls_("C)"); lend();
-    if (dry_run) return;
-    fan_cmd(cmd);
-    fan_cmd("watchdog 0"); /* a level write re-arms the EC watchdog */
+    if (dry_run) { fan_idx = i; return; }
+    /* thinkpad_acpi returns the fan to auto if we stop refreshing it. Arm
+       before the level write, which also renews the stored timeout. */
+    if (fan_cmd("watchdog 120") || fan_cmd(cmd)) {
+        fan_auto();
+        return;
+    }
+    fan_idx = i;
+    fan_owned = 1;
     last_fan_write = now;
 }
 static void fan_apply(const struct conf *c, long tempc, time_t now)
 {
     int i = fan_idx;
-    if (!c->nfan) return;
+    if (!c->nfan) { fan_release(); return; }
     if (i < 0) {
         for (i = 0; i < c->nfan - 1 && tempc > c->fan[i].hi; i++) ;
         fan_write(c, i, tempc, now);
         return;
     }
-    if (tempc > c->fan[i].hi && i < c->nfan - 1) i++;
-    else if (tempc < c->fan[i].lo && i > 0) i--;
-    if (i != fan_idx || now - last_fan_write > 60) fan_write(c, i, tempc, now);
+    while (tempc > c->fan[i].hi && i < c->nfan - 1) i++;
+    while (tempc < c->fan[i].lo && i > 0) i--;
+    if (i != fan_idx || now - last_fan_write >= 30) fan_write(c, i, tempc, now);
 }
 
 int main(int argc, char **argv)
@@ -653,7 +680,6 @@ int main(int argc, char **argv)
     sa.sa_handler = SIG_DFL;
     sa.sa_flags = SA_NOCLDWAIT; /* tlp children reap themselves */
     sigaction(SIGCHLD, &sa, 0);
-    if (!dry_run) { fan_cmd("watchdog 0"); logs("fan watchdog disarmed", 0); }
     ls_("start (pid "); li_(getpid()); ls_(")"); lend();
 
     while (!quit) {
@@ -666,6 +692,7 @@ int main(int argc, char **argv)
         time_t now = time(0);
         long long per = p->interval > 0 ? p->interval : c.poll_s;
         struct timespec ts;
+        struct timespec fan_time;
 
         if (!stat(cpath, &st) && st.st_mtime != conf_mt) {
             conf_mt = st.st_mtime;
@@ -682,10 +709,12 @@ int main(int argc, char **argv)
             }
         }
         if (temp_open(&c)) {
-            if (!warned++) logs("temp coretemp absent, holding fan", 0);
-        } else if (read_long(temp_fd, &raw)) {
-            logs("temp read fail, re-resolving", 0);
+            if (!warned++) logs("temp coretemp absent, returning fan to EC", 0);
+            fan_release();
+        } else if (read_long(temp_fd, &raw) || raw <= 0 || raw > 125000) {
+            logs("temp unavailable, returning fan to EC and re-resolving", 0);
             close(temp_fd); temp_fd = -1;
+            fan_release();
         } else {
             long g;
             warned = 0;
@@ -699,7 +728,11 @@ int main(int argc, char **argv)
                     if (g / 1000 > raw) raw = g / 1000;
                 }
             }
-            fan_apply(&c, raw, now);
+            /* Fan keepalive must not depend on wall-clock corrections. */
+            if (!clock_gettime(CLOCK_MONOTONIC, &fan_time))
+                fan_apply(&c, raw, fan_time.tv_sec);
+            else
+                fan_release();
         }
         if (plan != last_plan) {
             logs("plan ", plan_nm[plan]);
@@ -735,10 +768,12 @@ int main(int argc, char **argv)
         }
         if (once) break;
         if (per < 500) per = 500;
+        if (per > 30000) per = 30000; /* renew the fan watchdog on time */
         ts.tv_sec = per / 1000;
         ts.tv_nsec = per % 1000 * 1000000;
         nanosleep(&ts, 0);
     }
+    if (!once) fan_release();
     logs("exit", 0);
     return 0;
 }

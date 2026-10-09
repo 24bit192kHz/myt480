@@ -13,18 +13,19 @@
  *   auto       back to the AC/battery policy, applied now
  *   apply      apply the policy (power-supply udev rule, boot)
  *   use        turn on for a program (prime-run)
+ *   tune       reapply the current power source's clock offsets after a wake
  *   release    a program ended: back to what the policy or the hand said
  *   status
  *
  * Clock offsets: after the driver is loaded, the offsets of /etc/gpu-power.conf
  * (ac_gpc_offset, ac_mem_offset, batt_gpc_offset, batt_mem_offset, MHz, default 0)
- * are set through NVML for the current power source. They last until the driver
- * is unloaded, so every load sets them again.
+ * are set through NVML for the current power source. Runtime suspend also clears
+ * them: prime-run holds a GPU descriptor and tunes again before starting work.
  *
  * Runtime D3: with "rtd3 1" in /etc/gpu-power.conf every load uses NVIDIA's coarse-grained
  * runtime D3 (NVreg_DynamicPowerManagement=0x01, nvidia-drm modeset=0 fbdev=0, runtime PM
- * allowed): while the driver is loaded the GPU powers itself off (D3cold, rail off) about a
- * second after the last program closes it and wakes in well under a second. On AC the GPU
+ * allowed): while the driver is loaded the GPU powers itself off (D3cold, rail off)
+ * after the last program closes it and wakes on demand. On AC the GPU
  * then sleeps whenever it is idle instead of staying on; programs still start without a
  * module load. Changing the setting takes effect at the next load (gpu-power off; auto).
  *
@@ -43,14 +44,40 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Compile-time overrides let the hardware-independent tests use fixtures. */
+#ifndef GPU
 #define GPU      "/sys/bus/pci/devices/0000:01:00.0"
+#endif
+#ifndef AC
 #define AC       "/sys/class/power_supply/AC/online"
+#endif
+#ifndef MODPROBE
 #define MODPROBE "/usr/bin/modprobe"
-#define LOCK     "/run/gpu-power.lock"	/* one gpu-power at a time */
-#define USERS    "/run/gpu-power.users"	/* prime-run holds a shared lock while a program runs */
-#define MANUAL   "/run/gpu-power.manual"	/* "on" or "off" set by hand */
-#define CONF     "/etc/gpu-power.conf"	/* clock offsets per power source, rtd3 */
+#endif
+#ifndef LOCK
+#define LOCK     "/run/gpu-power.lock"
+#endif
+#ifndef USERS
+#define USERS    "/run/gpu-power.users"
+#endif
+#ifndef MANUAL
+#define MANUAL   "/run/gpu-power.manual"
+#endif
+#ifndef CONF
+#define CONF     "/etc/gpu-power.conf"
+#endif
+#ifndef NVML
 #define NVML     "/usr/lib/libnvidia-ml.so.1"
+#endif
+#ifndef NVIDIA_PARAMS
+#define NVIDIA_PARAMS "/proc/driver/nvidia/params"
+#endif
+#ifndef NVIDIA_DEVICE
+#define NVIDIA_DEVICE "/dev/nvidia0"
+#endif
+#ifndef NVIDIA_MODULE
+#define NVIDIA_MODULE "/sys/module/nvidia"
+#endif
 
 static char *const envp[] = { "PATH=/usr/bin:/bin", NULL };
 
@@ -155,16 +182,32 @@ static int conf_rtd3(void)
 static int status(void)
 {
 	char state[16] = "?";
+	char runtime[32] = "?", line[256];
+	unsigned active;
+	FILE *params;
 	const char *m = manual();
 
 	if (!gpu_present() || read_word(GPU "/power_state", state, sizeof(state))) {
 		puts("GPU is switched off in the firmware (dgpu on, then reboot)");
 		return 2;
 	}
-	printf("driver %s, GPU %s\n", exists("/sys/module/nvidia") ? "loaded" : "not loaded",
+	printf("driver %s, GPU %s\n", exists(NVIDIA_MODULE) ? "loaded" : "not loaded",
 	       strcmp(state, "D3cold") ? "on" : "off");
-	if (exists("/sys/module/nvidia") && conf_rtd3())
-		puts("runtime D3: the GPU powers off whenever no program uses it");
+	read_word(GPU "/power/runtime_status", runtime, sizeof(runtime));
+	printf("runtime PM: %s, PCI %s\n", runtime, state);
+	params = fopen(NVIDIA_PARAMS, "r");
+	if (params) {
+		while (fgets(line, sizeof(line), params))
+			if (sscanf(line, "DynamicPowerManagement: %u", &active) == 1) {
+				printf("runtime D3 parameter: 0x%02x (%s)\n", active,
+				       active == 1 ? "coarse" : active == 2 ? "fine" :
+				       active == 3 ? "driver default" : active == 0 ? "disabled" : "unknown");
+				if (conf_rtd3() && active != 1)
+					puts("runtime D3 config is pending: reload the driver to apply it");
+				break;
+			}
+		fclose(params);
+	}
 	if (m)
 		printf("mode: %s by hand (gpu-power auto returns to the AC/battery policy)\n", m);
 	else
@@ -210,30 +253,38 @@ static void allow_runtime_pm(void)
 }
 
 /* Set the clock offsets through NVML (the driver must be loaded) */
-static void tune(int quiet)
+static int tune(int quiet)
 {
 	int (*init)(void), (*shutdown)(void), (*handle)(unsigned, void **), (*set_gpc)(void *, int),
 	    (*set_mem)(void *, int);
 	void *lib, *dev;
 	int gpc, mem;
+	int rc = 1, gpc_rc, mem_rc;
 
-	if (!exists("/dev/nvidia0") || !exists(CONF))
-		return;
+	if (!exists(NVIDIA_DEVICE) || !exists(CONF))
+		return 1;
 	conf_offsets(&gpc, &mem);
 	lib = dlopen(NVML, RTLD_NOW | RTLD_LOCAL);
 	if (!lib)
-		return;
+		return 1;
 	init = (int (*)(void))dlsym(lib, "nvmlInit_v2");
 	shutdown = (int (*)(void))dlsym(lib, "nvmlShutdown");
 	handle = (int (*)(unsigned, void **))dlsym(lib, "nvmlDeviceGetHandleByIndex_v2");
 	set_gpc = (int (*)(void *, int))dlsym(lib, "nvmlDeviceSetGpcClkVfOffset");
 	set_mem = (int (*)(void *, int))dlsym(lib, "nvmlDeviceSetMemClkVfOffset");
 	if (init && shutdown && handle && set_gpc && set_mem && !init()) {
-		if (!handle(0, &dev) && (set_gpc(dev, gpc) || set_mem(dev, mem)) && !quiet)
-			fprintf(stderr, "gpu-power: clock offsets %+d/%+d MHz not accepted\n", gpc, mem);
+		if (!handle(0, &dev)) {
+			gpc_rc = set_gpc(dev, gpc);
+			mem_rc = set_mem(dev, mem);
+			rc = gpc_rc || mem_rc;
+			if (rc && !quiet)
+				fprintf(stderr, "gpu-power: clock offsets %+d/%+d MHz not accepted (gpc=%d mem=%d)\n",
+				        gpc, mem, gpc_rc, mem_rc);
+		}
 		shutdown();
 	}
 	dlclose(lib);
+	return rc;
 }
 
 static int on(int quiet)
@@ -262,7 +313,7 @@ static int on(int quiet)
 		}
 	}
 	/* udev creates the device nodes */
-	for (i = 0; i < 60 && !exists("/dev/nvidia0"); i++)
+	for (i = 0; i < 60 && !exists(NVIDIA_DEVICE); i++)
 		nanosleep(&ts, NULL);
 	tune(quiet);
 	if (rtd3)
@@ -276,7 +327,7 @@ static int off(int quiet)
 			 "nvidia", NULL };
 
 	allow_runtime_pm();
-	if (!exists("/sys/module/nvidia"))
+	if (!exists(NVIDIA_MODULE))
 		return 0;
 	if (run(argv)) {
 		if (!quiet)
@@ -288,12 +339,17 @@ static int off(int quiet)
 
 /* Bring the GPU to what the policy or the hand wants; never turn it off
    under a running program (prime-run holds USERS shared). */
-static int apply(int users_fd)
+static int apply(int users_fd, int retune)
 {
 	if (!gpu_present())
 		return 0;
-	if (!strcmp(wanted(), "on"))
+	if (!strcmp(wanted(), "on")) {
+		/* After work ends, NVML would wake an idle RTD3 GPU only to set
+		   offsets which the next suspend clears. Defer to the next use. */
+		if (!retune && conf_rtd3() && exists(NVIDIA_MODULE))
+			return 0;
 		return on(1);
+	}
 	if (flock(users_fd, LOCK_EX | LOCK_NB)) {
 		if (errno == EWOULDBLOCK) {
 			tune(1);	/* a program is using it: offsets of the new power source */
@@ -308,7 +364,7 @@ static int apply(int users_fd)
 
 int main(int argc, char **argv)
 {
-	static const char *const cmds[] = { "on", "off", "auto", "apply", "use", "release", "status" };
+	static const char *const cmds[] = { "on", "off", "auto", "apply", "use", "release", "status", "tune" };
 	int fd, users, rc = 0;
 	size_t c;
 
@@ -316,7 +372,7 @@ int main(int argc, char **argv)
 		if (!strcmp(argv[1], cmds[c]))
 			break;
 	if (argc != 2 || c == sizeof(cmds) / sizeof(cmds[0])) {
-		fputs("usage: gpu-power on|off|auto|apply|use|release|status\n", stderr);
+		fputs("usage: gpu-power on|off|auto|apply|use|release|status|tune\n", stderr);
 		return 64;
 	}
 	if (setgid(0) || setuid(0)) {
@@ -345,11 +401,13 @@ int main(int argc, char **argv)
 		rc = off(0);
 	} else if (!strcmp(argv[1], "auto")) {
 		set_manual(NULL);
-		rc = apply(users);
+		rc = apply(users, 1);
 	} else if (!strcmp(argv[1], "apply") || !strcmp(argv[1], "release")) {
-		rc = apply(users);
+		rc = apply(users, strcmp(argv[1], "release") != 0);
 	} else if (!strcmp(argv[1], "use")) {
 		rc = on(0);
+	} else if (!strcmp(argv[1], "tune")) {
+		rc = gpu_present() ? tune(0) : 2;
 	}
 	close(fd);
 	return rc;

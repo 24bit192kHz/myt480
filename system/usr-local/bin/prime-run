@@ -9,15 +9,43 @@ gpu-power status >/dev/null 2>&1		# creates /run/gpu-power.users
 exec 9</run/gpu-power.users
 flock -s 9				# shared: a program is using the GPU
 
+cleanup()
+{
+	# Close the GPU before releasing the shared policy lock.
+	exec 8<&-
+	flock -u 9
+	gpu-power release 2>/dev/null
+}
+trap cleanup 0
+
+terminate()
+{
+	trap '' HUP INT TERM
+	if [ -n "$child" ]; then
+		kill -s "$1" "$child" 2>/dev/null
+		wait "$child" 2>/dev/null
+	fi
+	exit "$2"
+}
+trap 'terminate HUP 129' HUP
+trap 'terminate INT 130' INT
+trap 'terminate TERM 143' TERM
+
 if gpu-power use; then
+	# Coarse RTD3 clears offsets on suspend. Keep the device awake, then
+	# restore offsets; neither this descriptor nor the policy lock reaches
+	# the child, so its descendants cannot accidentally keep the GPU on.
+	exec 8</dev/nvidia0
+	gpu-power tune || echo "prime-run: clock offsets were not restored" >&2
 	export __NV_PRIME_RENDER_OFFLOAD=1
 	export __VK_LAYER_NV_optimus=NVIDIA_only
 	export __GLX_VENDOR_LIBRARY_NAME=nvidia
 fi
 
-"$@" 9>&-
+# POSIX shells ignore INT/QUIT in background jobs. Restore defaults so the
+# forwarded interrupt works even for commands such as sleep.
+env --default-signal=INT,QUIT -- "$@" <&0 8<&- 9<&- &
+child=$!
+wait "$child"
 rc=$?
-
-flock -u 9
-gpu-power release 2>/dev/null
 exit $rc

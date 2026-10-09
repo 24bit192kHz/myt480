@@ -1,5 +1,9 @@
 # Notes
 
+The [T480 improvement wiki](wiki/README.md) records the 2026-10-09 live audit,
+reversible thermal/GPU changes, USB-C and fingerprint reverse engineering, tests,
+and restoration commands.
+
 Written while the system was built; they explain decisions, not commands. The dated
 notes record the state of that day, and later notes or the READMEs supersede them. Paths
 such as `~/t480-build/`, `~/systemagent/` or `/root/PRE-*.rom` in them are on the
