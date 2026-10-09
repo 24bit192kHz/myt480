@@ -1,7 +1,9 @@
 # T480 reverse-engineering and improvement wiki
 
-Audit date: **2026-10-09**. Source baseline: `d89f79d`; work branch:
-`re-audit-20261009`. The laptop was inspected over SSH. Its live firmware is C55,
+Audit date: **2026-10-09**. Source baseline: `d89f79d`; original work branch:
+`re-audit-20261009`, published with all audit commits on `testing`. The
+[research folder](../../research/2026-10-09-t480/README.md) organizes the complete
+work record by subject. The laptop was inspected over SSH. Its live firmware is C55,
 its kernel is `7.2.8-7-t480`, and its proprietary NVIDIA driver is `580.178.04`.
 
 The most important improvement was making manual fan control fail safely. GPU

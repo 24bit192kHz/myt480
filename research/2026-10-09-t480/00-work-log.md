@@ -1,0 +1,148 @@
+# Complete work record
+
+Audit and publication date: **2026-10-09**. The source baseline was `d89f79d`.
+Work was first committed on `re-audit-20261009`; `testing` was created from its
+final audit commit to publish the complete work with this subject-based research
+folder. Existing history was retained.
+
+## 1. Initial inspection and reverse engineering
+
+Inspected the laptop over SSH: firmware/version, running kernel and command line,
+GPU driver/runtime state, fan and thermal settings, power policies, ACPI tables,
+USB/backend selection, storage, display, Thunderbolt, services, and selected logs.
+Compared live state with repository snapshots rather than assuming every stored
+configuration was active.
+
+Used REA successfully after the installed older workflow failed; analyzed the
+thermal executable, selected fingerprint DLL functions, and stock USB-C SMM/EC
+components. Used Ghidra MCP after the full NVIDIA REA job timed out. Recovered
+selected RM power paths, fingerprint worker/reset/cancel paths, and the stock
+UCSI mailbox/transport. Inspected the awesome-reverse-engineering index to select
+appropriate tools. Tool versions and artifact hashes are in the
+[evidence report](08-tools-evidence-and-validation.md).
+
+## 2. Fan and NVIDIA improvements — `2cb13a3`
+
+[Commit: Make T480 fan and GPU control fail safely; document driver audit](https://github.com/24bit192kHz/myt480/commit/2cb13a3c133df037f55a46a4bb4493fdc34f0c20).
+
+| Change | Repository | Laptop |
+|---|---|---|
+| Fan watchdog, EC fallback, curve transitions, config validation | [`thermald.c`](../../src/thermald-t480/thermald.c), rebuilt tracked executable, emulated tests | Replaced `/usr/local/bin/thermald-t480`; existing config retained |
+| Offset restoration, honest runtime status, independent NVML setters | [`gpu-power.c`](../../src/gpu-power/gpu-power.c), fixtures | Rebuilt and replaced `/usr/local/bin/gpu-power` |
+| Held-open device, signal forwarding, cleanup, descriptor isolation | [`prime-run`](../../src/gpu-power/prime-run), system snapshot, fixtures | Replaced `/usr/local/bin/prime-run` |
+| Coarse RTD3 on AC | [`gpu-power.conf`](../../system/etc/gpu-power.conf) | Set `rtd3 1`; active module parameter checked as `0x01` |
+| Inspection, hardware validation, recovery | [`tools/re-audit`](../../tools/re-audit/) collector, RTD3 test, rollback | Original programs/configs preserved under root-only backup directory |
+| Research wiki | Initial thermal, NVIDIA, USB-C, fingerprint, subsystem, evidence and rollback pages | Research saved; no firmware or kernel replacement |
+
+Validation included emulated fan I/O, wrapper signal/stdin/exit/descriptor
+fixtures, mocked NVML errors, static builds and shell checks. A live 125-second
+daemon pause demonstrated independent kernel fallback from manual fan level 4
+to EC auto; the maximum sampled CPU temperature was 49°C. Resuming the daemon
+restored curve control.
+
+Five live D3cold-to-CUDA rounds passed self-checking `vectorAdd` and `scan`, with
+the retained +200/+1250 MHz offsets present inside a held-open job. PRIME OpenGL
+rendered on the MX150 and idle returned to D3cold. These checks establish behavior
+on this machine; total cold-job durations are not isolated wake latency or watts.
+
+The full rollback restored original executable/config hashes, after which the
+improvements were reapplied and revalidated. A later reload attempt was refused
+while Bitwarden held GPU handles; cleanup/reapplication restored the intended
+files and driver mode. The application was left running.
+
+## 3. Protocol recovery, Intel routing, and diagnostics — `fe58a80`
+
+[Commit: Extend T480 protocol audit, Intel routing and measurement wiki](https://github.com/24bit192kHz/myt480/commit/fe58a802fc08913b1d7c9147196d1dd1e6756527).
+
+| Change | Repository | Laptop |
+|---|---|---|
+| Explicit Intel GLX/EGL/Vulkan routing | [`igpu-run`](../../src/gpu-power/igpu-run), install target, system snapshot, four fixtures | Installed `/usr/local/bin/igpu-run` |
+| Bitwarden future-launch routing | [`bitwarden.desktop`](../../home/local-share/applications/bitwarden.desktop) | Added user desktop override; running instance unchanged |
+| Routing restoration | [`rollback-routing.sh`](../../tools/re-audit/rollback-routing.sh) | Original-absence markers and installed hashes saved; removal/reinstallation tested |
+| Passive energy/source measurement | [`measure-power.py`](../../tools/re-audit/measure-power.py), 21 fixtures | Captured a 20-second observational AC baseline without policy changes |
+| Fixed read-only SMART request | [`nvme-health.py`](../../tools/re-audit/nvme-health.py), four fixtures | Read SSD health; no storage setting changed |
+| Offline UCSI packet/completion model | [`ucsi-model.py`](../../firmware/tools/ucsi-model.py), six fixtures | No EC/mailbox transactions performed |
+| Fingerprint event-stream cancellation | [`usb.rs`](../../src/validity-rs/src/usb.rs), seven USB fixtures within Rust suite | Source-only; selected libfprint backend retained |
+| Extended documentation | Five new wiki subjects, prior-page updates, usage/installation notes | Wiki copied into the routing research backup directory |
+
+Intel GLX, targeted X11 EGL, and Vulkan checks passed. The first Intel selector
+produced a Mesa warning; it was corrected to the explicit PCI selector and
+revalidated. A broad EGL probe reported unsupported contexts, so the report does
+not claim universal platform support. Routing rollback/reapply passed again after
+the final inherited-environment cleanup.
+
+The AC capture yielded 21 samples across 19.995 seconds, package energy 63.678 J
+and average CPU-package power 3.185 W. AC was online, so whole-system discharge
+was deliberately unavailable. NVIDIA was active with application holders.
+No battery-runtime improvement or isolated GPU wattage was measured.
+
+Recovered additional Windows fingerprint reset/stop and secure-transport paths,
+plus USB-C DXE shadow initialization, SMM dispatch, EC mailbox and lower transport
+wait semantics. Corrected the earlier interpretation of SMM subcommand 0: it
+rewrites EC bits, rather than querying capability. Native USB-C restoration
+remains open.
+
+Continuation tests passed: **25 power/SMART + 4 Intel launcher + 6 UCSI model +
+44 Rust tests = 79 tests**. Seven USB cancellation fixtures are included in the
+44 Rust tests, not additional to them. The Rust run retained six existing
+dead-code warnings; optional private Python golden data was absent, so conditional
+tests were not fresh cross-language verification. Desktop validation, shell
+syntax, relative wiki links and whitespace checks also passed.
+
+## 4. Cross-stack assessment — `7f5a430`
+
+[Commit: Document cross-stack boot, driver and sleep defects](https://github.com/24bit192kHz/myt480/commit/7f5a430d6091280f9c8d127a1b17096dbf1a0b78).
+
+This pass added the [cross-stack review](../../docs/wiki/cross-stack-review.md)
+and corrected the coreboot, kernel and early-init READMEs. It inspected the
+actual running configuration, installed sleep hooks, final patched sources and
+archived C55 payload. It made no live policy changes.
+
+| Work | Result and boundary |
+|---|---|
+| Early-init control-flow harness using actual source | Reproduced master load → plain-root mount → init under mocked successful unseal; no live key release/extraction |
+| GRUB NVMe completion/queue vectors | Found status-type masking and timeout/retry failure paths; matching module bound to archived C55 payload, no induced live timeout |
+| Sleep-hook/helper inspection and mocked VT failure | Found wrong hibernate mapping, asynchronous resume, locker/watchdog readiness gaps and status loss; no live sleep test |
+| Kernel and DMA inspection | Distinguished actual final config from base; confirmed mitigation tradeoffs, host identity mapping, GVT fallback and current driver state |
+| Firmware-check fixtures | Reproduced UUID-only checker acceptance and zero exit on printed test failure; found flash-status propagation and option-ROM bounds candidates |
+| GPU/thermal robustness review | Identified remaining error reporting, manual-off lock race candidate, AC-detection fallback and numeric-bounds gaps |
+| Documentation correction | Recorded findings, evidence limits, validation required and prioritized next fixes |
+
+Remaining findings are analysis and proposed work. They were not fixed by this
+documentation-only assessment.
+
+## 5. Publication on `testing`
+
+Created `testing` from the final cross-stack audit, retaining all preceding source, tools,
+tests and wiki changes. Added this folder with subject reports, this work record,
+validation/evidence notes and recovery priorities. Linked it from the repository
+and documentation indexes; updated branch-publication statements that described
+the earlier local-only phase. The publication introduces no further hardware
+changes. It is committed and pushed as a separate documentation commit.
+
+GitHub rejected the initial push with `GH007` because the commit email was
+protected. Only the four unpublished `testing` commits were recreated using
+the authenticated account's GitHub no-reply address. Their file trees matched
+before this work-log/link update. The original `re-audit-20261009` branch and
+`testing-before-email-fix-20261009` backup remain local. Commit links above use
+the public equivalents; no remote history was rewritten and email protection
+was retained.
+
+## Final recorded state and preserved boundaries
+
+The thermal daemon, GPU helper/wrapper, coarse RTD3 configuration, Intel helper
+and desktop override were deployed. Backup/hash-guarded restoration was tested.
+The last observed Bitwarden process still held NVIDIA devices, so the GPU was
+active/D0 despite coarse mode being enabled; future normal relaunch adopts Intel
+routing. CPU undervolt, GPU offsets, fan curve and configured power limits were
+retained. The live CPU plan was `auto`.
+
+Firmware was not flashed; kernel/NVIDIA packages were not replaced; the selected
+fingerprint backend was not switched; biometrics were not enrolled or deleted.
+Real suspend/hibernate, external docks, USB-C role swaps and controlled battery
+discharge comparisons remain outstanding. No full recovery of proprietary
+drivers or the EC firmware is claimed.
+
+Raw analysis and selected live logs remain in private workstation evidence
+directories. This publication adds derived research and authored fixes/fixtures,
+without adding raw DLLs, full firmware images, keys or biometric captures.

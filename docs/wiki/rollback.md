@@ -80,9 +80,10 @@ rollback. The Rust fingerprint cancellation fix is source-only; the selected
 live libfprint backend was not replaced. Restore the preceding Git version of
 that source if reverting the experiment rather than selecting another backend.
 
-Changes are isolated on local branch `re-audit-20261009`; the original local
-`main` branch was not rewritten. The branch began at the fetched current remote
-baseline `d89f79d`. No commits were pushed and no firmware was flashed by this audit.
+Changes were developed on `re-audit-20261009`, starting from fetched baseline
+`d89f79d`. The complete audit is published on the separate `testing` branch with
+a [subject-based research record](../../research/2026-10-09-t480/README.md).
+The original `main` branch was not rewritten. No firmware was flashed by this audit.
 
 Raw reverse-engineering output and selected validation logs are kept privately
 on the workstation under `/home/btw/test/rea/work/audit-20261009`. Proprietary DLLs,

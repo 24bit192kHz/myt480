@@ -27,9 +27,11 @@ resumes 6 s after the wake alarm, and a tested undervolt (-115 mV core on AC) gi
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
 | `main` | C55 (2026-10-08): on coreboot main of that day, all patches in `firmware/coreboot/README.md` (0001 to 0028): link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi, and the vendor platform setup (radios, wake sources, subsystem IDs, GMM); C52 to C54 (2026-10-04): TPM measured boot, GRUB signature check and password, boot entries for the encrypted disk, h8 options from the devicetree, GPU option ROM measured into PCR 3 (`site-local`); C55: rebased on upstream main (Fn hotkey events from upstream), the power-button override keeps the GPU choice, lid wake GPE fixed, GPE routing explicit (patches 0026 to 0028) | flashed and tested: RTC-alarm cold boots, S3 with the watchdog armed, GPU off/on cycles; hibernate, a watchdog hang test and a 10-minute GPU load test on the builds before it; C54 also: suspend, hibernate, firmware flash with re-seal |
+| `testing` | C55 retained; no firmware or kernel replacement in the 2026-10-09 audit | reversible fan/GPU fixes and Intel routing deployed; diagnostics, protocol recovery and remaining defects recorded in [research](research/2026-10-09-t480/README.md) |
 
-Everything outside `firmware/` and `hardware/kernel-cmdline.txt` is the same on both.
-`main` is what runs on my laptop now (C55); `speed` is the state before the review round.
+`main` and `speed` differ in `firmware/` and `hardware/kernel-cmdline.txt`.
+`main` supplies the running C55 firmware; `speed` is the state before that review.
+`testing` adds the 2026-10-09 audit changes and research without rewriting either branch.
 
 ## Layout
 
@@ -48,6 +50,7 @@ Every directory has its own README.
 | `src/` | the programs written for this laptop, chadwm as configured, changes to third-party programs |
 | `home/` | dotfiles and `~/.local/bin` scripts |
 | `docs/` | notes on why things are the way they are |
+| `research/` | dated subject reports, complete audit work log, validation and recovery |
 
 ## What you need
 

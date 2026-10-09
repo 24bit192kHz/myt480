@@ -1,6 +1,6 @@
 # Cross-stack defects and improvement priorities
 
-Review date: **2026-10-09**, following audit commit `9471ae9`. This pass checked
+Review date: **2026-10-09**, following audit commit `fe58a80`. This pass checked
 the current laptop, cumulative firmware sources, archived C55 payload, kernel
 recipe/configuration, and driver/service hooks. It did not change live policies,
 flash firmware, suspend, switch backends, or read secret/biometric material.
