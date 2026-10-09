@@ -19,7 +19,7 @@ mistaken for broken drivers.
 | Security choice | CPU mitigations disabled | Live vulnerabilities explicitly report vulnerable states | Compare a recoverable boot profile with mitigations enabled |
 | Security choice | Thunderbolt domain has automatic connection and identity DMA mapping | Live NHI group13 `identity`, domain `none`, advertised protection0 | Test translated/strict host DMA with dock and VM coverage |
 | Feature gap | UCSI connector control/notifications absent | Live-matching kernel disables TYPEC; coreboot omits the recovered bridge | Implement serialized transport plus ACPI notifications; options alone are insufficient |
-| Fixed in two reported cycles | Lid did not wake S4 hibernation | EC bit6 gate used by `03-lid-wake-s4`; owner-tested twice (PWRBTN wake from S4, no RTC) | No firmware change needed; retained baseline, cancellation and rollback cases remain open |
+| Fixed 2026-10-09 | Lid did not wake S4 hibernation | EC decode found the retained flag behind EC byte `0x01` bit 6; the `03-lid-wake-s4` hook sets it before each hibernate; owner-tested twice (wake by the EC's PWRBTN# pulse, no RTC) | Nothing further; no firmware change needed. Since 2026-10-10 the post phase clears the bit whenever the pre phase set it (the opt-out file only stops arming). The flag's initial value cannot be read from the host; the hook clears it regardless |
 
 ## 1. The TPM boot path needs a stricter root boundary
 
@@ -110,8 +110,10 @@ That was reproduced with mocked commands, without switching a real VT.
 The later approved [MX150 file observation](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md)
 supersedes that hook inventory: the vendor hook is absent and a site hook already
 has hibernate/phase mapping and synchronous resume. Its helper failure codes are
-still hidden; a source-only correction with fourteen mock tests is now included.
-It was not deployed by this continuation. The evening record also updates the
+still hidden; a correction with fourteen mock tests is now included and was
+deployed on 2026-10-10 (the hook logs and returns the helper's real status; elogind 257
+runs the hooks sequentially and ignores the status unless `AllowSuspendInterrupts=yes`,
+so it is a reporting fix only). The evening record also updates the
 watchdog/RTC paths below; locker readiness, failure cleanup and live GPU
 allocations remain open.
 

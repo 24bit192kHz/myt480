@@ -1,5 +1,6 @@
 #!/bin/sh
-# Lid-open wake from hibernation, EXPERIMENT 2026-10-09 (elogind hook: $1=pre|post, $2=verb).
+# Lid-open wake from hibernation (elogind hook: $1=pre|post, $2=verb). Works: owner-tested
+# 2026-10-09 (hibernate, close, open -> cbmem PM1_STS WAK PWRBTN, prev_sleep_state 4, no RTC).
 #
 # Lenovo's EC firmware (N24HT37W, decoded in myt480 research/2026-10-09-t480/
 # 10-ec-firmware-and-lid-wake.md) keeps a retained flag that enables lid detection in its
@@ -9,10 +10,10 @@
 # pre hibernate: set the bit, remember that it was clear. post: clear it again. Only bit 6 is
 # touched; the other bits of the byte are written back as they are read at that moment.
 # The EC's shadow of byte 0x01 is zeroed when the EC itself restarts, so the readback is the
-# host view, not proof of the retained flag. Two owner-operated S4 lid wakes are
-# recorded in docs/notes/2026-10-09-evening.md; cancellation/retained-state rollback
-# remain unverified. The opt-out below skips post cleanup too if enabled after arming.
-# Disable: touch /etc/elogind/no-lid-wake-s4. Writes use coreboot's ectool (ports 0x62/0x66).
+# host view, not proof of the retained flag; post clears the bit whenever pre set it, also
+# after a hibernate that failed (elogind runs post after a failed state write too).
+# Disable: touch /etc/elogind/no-lid-wake-s4. Checked in pre only, so a bit set before the
+# file appeared is still cleared after the resume. Writes use coreboot's ectool (ports 0x62/0x66).
 PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
 ECTOOL=/usr/local/sbin/ectool
 MARK=/run/lid-wake-s4.was-clear
@@ -21,7 +22,7 @@ case "$2" in
 	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
 	*) act=suspend ;;
 esac
-[ -x "$ECTOOL" ] && [ ! -e /etc/elogind/no-lid-wake-s4 ] || exit 0
+[ -x "$ECTOOL" ] || exit 0
 
 ec01() { # EC RAM byte 0x01 as a decimal number, from ectool's dump line "00: a6 05 ..."
 	v=$("$ECTOOL" -d 2>/dev/null | sed -n 's/^00: [0-9a-f][0-9a-f] \([0-9a-f][0-9a-f]\) .*/\1/p' | head -n1)
@@ -32,7 +33,7 @@ hex() { printf '0x%02x' "$1"; }
 
 case "$1" in
 pre)
-	[ "$act" = hibernate ] || exit 0
+	[ "$act" = hibernate ] && [ ! -e /etc/elogind/no-lid-wake-s4 ] || exit 0
 	cur=$(ec01) || { logger -t lid-wake-s4 "EC byte 0x01 unreadable, left alone"; exit 0; }
 	if [ $((cur & 0x40)) -eq 0 ]; then
 		"$ECTOOL" -w 0x01 -z "$(hex $((cur | 0x40)))" >/dev/null 2>&1 && touch "$MARK"

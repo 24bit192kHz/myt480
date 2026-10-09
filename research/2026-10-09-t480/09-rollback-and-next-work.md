@@ -62,13 +62,13 @@ components, not to future installations with different hashes.
 |---|---|---|
 | 1 | Require expected encrypted root before production-secret unseal; separate provisioning | Actual-source fixtures for plain/wrong/missing headers, valid encrypted root, passphrase and hibernation; then a recoverable signed-kernel test |
 | 2 | Repair GRUB NVMe status checking and timeout/queue recovery | Inject full status, queue-full, late completion and timeout cases; verify controller quiescence and buffer lifetime before cold boots |
-| 3 | Make sleep hooks a checked sequence | Evening run fixes action/synchronous resume, TCO checks and `rtc-hibernate`; truthful NVIDIA hook status now fixed in source. Locker, failure/cancellation recovery and live allocations remain open |
+| 3 | Make sleep hooks a checked sequence | Evening run fixes action/synchronous resume, TCO checks and `rtc-hibernate`; truthful NVIDIA hook status deployed 2026-10-10. Locker, failure/cancellation recovery and live allocations remain open |
 | 4 | Make firmware checkers and wrappers truthful | QEMU verdict installed and flash failure status fixed; CBFS ROM probe/copy/actual-size bounds now repaired offline. Exact config/key/auth, wider ROM/AML and firmware hardware validation remain |
 | 5 | Close policy-helper failure gaps | Deployed 2026-10-09 19:01: the node/unload/users-lock helper, and thermald keeps the last power source (battery at start) when AC detection fails and rejects out-of-range undervolt, power-limit and trip values |
 | 6 | Restore native UCSI connector control | Serialized bounded EC transport, recovered packet ordering, ACPI notifications and a compatible kernel; validate on recoverable hardware without assuming the model proves it |
 | 7 | Compare a tracing/security kernel profile | Mitigations, translated host DMA, supported signatures/confinement; compare workload cost and dock/VM behavior while retaining the tuned profile |
 | 8 | Measure practical performance and energy | App restart/holders, controlled battery discharge, fixed completed jobs, display/dock/radio consistency and real sleep/resume |
-| 9 | Continue fingerprint and wake research | Fingerprint cancellation/resume; S4 lid hook is owner-tested twice. Retained baseline/completion/cancellation/rollback and S5 separation remain; further EC/hardware tests need approval |
+| 9 | Continue fingerprint and wake research | Fingerprint cancellation/resume; S4 lid hook is owner-tested twice and its post cleanup is unconditional since 2026-10-10. The retained flag's initial value and S5 behaviour remain unobserved; further EC/hardware tests need approval |
 
 The first three entries address concrete trust/reliability findings; later tuning
 depends on measured constraints. Full rationale and evidence are in the

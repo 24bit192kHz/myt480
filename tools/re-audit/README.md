@@ -47,7 +47,8 @@ patch reversal and fixture success are separate from hardware recovery.
 The C fixtures compile actual coreboot ROM/CBFS functions from hashed GPL source
 baselines with ASAN/UBSAN. They access temporary host buffers, not PCI/flash.
 Use a sanitizer-capable host compiler (`CC` selects one) and `patch`. The optional
-full-ROM check uses the existing private `mx150-vbios.rom`, or a file selected by
-`T480_MX150_VBIOS`; it is never copied into the public fixtures. Missing tools or
+full-ROM check uses the kit's own `firmware/coreboot/site-local/data/mx150-vbios.rom`
+(Lenovo's MX150 VBIOS, shipped with the kit as the top-level README says), or a file
+selected by `T480_MX150_VBIOS`; the synthetic fixtures do not embed it. Missing tools or
 optional integration files are reported as skips. Mock sleep-hook tests also
 run GNU timeout against a mock process; they never call NVIDIA or real sleep.

@@ -332,12 +332,13 @@ hardware experiment requires explicit authorization overriding the current
 read-only restriction, a persistence/synchronization result, and a concrete
 rollback plan; none was performed in this continuation.
 
-The later reported successful cycles do not prove every cancellation/failure
-cleanup or a saved retained-state baseline. The current hook returns before
-both phases when its opt-out file exists; disabling/removing it after arming
-does not itself clear the retained EC flag. Further EC access or cleanup tests
-are outside the separately approved NVIDIA query-only scope. No new EC action
-is performed by documenting that limit.
+The later reported successful cycles do not prove a saved retained-state
+baseline: the host shadow cannot show the flag's initial value, so the hook
+clears bit 6 after every resume in which it set it. Since 2026-10-10 the opt-out
+file is read only before arming; the post phase runs whenever the pre phase
+armed, including after a hibernate that failed (elogind runs the post hooks after
+a failed state write as well). Further EC access or cleanup tests are outside
+the separately approved NVIDIA query-only scope.
 
 Private extraction, manifests, Ghidra project/results and independent GNU output
 are retained under `/home/btw/test/rea/work/audit-20261009-ec`. Raw EC images and

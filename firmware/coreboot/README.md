@@ -60,6 +60,16 @@ ACPI AML read contract, the full firmware build or hardware behavior. Reverse
 0031 then 0030 in a source tree before rebuilding to remove them. Existing flashed
 firmware remains unchanged.
 
+Review of 2026-10-10 (independent of the author): the three patches apply on `c55`
+and `pci_rom.c`/`cbfs.c` compile cleanly with coreboot's own toolchain and `-Werror`.
+They have no effect on this board: the VBIOS is stored uncompressed in CBFS
+(`site-local/Makefile.mk`, 184320 bytes), so the stored and mapped sizes are already
+equal and the `_ROM` copy is byte-identical with or without 0030/0031; and Lenovo's own
+`HGON` never checks power-good at all (8–16 ms delay, then reset release), so the
+abort path of 0029 is new behaviour without a vendor precedent and has never been
+exercised. Treat them as hardening for a future build, gated by the QEMU scenarios;
+they do not justify a flash on their own.
+
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied
 first, so that those commits exist.

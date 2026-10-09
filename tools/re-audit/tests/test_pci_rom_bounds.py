@@ -8,8 +8,9 @@ coreboot c57exp 84126e3fc1e4129f5be9af44d633736cea68d169. Patch 0029 changes
 another source file. Test stubs supply allocated CBFS buffers and collect
 CBMEM/_ROM copies; no host PCI or firmware access exists. Optional
 T480_COREBOOT_ROOT validates the existing source/header baseline too.
-T480_MX150_VBIOS can select the existing private full-ROM fixture; raw
-firmware is never copied into these public test files.
+T480_MX150_VBIOS can select another full ROM; by default the kit's own
+firmware/coreboot/site-local/data/mx150-vbios.rom is used. The synthetic
+fixtures below do not embed it.
 """
 
 import hashlib
@@ -181,7 +182,7 @@ class PciRomBoundsTests(unittest.TestCase):
     def test_existing_full_mx150_keeps_all_nonpadding_bytes(self):
         path = Path(os.environ.get("T480_MX150_VBIOS", str(REPO / "firmware/coreboot/site-local/data/mx150-vbios.rom")))
         if not path.is_file():
-            self.skipTest("Existing private full MX150 VBIOS fixture is absent")
+            self.skipTest("Full MX150 VBIOS (site-local/data/mx150-vbios.rom) is absent")
         self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), MX150_SHA256)
         result = self.scenario("full-mx150", path)
         self.assertEqual(result["mapped_size"], 184320)

@@ -46,7 +46,8 @@ against a mock process; no real NVIDIA helper or sleep action is called.
 elogind may continue sleep despite a nonzero hook, so this corrects reporting,
 not the entire sleep abort/readiness contract. The existing 30-second timeout
 uses SIGTERM semantics and is not a guarantee that an unresponsive process is
-forcibly killed. This file is not deployed and package configuration is unchanged.
+forcibly killed. Deployed on 2026-10-10 with the original header restored (it
+documents why the package hook must stay removed); package configuration is unchanged.
 
 ## Corrected configuration diagnostic
 

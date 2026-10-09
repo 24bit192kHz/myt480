@@ -1,62 +1,51 @@
 #!/bin/sh
-# Source-only snapshot of the observed T480 hook, with truthful status reporting.
-# The observed /usr/lib and /usr/libexec vendor hooks were absent. Verify effective
-# elogind hook precedence and NVIDIA ownership before any later deployment.
-# Returning failure reports this hook's result; elogind may still continue sleep.
-# No package configuration is changed by storing this file in the repository.
-#
-# elogind: $2 = suspend | hibernate | hybrid-sleep | suspend-then-hibernate.
-# SYSTEMD_SLEEP_ACTION identifies the suspend-then-hibernate phase. Preserve the
-# observed hibernate dispatch and synchronous, 30-second resume timeout.
+# Replaces /usr/lib/elogind/system-sleep/nvidia (nvidia-580xx-utils). elogind runs the /usr/lib
+# directory FIRST and masks /etc by file name, so the package file must be absent: removed and
+# kept out by NoExtract in /etc/pacman.conf (2026-10-09; until then this file had never run).
+# The packaged hook always runs "nvidia-sleep.sh suspend", also before a hibernate.
+# With NVreg_PreserveVideoMemoryAllocations=1 the driver has to be told "hibernate"
+# for S4 (coreboot cuts the GPU power in both, the saved video memory must survive a
+# power-off). elogind: $2 = suspend | hibernate | hybrid-sleep | suspend-then-hibernate;
+# for the last one SYSTEMD_SLEEP_ACTION names the phase (suspend, then hibernate).
+# nvidia-sleep.sh is a no-op when the driver is not loaded (gpu-power unloads it).
+# Exit status: the helper's (or timeout's) real code, saved before any logging. elogind 257
+# runs the hooks one after the other and ignores the status unless AllowSuspendInterrupts=yes
+# (kept off here, see docs/notes/2026-10-09-evening.md): a failure is logged, never cancels.
 case "$2" in
 	hibernate|hybrid-sleep) act=hibernate ;;
 	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
 	*) act=suspend ;;
 esac
-
-log()
-{
-	# Logging failure must not replace a helper/timeout failure or success status.
-	logger -t nvidia-sleep "$*" || :
-}
-
+log() { logger -t nvidia-sleep "$*" || :; }	# a failing logger must not replace the status
+# The resume is synchronous (the package backgrounds it): the driver wants it right after
+# the transition, and the hooks after this one (fingerprint, hibernate-later's S3->S4 chain)
+# must not run while video memory is still being restored. Bounded by timeout (SIGTERM after
+# 30 s), and the VT is put back even if the helper was cut short, so a stuck resume cannot
+# leave a black console.
 VTF=/var/run/nvidia-sleep/Xorg.vt_number
 case "$1" in
 	pre)
-		# Keep the observed unloaded-driver behavior: no NVIDIA helper call.
 		[ -e /proc/driver/nvidia/suspend ] || exit 0
 		log "pre $2: $act"
 		/usr/bin/nvidia-sleep.sh "$act"
 		rc=$?
-		if [ "$rc" -ne 0 ]; then
-			log "pre $2: $act failed (rc $rc)"
-		fi
-		exit "$rc"
-		;;
+		[ "$rc" -eq 0 ] || log "pre $2: $act failed (rc $rc)"
+		exit "$rc" ;;
 	post)
 		[ -e /proc/driver/nvidia/suspend ] || exit 0
 		timeout 30 /usr/bin/nvidia-sleep.sh resume
 		rc=$?
 		if [ "$rc" -ne 0 ]; then
 			if [ "$rc" -eq 124 ]; then
-				# GNU timeout and a helper itself can both return 124.
 				log "post $2: resume failed or timed out (30 s limit; rc $rc)"
 			else
 				log "post $2: resume failed (rc $rc)"
 			fi
-			# Preserve the observed fallback: consume the saved VT and restore it
-			# after a failed/timed-out resume. Cleanup must not mask the resume rc.
 			if [ -f "$VTF" ]; then
-				vt=$(cat "$VTF")
-				rm -f "$VTF"
-				chvt "$vt" 2>/dev/null
-				vt_rc=$?
-				if [ "$vt_rc" -ne 0 ]; then
-					log "post $2: VT restore failed (rc $vt_rc); resume rc $rc"
-				fi
+				vt=$(cat "$VTF"); rm -f "$VTF"
+				chvt "$vt" 2>/dev/null || log "post $2: VT restore failed (rc $?); resume rc $rc"
 			fi
 		fi
-		exit "$rc"
-		;;
+		exit "$rc" ;;
 esac
 exit 0

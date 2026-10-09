@@ -143,10 +143,10 @@ desktop file, so the desktop override alone would have changed nothing after a
 reboot. `bw-screen` now launches it through `igpu-run` as well.
 
 The MX150 continuation adds a getter-only inventory, a corrected file-only sleep
-diagnostic, truthful status reporting in a source-only elogind hook, and coreboot
-power-good/CBFS ROM bounds patches. None of those replacement files or firmware
-patches has been installed on the laptop. Hardware sleep and firmware validation
-remain separate from the offline fixture results.
+diagnostic, truthful status reporting in the elogind hook, and coreboot
+power-good/CBFS ROM bounds patches. The hook and the diagnostic were installed on
+2026-10-10 (one RTC S3 cycle after the install); the firmware patches 0029–0031 are
+not flashed and change nothing on this board (see `firmware/coreboot/README.md`).
 
 Local checks and repeatable hardware test:
 
