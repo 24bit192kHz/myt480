@@ -82,6 +82,33 @@ pub struct Usb {
     cancel: Arc<AtomicBool>,
 }
 
+/// Keep the cancellable event policy independent of the USB handle so event
+/// ordering and cancellation races can be tested without claiming a sensor.
+fn wait_interrupt(
+    cancel: &AtomicBool,
+    mut read: impl FnMut(&mut [u8]) -> rusb::Result<usize>,
+) -> Result<Vec<u8>> {
+    let mut buf = [0u8; 1024];
+    loop {
+        if cancel.load(Ordering::SeqCst) {
+            return Err(Cancelled.into());
+        }
+        match read(&mut buf) {
+            Ok(n) => {
+                // A ready interrupt must not hide a cancel that arrived during
+                // the read, including one racing the finger-down event.
+                if cancel.load(Ordering::SeqCst) {
+                    return Err(Cancelled.into());
+                }
+                trace!("<int< {}", hex::encode(&buf[..n]));
+                return Ok(buf[..n].to_vec());
+            }
+            Err(rusb::Error::Timeout) => {}
+            Err(e) => return Err(UsbFailure(e).into()),
+        }
+    }
+}
+
 impl Usb {
     pub fn open(cancel: Arc<AtomicBool>) -> Result<Self> {
         let handle = rusb::open_device_with_vid_pid(VID, PID)
@@ -126,23 +153,12 @@ impl Usb {
 
     /// Wait for the next interrupt event; returns `Cancelled` once the shared
     /// cancel flag is raised. Unlike python-validity the flag is not cleared
-    /// here, so a cancel that arrives just before a wait is not lost.
+    /// here. Check it before reading and before accepting a successful event so
+    /// an uninterrupted event stream cannot starve cancellation.
     pub fn wait_int(&self) -> Result<Vec<u8>> {
-        let mut buf = [0u8; 1024];
-        loop {
-            match self.handle.read_interrupt(EP_INT_IN, &mut buf, INT_POLL) {
-                Ok(n) => {
-                    trace!("<int< {}", hex::encode(&buf[..n]));
-                    return Ok(buf[..n].to_vec());
-                }
-                Err(rusb::Error::Timeout) => {
-                    if self.cancel.load(Ordering::SeqCst) {
-                        return Err(Cancelled.into());
-                    }
-                }
-                Err(e) => return Err(UsbFailure(e).into()),
-            }
-        }
+        wait_interrupt(&self.cancel, |buf| {
+            self.handle.read_interrupt(EP_INT_IN, buf, INT_POLL)
+        })
     }
 
     /// Wait for an interrupt event ignoring cancel requests: used once the sensor
@@ -204,5 +220,119 @@ impl Usb {
             self.cmd(blobs::INIT_HARDCODED_CLEAN_SLATE)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normal_event_preserves_its_bytes() {
+        let cancel = AtomicBool::new(false);
+        let event = wait_interrupt(&cancel, |buf| {
+            buf[..3].copy_from_slice(&[3, 0, 4]);
+            Ok(3)
+        })
+        .unwrap();
+        assert_eq!(event, [3, 0, 4]);
+    }
+
+    #[test]
+    fn timeout_retries_until_an_event() {
+        let cancel = AtomicBool::new(false);
+        let mut reads = 0;
+        let event = wait_interrupt(&cancel, |buf| {
+            reads += 1;
+            if reads == 1 {
+                return Err(rusb::Error::Timeout);
+            }
+            buf[0] = 2;
+            Ok(1)
+        })
+        .unwrap();
+        assert_eq!(event, [2]);
+        assert_eq!(reads, 2);
+    }
+
+    #[test]
+    fn cancellation_before_wait_does_not_read() {
+        let cancel = AtomicBool::new(true);
+        let mut reads = 0;
+        let result = wait_interrupt(&cancel, |buf| {
+            reads += 1;
+            buf[0] = 1;
+            Ok(1)
+        });
+        assert!(result.unwrap_err().is::<Cancelled>());
+        assert_eq!(reads, 0);
+    }
+
+    #[test]
+    fn timeout_observes_cancellation_during_the_read() {
+        let cancel = AtomicBool::new(false);
+        let mut reads = 0;
+        let result = wait_interrupt(&cancel, |_| {
+            reads += 1;
+            cancel.store(true, Ordering::SeqCst);
+            Err(rusb::Error::Timeout)
+        });
+        assert!(result.unwrap_err().is::<Cancelled>());
+        assert_eq!(reads, 1);
+    }
+
+    #[test]
+    fn cancellation_during_read_wins_over_finger_down() {
+        let cancel = AtomicBool::new(false);
+        let result = wait_interrupt(&cancel, |buf| {
+            cancel.store(true, Ordering::SeqCst);
+            buf[0] = 2;
+            Ok(1)
+        });
+        assert!(result.unwrap_err().is::<Cancelled>());
+    }
+
+    #[test]
+    fn success_stream_cannot_starve_cancellation() {
+        let cancel = AtomicBool::new(false);
+        let mut reads = 0;
+        let mut accepted_events = 0;
+        let mut cancelled = false;
+        // Model the sensor's wait-for-finger loop with an interrupt stream that
+        // never times out. Stop after five events even in the buggy version.
+        for _ in 0..5 {
+            let result = wait_interrupt(&cancel, |buf| {
+                reads += 1;
+                if reads == 3 {
+                    cancel.store(true, Ordering::SeqCst);
+                }
+                buf[0] = 1;
+                Ok(1)
+            });
+            match result {
+                Ok(event) => {
+                    assert_eq!(event, [1]);
+                    accepted_events += 1;
+                }
+                Err(e) => {
+                    assert!(e.is::<Cancelled>());
+                    cancelled = true;
+                    break;
+                }
+            }
+        }
+        assert!(cancelled, "successful interrupt reads starved cancellation");
+        assert_eq!(reads, 3);
+        assert_eq!(accepted_events, 2);
+    }
+
+    #[test]
+    fn usb_error_keeps_its_failure_type() {
+        let cancel = AtomicBool::new(false);
+        let result = wait_interrupt(&cancel, |_| Err(rusb::Error::NoDevice));
+        assert!(matches!(
+            result.unwrap_err().downcast_ref::<UsbFailure>(),
+            Some(UsbFailure(rusb::Error::NoDevice))
+        ));
     }
 }

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Bitwarden
+Comment=A secure and free password manager for all of your devices.
+Exec=/usr/local/bin/igpu-run /usr/bin/bitwarden %U
+Terminal=false
+Type=Application
+Icon=bitwarden
+MimeType=x-scheme-handler/bitwarden;
+GenericName=Password Manager
+Categories=Utility;
+StartupWMClass=Bitwarden
+TryExec=/usr/local/bin/igpu-run

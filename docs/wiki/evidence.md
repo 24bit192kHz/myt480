@@ -38,6 +38,7 @@ this reporting exception was not counted as a failed native analysis.
 | Live `DSDT.aml` | `f2fd32df2cbd99def8d6a4af3743753879a08b31982d862307832642a5c5b750` | Actual coreboot ACPI interface |
 | `mod-SmmAslSmi.pe` | `149a282a9ca05baa6ad659a09a9aeda2f6143612221cc2adb2828f7774312e10` | Stock SMI dispatch/mailbox bridge |
 | `mod-EcIoSmm.pe` | `b44f9cb7fcc7a798b967ff5769bd9002981ec331cf7085f0a6fc62fc5feddf00` | Stock EC transport |
+| `UsbTypeCDxe.pe` | `71b192a866d4d5aebe09b7272401db24e760f96f9e94ecf9ddbda5cfe9622f7d` | Stock UCSI software-shadow initialization |
 
 The Lenovo archive's expected SHA512, verified before extraction, was:
 
@@ -79,6 +80,20 @@ These are retained under `/home/btw/test/rea/work/audit-20261009`.
 while an application held the GPU; `reapply-retry.txt` and `final-validation.txt`
 record the final deployed state and successful post-restoration checks.
 
+Continuation evidence is retained in adjacent private directories:
+
+| Directory below `/home/btw/test/rea/work/` | Contents |
+|---|---|
+| `audit-20261009-usbc` | DXE/SMM/EC function results, hashes, captured Linux UCSI source, offline model tests and manifest |
+| `audit-20261009-fingerprint` | Fourteen successful REA function bundles, protocol/worker recovery and manifest; cancellation regression logs |
+| `audit-20261009-power` | 20-second AC capture, report and manifest; no policy changes |
+| `audit-20261009-routing` | GLX/EGL/Vulkan validation, NVMe health, display/Thunderbolt observations, routing rollback/reapply and final checks |
+
+The temporary REA clients used for the continuation were closed after their
+results were saved. USB-C packet models and fingerprint command reconstruction
+are offline results; they do not establish hardware behavior. The power capture
+measured CPU package energy on AC, not total laptop discharge.
+
 ## Verification commands
 
 ```sh
@@ -88,7 +103,12 @@ cc -O2 -Wall -Wextra -Wno-missing-field-initializers \
 cc -O2 -Wall -Wextra -std=c99 src/gpu-power/gpu-power.c -o /tmp/test-gpu-power
 python3 src/gpu-power/tests/prime-run.py
 python3 src/gpu-power/tests/tune.py
-for script in src/gpu-power/prime-run tools/re-audit/*.sh; do
+python3 src/gpu-power/tests/igpu-run.py
+python3 -m unittest discover -s tools/re-audit/tests -v
+python3 firmware/tools/ucsi-model.py --self-test
+# Hardware-free Rust tests; run inside src/validity-rs:
+cargo test --locked
+for script in src/gpu-power/prime-run src/gpu-power/igpu-run tools/re-audit/*.sh; do
   sh -n "$script" || exit
 done
 git diff --check
@@ -97,3 +117,11 @@ git diff --check
 The hardware-independent tests use fixtures instead of MSRs, fan registers, or
 NVIDIA hardware. They complement the live tests; they cannot establish dock,
 recognition-accuracy, hibernation, or battery-runtime behavior.
+
+Continuation validation passed: 25 power/SMART tests, four launcher tests,
+six offline UCSI model tests and all 44 Rust tests. The Rust suite emitted six
+existing dead-code warnings. Optional Python-generated golden data was absent;
+tests conditional on that private data do not provide fresh cross-language
+validation in this run. The seven new USB cancellation fixtures ran without a
+device. Desktop-file validation, shell syntax, local wiki links, whitespace,
+Intel GLX/EGL/Vulkan, SMART access and routing rollback/reapply also passed.

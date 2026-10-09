@@ -133,8 +133,10 @@ After that, before every firmware flash: `t480-reseal next-boot` (or use
 
 ### 4. Desktop
 
-Copy the dotfiles in `home/` (`ls -a`) to `~/`, `home/config/` to `~/.config/` and
-`home/local-bin/` to `~/.local/bin/`. tty1 logs in automatically and `~/.zprofile`
+Copy the dotfiles in `home/` (`ls -a`) to `~/`, `home/config/` to `~/.config/`,
+`home/local-bin/` to `~/.local/bin/` and `home/local-share/` to `~/.local/share/`.
+The Bitwarden desktop override requires the `igpu-run` helper installed by
+`src/gpu-power`. tty1 logs in automatically and `~/.zprofile`
 starts X.
 
 ## MX150

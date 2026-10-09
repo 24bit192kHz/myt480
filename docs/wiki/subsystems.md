@@ -14,14 +14,14 @@ sudo sh tools/re-audit/collect.sh
 |---|---|---|
 | CPU | i7-8650U, `intel_pstate`, performance governor/EPP; intel_idle C1..C10 available | Retained existing AC policy. Compare energy and response time on battery before changing EPP or turbo |
 | CPU voltage/limits | Explicit per-source undervolt; AC PL1 64 W / PL2 90 W, TCC 95°C | Retained previously tested values. Missing-config default is now zero undervolt |
-| Intel graphics | UHD620, desktop on Intel; i915 FBC/PSR/GuC parameters `-1` (automatic) | No forced enablement. Read actual display/PSR residency and check flicker before trying overrides |
+| Intel graphics | UHD620; live FBC compressing, DMC 1.4 loaded; PSR status unavailable | [Actual display state](storage-display-thunderbolt.md) checked; no forced feature enablement |
 | NVIDIA | MX150; D3cold in idle tests, active at final check with Bitwarden holding handles | Wrapper restoration and coarse RTD3 deployed; see [GPU tests](nvidia.md) |
-| NVMe | Toshiba XG6, APST latency limit 25,000 µs | Policy already permits power saving. Need idle residency plus latency/error tests before tightening it |
+| NVMe | Toshiba XG6, APST budget 25,000 µs; SMART no critical/media errors, 26% endurance used | [Read-only health reader](storage-display-thunderbolt.md) added; no justification for tightening APST |
 | PCIe | Global ASPM `powersupersave`; GPU port deliberately excludes ASPM | Keep known port workaround; previous freezes make blind ASPM changes inappropriate |
 | Wi-Fi | Intel 8265/8275, `iwlwifi` module power_save=N on AC | Compare throughput, latency, and discharge under the battery profile first |
 | Ethernet | I219-LM; existing AC-only wake policy | Retained; monitor wake sources and overnight discharge |
 | Audio | `snd_hda_intel power_save=0` on AC | Avoid changing active-audio behavior without pop/click and wake-latency tests |
-| Thunderbolt | JHL6240 NHI bound to `thunderbolt`; host/domain present, no attached device observed | Test an actual dock; inspect NVM version when available. No controller firmware update performed |
+| Thunderbolt | JHL6240 bound; NVM 23.0; domain `none`, advertised DMA protection 0 | [NVM/domain findings](storage-display-thunderbolt.md) recorded; test an actual dock; no firmware update |
 | USB-C | TYPEC disabled and UCSI ACPI transport absent | Kernel option alone is insufficient; [native EC bridge route](usb-c.md) documented |
 | USB / fingerprint | Two readers, libfprint selected; alternate services down intentionally | Retain backend selection and isolate cancellation/resume tests |
 | Sleep | `deep` selected; existing GPU saved-VRAM and sleep-guard hooks | Retained; real suspend/hibernate validation remains open in this session |
@@ -36,7 +36,9 @@ The two battery capacities were approximately 87% and 85% early in the audit,
 with AC connected and charging activity. Capacity percentages and AC charging
 cannot establish system idle watts. A repeatable energy experiment should log
 power source, charging state, battery energy/rate, CPU package residency,
-GPU sysfs state, screen brightness, radios, and workload together.
+GPU sysfs state, screen brightness, radios, and workload together. The new
+[power sampler](power-measurement.md) implements that observation without NVML;
+the continuation's AC capture reports CPU-package energy only.
 
 ## Firmware issues already investigated
 

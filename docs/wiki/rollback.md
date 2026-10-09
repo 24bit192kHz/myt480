@@ -68,6 +68,18 @@ GPU config `d76537387b7e79d7a358b647cc01780e084dbc988512173e721d80cd6a2edaff`.
 
 ## Repository and evidence
 
+The continuation's Intel helper and Bitwarden override have a separate
+[routing rollback](gpu-routing.md#revert), under
+`/root/myt480-audit-20261009-routing`. A full removal/reinstallation round trip
+confirmed the original absence of both files, followed by matching reinstalled
+checksums and successful Intel EGL rendering. It does not reload a GPU driver
+or stop applications. Later user edits prevent checksum-guarded removal.
+
+The read-only measurement tools and offline UCSI model need no machine-policy
+rollback. The Rust fingerprint cancellation fix is source-only; the selected
+live libfprint backend was not replaced. Restore the preceding Git version of
+that source if reverting the experiment rather than selecting another backend.
+
 Changes are isolated on local branch `re-audit-20261009`; the original local
 `main` branch was not rewritten. The branch began at the fetched current remote
 baseline `d89f79d`. No commits were pushed and no firmware was flashed by this audit.

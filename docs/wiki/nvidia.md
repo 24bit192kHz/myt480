@@ -83,11 +83,13 @@ offsets. Keeping a GPU descriptor open also intentionally prevents coarse idle
 suspend. At the final check, `bitwarden-app` held `/dev/nvidiactl` and the NVIDIA
 render node, and the GPU was consequently active/D0 despite coarse mode being
 enabled. It was left running. Use `fuser -v /dev/nvidia* /dev/dri/*` to identify
-such holders before measuring idle behavior or reloading the driver. A follow-up
-is to launch affected Electron applications explicitly on Intel and verify that
-they no longer retain NVIDIA handles; that application routing was not changed.
+such holders before measuring idle behavior or reloading the driver. The
+continuation installed [Intel routing](gpu-routing.md) and a Bitwarden desktop
+override for its next normal launch. Intel GLX/EGL/Vulkan checks passed; the
+existing Bitwarden instance was left running, so its post-restart device handles
+and any battery improvement remain to be measured.
 
-Vulkan, docks, real suspend/hibernate, and battery transitions were not
+MX150 Vulkan, docks, real suspend/hibernate, and battery transitions were not
 tested in this session. Retest after driver or firmware updates.
 
 Local checks and repeatable hardware test:

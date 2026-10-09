@@ -4,16 +4,24 @@ Audit date: **2026-10-09**. Source baseline: `d89f79d`; work branch:
 `re-audit-20261009`. The laptop was inspected over SSH. Its live firmware is C55,
 its kernel is `7.2.8-7-t480`, and its proprietary NVIDIA driver is `580.178.04`.
 
-The most important improvement was making manual fan control fail safely. The
-largest demonstrated power improvement was letting the MX150 sleep on AC while
-restoring its existing clock offsets before each `prime-run` job. Both are deployed.
+The most important improvement was making manual fan control fail safely. GPU
+tests confirmed D3cold on AC while restoring the existing clock offsets before
+each `prime-run` job. Both are deployed. The continuation added Intel application
+routing, deeper protocol recovery and better measurement tools.
+
+Start with [getting the most out of this T480](getting-the-most.md) for daily
+profiles, GPU selection, repeatable measurements and recovery.
 
 | Area | Result | Status |
 |---|---|---|
 | [Thermal control](thermal.md) | Kernel fan watchdog, immediate curve transitions, EC fallback, conservative missing-config undervolt | Deployed; emulated I/O, graceful shutdown, and live 125-second pause tested |
 | [NVIDIA](nvidia.md) | Coarse RTD3 with clock restoration; signal cleanup; truthful runtime status | Deployed; five cold-wake CUDA rounds and PRIME OpenGL passed |
+| [Intel application routing](gpu-routing.md) | `igpu-run` and Bitwarden desktop override | Deployed; Intel GLX/EGL/Vulkan and full rollback/reapply passed; existing app still running |
 | [USB-C](usb-c.md) | Recovered stock UCSI ACPI layout, SMM dispatch, EC mailbox, and transport ports | Reverse engineered; native implementation remains open |
 | [Fingerprint](fingerprint.md) | Traced Windows cancellation, reset, and idle/resume paths; checked Linux backend selection | Analysis completed for selected paths; backend unchanged |
+| [Fingerprint protocol](fingerprint-protocol.md) | Recovered reset `05 02 00`, stop `04`, secure transport and worker ordering | Static recovery; source cancellation regression addressed separately from live backend |
+| [Power measurement](power-measurement.md) | Passive counters, correct dual-battery/source handling, repeatable capture | 21 fixture tests; live AC CPU-package observation, no whole-system watts claim |
+| [Storage/display/Thunderbolt](storage-display-thunderbolt.md) | SMART health, working FBC/DMC, NVM 23.0 and domain policy | Read-only checks; no firmware or power-policy changes |
 | [Other subsystems](subsystems.md) | CPU, iGPU, NVMe, Wi-Fi, audio, Thunderbolt, sleep, firmware and crash diagnostics inspected | Inventory and next experiments documented |
 | [Evidence and tools](evidence.md) | REA used successfully; Ghidra MCP fallback used on NVIDIA | Reproduction details and artifact hashes recorded |
 | [Rollback](rollback.md) | Original binaries/configs retained; checksum-checked restoration script | Backup preflight passed on the laptop |
@@ -25,8 +33,14 @@ restoring its existing clock offsets before each `prime-run` job. Both are deplo
 - `/etc/gpu-power.conf`: `rtd3 0` changed to `rtd3 1` with an explanatory comment.
 - Matching source, the tracked thermal binary, the `prime-run` system snapshot,
   and GPU config updated in this branch.
+- `/usr/local/bin/igpu-run` added, plus a user Bitwarden desktop override for
+  future launches. No running password-manager instance was stopped.
 - Added hardware-independent tests, a read-only inventory collector, a temporary
-  RTD3 validation script, and a rollback script under `tools/re-audit/`.
+  RTD3 validation script, power/SMART diagnostics, and rollback scripts under
+  `tools/re-audit/`. Added an offline UCSI packet/completion model.
+- Fixed cancellation starvation in the optional Rust fingerprint backend source,
+  with a reproduced fixture failure and passing regressions. The active libfprint
+  backend was not replaced.
 
 The existing CPU undervolt, GPU offsets, fan curve, and power limits were retained.
 This audit did not flash firmware, change the kernel, enroll/delete fingerprints,

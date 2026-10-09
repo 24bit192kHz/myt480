@@ -1,0 +1,24 @@
+#!/bin/sh
+# Select the T480's Intel/Mesa stack before GL/Vulkan driver discovery.
+# An application that is already running must be relaunched to use this policy.
+[ $# -gt 0 ] || { echo 'usage: igpu-run <program> [args]' >&2; exit 64; }
+mesa=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+intel=/usr/share/vulkan/icd.d/intel_icd.json
+for manifest in "$mesa" "$intel"; do
+    [ -r "$manifest" ] || {
+        echo "igpu-run: required Intel/Mesa manifest missing: $manifest" >&2
+        exit 69
+    }
+done
+
+# Remove inherited offload/filter settings, including those from prime-run.
+unset __NV_PRIME_RENDER_OFFLOAD __NV_PRIME_RENDER_OFFLOAD_PROVIDER __VK_LAYER_NV_optimus
+unset __EGL_VENDOR_LIBRARY_DIRS VK_ADD_DRIVER_FILES VK_LOADER_DRIVERS_SELECT VK_LOADER_DRIVERS_DISABLE
+unset VK_INSTANCE_LAYERS VK_LOADER_LAYERS_ENABLE MESA_LOADER_DRIVER_OVERRIDE
+unset MESA_VK_DEVICE_SELECT MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE
+export DRI_PRIME=pci-0000_00_02_0
+export __GLX_VENDOR_LIBRARY_NAME=mesa
+export __EGL_VENDOR_LIBRARY_FILENAMES="$mesa"
+export VK_DRIVER_FILES="$intel"
+export VK_ICD_FILENAMES="$intel" # older Vulkan loaders
+exec "$@"

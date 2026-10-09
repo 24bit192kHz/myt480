@@ -5,6 +5,7 @@
 | `.xinitrc`, `.zprofile`, `.zshrc`, ... | `~/` |
 | `config/` | `~/.config/` |
 | `local-bin/` | `~/.local/bin/` |
+| `local-share/` | `~/.local/share/` |
 
 The files in this directory start with a dot: use `ls -a`.
 
@@ -13,3 +14,5 @@ The files in this directory start with a dot: use `ls -a`.
 - `~/.config/chadwm` is a link to the chadwm source tree (`../src/chadwm`); its
   `scripts/run.sh` starts picom, the bar and the window manager.
 - zsh plugins are not included: `config/zsh/plugins/PLUGINS.txt` lists what to clone.
+- The Bitwarden desktop override uses `igpu-run` from `src/gpu-power/` to select
+  Intel/Mesa on its next launch. See `docs/wiki/gpu-routing.md` for tests and rollback.
