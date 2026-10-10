@@ -27,11 +27,11 @@ resumes 6 s after the wake alarm, and a tested undervolt (-115 mV core on AC) gi
 |---|---|---|
 | `speed` | C32: the fastest boot, nothing that costs time | flashed and tested: cold boot, warm reset, suspend, GPU on and off |
 | `main` | C55 (2026-10-08): on coreboot main of that day, all patches in `firmware/coreboot/README.md` (0001 to 0028): link wait and `_ROM` check, GRUB runtime config and NVMe fixes, panel power before FSP-S, one reset at most, vendor ASPM and payload settings on the GPU port, SMBIOS version for thinkpad_acpi, and the vendor platform setup (radios, wake sources, subsystem IDs, GMM); C52 to C54 (2026-10-04): TPM measured boot, GRUB signature check and password, boot entries for the encrypted disk, h8 options from the devicetree, GPU option ROM measured into PCR 3 (`site-local`); C55: rebased on upstream main (Fn hotkey events from upstream), the power-button override keeps the GPU choice, lid wake GPE fixed, GPE routing explicit (patches 0026 to 0028) | flashed and tested: RTC-alarm cold boots, S3 with the watchdog armed, GPU off/on cycles; hibernate, a watchdog hang test and a 10-minute GPU load test on the builds before it; C54 also: suspend, hibernate, firmware flash with re-seal |
-| `testing` | C55 retained; no firmware or kernel replacement in the 2026-10-09 audit | reversible fan/GPU fixes and Intel routing deployed; diagnostics, protocol recovery and remaining defects recorded in [research](research/2026-10-09-t480/README.md); the same evening the remaining helper fixes, the sleep hooks (NVIDIA override now actually in effect, TCO disarm fallback), Bitwarden's real launch path and the EC lid-wake hook were deployed, RTC-wake S3/S4 cycles run, and lid wake from hibernation confirmed by hand (`docs/notes/2026-10-09-evening.md`) |
+| `testing` | C55 retained; kernel 7.2.8-8 (2026-10-10) | merged into `main` on 2026-10-10. The 2026-10-09 audit ([research](research/2026-10-09-t480/README.md)): fan watchdog, GPU helper and Intel routing; the same evening the remaining helper fixes, the sleep hooks (NVIDIA override now actually in effect, TCO disarm fallback), Bitwarden's real launch path and the EC lid-wake hook, RTC-wake S3/S4 cycles, lid wake from hibernation confirmed by hand; 2026-10-10: the MX150 push audited (coreboot patches 0029 to 0031 kept source-only), hook status fix deployed, and the early init releases the TPM key only for a LUKS2 root, built and booted as kernel 7.2.8-8 (`docs/notes/2026-10-09-evening.md`). New work lands here first |
 
 `main` and `speed` differ in `firmware/` and `hardware/kernel-cmdline.txt`.
-`main` supplies the running C55 firmware; `speed` is the state before that review.
-`testing` adds the 2026-10-09 audit changes and research without rewriting either branch.
+`main` supplies the running C55 firmware and, since 2026-10-10, the running kernel
+7.2.8-8 with the audit's fixes; `speed` is the state before the C55 review.
 
 ## Layout
 
