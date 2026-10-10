@@ -24,4 +24,16 @@ done
 umask 022
 [ -f "$F" ] && [ "$(wc -l <"$F")" -gt 400 ] && { tail -n 200 "$F" >"$F.new" && mv "$F.new" "$F"; }
 echo "$line" >>"$F"
+
+# A hibernation image can be lost (the next boot is another kernel, or resume
+# fails); /run goes with it. Keep this boot's marks on disk until the post line,
+# so the daemon can tell that boot change from a crash (marks.rs, lost_hibernation).
+P=/var/lib/battwatch/hibernate.pending
+case "$1 ${SYSTEMD_SLEEP_ACTION:-$2}" in
+"pre hibernate")
+	mkdir -p "${P%/*}" &&
+		{ echo "boot=$(cat /proc/sys/kernel/random/boot_id)"; cat "$F"; } >"$P.new" &&
+		mv "$P.new" "$P" ;;
+"post hibernate") rm -f "$P" ;;
+esac
 exit 0

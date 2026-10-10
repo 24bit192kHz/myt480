@@ -1,0 +1,20 @@
+#!/bin/sh
+# No hibernation on the distro kernels (stock linux, linux-lts from the GRUB menu).
+# GRUB always starts linux-t480 by default, and it cannot load another kernel's
+# image: "PM: hibernation: Failed to load image, recovering", a fresh boot, the
+# session lost (2026-10-10: stock kernel lid-closed 03:38, image written 04:38,
+# gone at 15:27). On these kernels the lid only suspends; elogind refuses
+# hibernate (also the menu's Hibernate); 20-hibernate-later does not arm (it
+# would hibernate after 1 h). Runtime drop-ins in /run: linux-t480 boots never
+# see them. 90-* sorts after the 10-* files in /etc, so these win.
+case "$(uname -r)" in *-t480) exit 0 ;; esac
+
+mkdir -p /run/elogind/logind.conf.d /run/elogind/sleep.conf.d
+printf '[Login]\nHandleLidSwitch=suspend\nHandleLidSwitchExternalPower=suspend\nHandleLidSwitchDocked=suspend\n' \
+	>/run/elogind/logind.conf.d/90-stock-kernel.conf
+printf '[Sleep]\nAllowHibernation=no\nAllowSuspendThenHibernate=no\nAllowHybridSleep=no\n' \
+	>/run/elogind/sleep.conf.d/90-stock-kernel.conf
+touch /run/t480-no-hibernate
+# elogind reloads its config on SIGHUP; when it starts later it reads them anyway
+pkill -HUP -x elogind
+logger -t stock-kernel-sleep "$(uname -r): hibernation off, lid suspends only"

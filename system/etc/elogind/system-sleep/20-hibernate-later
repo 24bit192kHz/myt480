@@ -67,6 +67,7 @@ case "$1" in
 job) hibernate_now; exit 0 ;;
 pre)
 	[ "$2" = suspend ] && [ "${SYSTEMD_SLEEP_ACTION:-suspend}" = suspend ] || exit 0
+	[ -e /run/t480-no-hibernate ] && exit 0 # distro kernel: no hibernation (local.d/stock-kernel-sleep.start)
 	grep -qw disk /sys/power/state && exit 0 # nothing blocks hibernation: elogind's own path
 	lid_closed || exit 0
 	d=$(delay)
