@@ -98,7 +98,7 @@ touches `/var/log/lastlog`, sources `/etc/s6/config/openssh.conf`, `exec /usr/bi
 - `/proc/cmdline` matches: `BOOT_IMAGE=/boot/vmlinuz-linux-rt root=UUID=<root UUID> rw net.ifnames=0 …`.
 - `/etc/fstab` (644): `UUID=<root UUID> / ext4 defaults,noatime 0 1`;
   `UUID=<swap UUID> swap pri=100`; `tmpfs /tmp mode=1777`;
-  `192.168.0.23:/my-zfs /mnt/my-zfs nfs noauto,nofail,soft,timeo=10,retrans=2,_netdev 0 0`;
+  `nas.lan:/my-zfs /mnt/my-zfs nfs noauto,nofail,soft,timeo=10,retrans=2,_netdev 0 0`;
   `/swapfile none swap pri=10`.
 - `/etc/mkinitcpio.conf`: `MODULES=(nvme i915)`, `BINARIES=() FILES=()`,
   `HOOKS=(base udev autodetect modconf kms block filesystems resume)` — no microcode (via grub),

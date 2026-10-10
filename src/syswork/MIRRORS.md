@@ -1,6 +1,6 @@
 # syswork NAS mirrors + timeshift + audit log
 
-Host: Artix T480. NAS: `192.168.0.23:/my-zfs`, mounted at `/mnt/my-zfs`
+Host: Artix T480. NAS: `nas.lan:/my-zfs`, mounted at `/mnt/my-zfs`
 (fstab: `nfs noauto,nofail,soft,timeo=10,retrans=2,_netdev` — on demand only).
 All privileged commands run as `ssh -o BatchMode=yes root@localhost '<cmd>'`. NEVER sudo.
 
