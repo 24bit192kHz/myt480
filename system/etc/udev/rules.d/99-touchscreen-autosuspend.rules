@@ -1,0 +1,2 @@
+# ELAN touchscreen: USB autosuspend (remote wakeup on touch; measured 2026-10-26, keeps the xHCI from staying awake)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04f3", ATTRS{idProduct}=="2398", ATTR{power/control}="auto", ATTR{power/autosuspend_delay_ms}="2000", ATTR{power/wakeup}="enabled"

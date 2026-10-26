@@ -256,16 +256,17 @@ PulseAudio idles at 0 % and DeepFilterNet engages only while something records f
 so another OS-side wake source remains since 10-04.
 
 Idle power on battery, resolved 13:50: the 2 W above the 10-04 figure was the live globe
-wallpaper (`gxwc`, 15 fps), which keeps presenting under the lock screen because the
-compositor never reports it obscured: 8.09 W with it, 6.09 W with it killed. Fix in
-`gxwc-wallpaper` (`home/local-bin/`): the supervisor pauses the renderer with SIGSTOP while
-`slock` runs and resumes it on unlock; measured 6.29 W locked on C60. Not applied, measured
-only: USB autosuspend for the touchscreen and the fingerprint reader plus the card reader
-unbound saves 0.6 W (needs the fingerprint daemons to release the device when idle); Wi-Fi
-power save saves 0.4 W (off on purpose in the NM profile). Thunderbolt driver unloaded costs
-1 W more (controller stays in D0), keep it loaded. Package C8 is never reached on this
-machine in any of these states (no PSR, i915 DC5/DC6 counts stay 0); the gain comes from
-package C6 and the iGPU idling.
+wallpaper (`gxwc`, 15 fps). gxwc stops rendering by itself when DPMS reports the panel off,
+but only while DPMS is enabled, and this desktop runs with DPMS disabled; the lock overlay is
+translucent by design (depth-32 windows never hide the globe), so the globe kept presenting
+under the lock. Fix: `lock-powersave` enables DPMS around the forced panel-off (`xset +dpms
+dpms force off`, back to `-dpms` at unlock); gxwc then idles on its own (renderer 0 CPU over a
+minute, measured). A first attempt that SIGSTOPped the renderer under slock was dropped: it
+froze the globe the lock screen is meant to show. Not applied, measured only: card reader
+unbound (0.2 W, usb-storage keeps it awake even with media polling at 10 s). Thunderbolt
+driver unloaded costs 1 W more (controller stays in D0), keep it loaded. Package C8 is never
+reached on this machine in any of these states (no PSR, i915 DC5/DC6 counts stay 0); the gain
+comes from package C6 and the iGPU idling.
 
 Battery policy, 2026-10-26 14:15 (the goal: fast on AC, cheap on battery, never sluggish):
 - `lock-powersave` (home/local-bin, started by chadwm run.sh): 120 s into a slock session the
@@ -280,5 +281,9 @@ Battery policy, 2026-10-26 14:15 (the goal: fast on AC, cheap on battery, never 
   8 fps 6.99, 10 fps 7.05, 12 fps 7.29, 15 fps 7.64. A floor of ~0.7 W comes from keeping
   the iGPU and compositor awake at all; above 8 fps each frame costs little. Battery setting
   now 10 fps (smooth for a slowly turning globe), AC stays 15; paused while locked.
-- Locked on battery with all of it: 4.00 W (8.1 W this morning). Card reader unbound saves
-  another 0.2 W, not applied.
+- Touchscreen (ELAN 04f3:2398) USB autosuspend: TLP denies HID devices by default, so
+  `USB_ALLOWLIST="04f3:2398"` in tlp.conf plus `system/etc/udev/rules.d/99-touchscreen-autosuspend.rules`
+  (2 s delay, remote wakeup enabled; the device advertises it). The fingerprint reader stays
+  on (`99-validity-no-autosuspend.rules`, it must watch for a finger while locked); the card
+  reader cannot suspend under usb-storage. Touch after an idle period not yet tried by hand.
+- Locked on battery with all of it: 3.86 W (8.1 W this morning).

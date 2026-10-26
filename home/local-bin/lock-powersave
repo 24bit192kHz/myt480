@@ -16,12 +16,12 @@ while sleep 2; do
     if pgrep -x slock >/dev/null 2>&1; then
         t=$((t + 2))
         if (( !off && t >= LOCK_SECS )); then
-            xset dpms force off 2>/dev/null && off=1
+            xset +dpms dpms force off 2>/dev/null && off=1   # +dpms: gxwc idles only when DPMS is enabled
         fi
         if on_battery; then wifi_ps on; else wifi_ps off; fi
     else
         if (( off )); then
-            xset dpms force on 2>/dev/null
+            xset dpms force on -dpms 2>/dev/null   # back to no DPMS timeouts for the unlocked desktop
             off=0
         fi
         t=0
