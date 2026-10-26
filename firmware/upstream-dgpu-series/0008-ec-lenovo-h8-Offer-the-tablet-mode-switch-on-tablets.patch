@@ -1,4 +1,4 @@
-From 80697927f655cc395d25c59fb9e9d691e7e89c06 Mon Sep 17 00:00:00 2001
+From 883fe99d61c074641beb08fceb52d3abb318b119 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Sun, 4 Oct 2026 15:48:39 +0300
 Subject: [PATCH 08/15] ec/lenovo/h8: Offer the tablet mode switch on tablets
@@ -176,3 +176,6 @@ index 9ccf11869a..dcc34398ef 100644
  					device pnp 62.0 alias lenovo_ec on
  						io 0x60 = 0x62
  						io 0x62 = 0x66
+-- 
+2.56.0
+

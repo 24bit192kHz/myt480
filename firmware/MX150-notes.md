@@ -160,3 +160,36 @@ removed: its log never saw a soft block, and Wi-Fi comes up unblocked on C50.
   with the watchdog armed, 17aa:225d on all PCH and system agent devices, verify48
   identical to C50 (MPS, ASPM, driver, GL/Vulkan, 5 D3cold cycles), DSDT and GRUB
   payload byte-identical to C50.
+
+## 2026-10-26: a T580 on the series, a truncated VBIOS, and the hot-plug port in D3cold
+
+A T580 owner (hustlerone) tried the Gerrit series (patch set 3) on
+[CB:95876](https://review.coreboot.org/c/coreboot/+/95876). What his reports taught:
+
+- `dGPU: disabled` with the option's default set to true: there is no option backend on
+  sklkbl without the EDK2 setup menu and SMMSTORE, so `get_uint_option()` returns its
+  fallback (series README, "Using the series").
+- `RmInitAdapter failed! (0x24:0x40:1603)` with a 119296-byte `pci10de,1d10.rom`: the
+  VBIOS was cut. The complete image sits in the Lenovo firmware, FFS file
+  `17835F4C-5D9B-484D-ABBC-5FBDC11F891C` on the T580 (`8B9BEF90-5FAF-46CF-A32A-7E1B7D33CC87`
+  on the T480), 182272 bytes; with it the GPU initialises. Patch 0001 (v6) now says so in the
+  log instead of failing silently: `option ROM needs 182272 bytes, but its CBFS file has only
+  119296`. `stock-reference/mx150-vbios-10de-1d10.rom` is the same kind of cut dump.
+- His `lspci` showed the GPU at `2.5GT/s (downgraded)`, ASPM L0s L1 on, MPS 128. Checked on the
+  T480 (C55, driver loaded): after about 20 s idle the GPU is in P8 at 139 MHz and the link
+  reads exactly that; it is back at 8 GT/s within a second of load (P0, 1949 MHz, `SW Power
+  Cap: Active`, which is normal; `glxfer`: 2.7 GB/s up, 3.1 GB/s down). So the line is normal
+  for an idle GPU. His crashes on Wayland and the low game FPS are not explained yet; the
+  T480 runs X11.
+- Hot-plug root port in D3cold (the open problem of v5, CB:95873): Linux puts a hot-plug
+  port into D3 only if it can signal wake and hot-plug events from there
+  (`acpi_pci_bridge_d3()`): `_PRW` with a wake GPE, `_S0W` not shallower than D3, and the
+  `_DSD` property `HotPlugSupportInD3`. Firmware **C58** = C55 + the hot-plug experiment
+  (GPU powered right before FSP-S, `PcieRpHotPlug[0]`) + those three objects on RP01 in the
+  SSDT (`_PRW {0x69, 4}` is what the vendor DSDT has on this port). Result on the T480, on AC:
+  after `gpu-power off`, the root port is `runtime_status suspended`, `power_state D3cold`,
+  ACPI `real_power_state D3cold` (the power resource ran `_OFF`: rail off) within 1 s, and the
+  GPU with it; unchanged after 60 s idle; 5 driver on/off cycles OK; no pciehp, Xid or AER
+  messages. Patch 0003 (v6) carries the same change. C58 is an experiment image (branch
+  `c58-hotplug-d3`, workstation + T480 trees, `roms/C58-hotplug-d3.rom`); the laptop went
+  back to C55 afterwards, whose bootblock design reaches D3cold without a hot-plug port.

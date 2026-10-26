@@ -1,4 +1,4 @@
-From 49a752e03e1751159abca71c1ff70bcbc8c9cf83 Mon Sep 17 00:00:00 2001
+From 5eaec0f1e36a928cdb8221f8119294d61e983375 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Sun, 4 Oct 2026 15:47:58 +0300
 Subject: [PATCH 07/15] ec/lenovo/h8: Add a devicetree option for boards
@@ -86,3 +86,6 @@ index fbe7070df0..4621959d8b 100644
  
  	acpigen_pop_len(); /* Scope HKEY */
  }
+-- 
+2.56.0
+

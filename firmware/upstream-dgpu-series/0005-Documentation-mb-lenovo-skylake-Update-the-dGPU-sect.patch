@@ -1,4 +1,4 @@
-From 67aa0986560a9a5e74e4ae62f8ae0dd367dcaeea Mon Sep 17 00:00:00 2001
+From 9c37525e2d3d52a2c8dd9a211e2fc93fef01acbb Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:55 +0300
 Subject: [PATCH 05/15] Documentation/mb/lenovo/skylake: Update the dGPU
@@ -49,3 +49,6 @@ index 672be9f4db..4e3db112e3 100644
  
  ## Verified Working
  
+-- 
+2.56.0
+

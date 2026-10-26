@@ -1,4 +1,4 @@
-From 5a5e9a0c5e8013b31886b6569880dc471c3f4676 Mon Sep 17 00:00:00 2001
+From 3e28b05823ca578f30515abe327d410d2ede2c27 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 02/15] mb/lenovo/sklkbl_thinkpad: Power the dGPU before FSP-S
@@ -403,3 +403,6 @@ index 7bce615b03..330ab853c4 100644
  			register "PcieRpClkReqNumber[0]"		= "0"
  			register "PcieRpClkSrcNumber[0]"		= "0"
  			register "PcieRpAdvancedErrorReporting[0]"	= "true"
+-- 
+2.56.0
+

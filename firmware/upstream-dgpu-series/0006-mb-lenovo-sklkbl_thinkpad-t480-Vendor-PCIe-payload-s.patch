@@ -1,4 +1,4 @@
-From 3bbe889c141dad714e5e29e672ee1e341d02d914 Mon Sep 17 00:00:00 2001
+From ab565e511ce539fc1e11aeee5dfdf17da81555e1 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:38:33 +0300
 Subject: [PATCH 06/15] mb/lenovo/sklkbl_thinkpad/t480: Vendor PCIe payload
@@ -59,3 +59,6 @@ index 8bb2f7ced1..5f837eba77 100644
                          smbios_slot_desc "SlotTypeM2Socket3" "SlotLengthOther" "M.2/M 2280 Sub Card" "SlotDataBusWidth2X"
  		end
  	end
+-- 
+2.56.0
+

@@ -1,4 +1,4 @@
-From fa464461a78ce6c3a5a467b8a309669b2ee4a72a Mon Sep 17 00:00:00 2001
+From f44bb866c2d414a993efc45c18571f8ba34a0b79 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 03/15] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
@@ -15,22 +15,33 @@ and RP01 in the DSDT describes that one. Add the power resource in the
 SSDT, and only if the dGPU is there, so that it cannot end up at the
 wrong root port.
 
-TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2: without a
-     driver the root port and the GPU go to D3cold and the power rail
-     is off. Loading the NVIDIA driver 580.178.04 turns the GPU on,
-     70 load/unload cycles in a row, S3 resume with a program running on
-     the GPU (video memory preserved by the driver).
+Root port 1 is hot-pluggable, and Linux puts a hot-plug port into D3
+only if it can signal wake and hot-plug events from there
+(acpi_pci_bridge_d3()): a wake GPE in _PRW, D3cold allowed by _S0W and
+the _DSD property HotPlugSupportInD3. Without them the port stayed in D0
+and the GPU with it (T480 on battery, idle, no driver: 7.3 to 10.5 W
+against 6.9 W with the port in D3cold). _PRW uses the PCIe PME GPE, as
+the vendor firmware does on this port.
+
+TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2, this code in
+     the local tree: with the NVIDIA driver 580.178.04 unloaded, the
+     root port and the GPU reach D3cold within a second (the port's
+     ACPI power state is D3cold, the rail is off) and stay there at
+     idle; five load/unload cycles of the driver, S3 with the port in
+     D3cold and resume, without pciehp, Xid or AER messages. Earlier on
+     the same tree: 70 load/unload cycles in a row, S3 resume with a
+     program running on the GPU (video memory preserved by the driver).
 
 Change-Id: I1e821855916e285123909cff581cccc6f48ca241
 Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
  .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 70 +++++++++++++++++++
- src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 39 +++++++++++
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 54 ++++++++++++++
  src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl |  4 ++
  .../lenovo/sklkbl_thinkpad/ramstage.c         |  4 +-
  .../lenovo/sklkbl_thinkpad/variant.h          |  3 +
- 5 files changed, 119 insertions(+), 1 deletion(-)
+ 5 files changed, 134 insertions(+), 1 deletion(-)
  create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
@@ -110,17 +121,27 @@ index 0000000000..067a17a450
 +	}
 +}
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index a1c5f30394..8e8c8e80a6 100644
+index a1c5f30394..f09cba9495 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,8 @@
  /* SPDX-License-Identifier: GPL-2.0-only */
  
++#include <acpi/acpi.h>
 +#include <acpi/acpigen.h>
++#include <acpi/acpi_device.h>
  #include <console/console.h>
  #include <delay.h>
  #include <device/device.h>
-@@ -98,6 +99,44 @@ static void dgpu_power_off(void)
+@@ -8,6 +11,7 @@
+ #include <gpio.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
+ #include <option.h>
++#include <soc/gpe.h>
+ #include <static.h>
+ #include <timer.h>
+ #include <variant/dgpu.h>
+@@ -98,6 +102,56 @@ static void dgpu_power_off(void)
  	gpio_set(GPIO_1R8VIDEO_AON_ON, 0);
  }
  
@@ -144,6 +165,18 @@ index a1c5f30394..8e8c8e80a6 100644
 +		return;
 +
 +	acpigen_write_scope(scope);
++
++	/*
++	 * Linux puts a hot-plug port into D3 only if it can signal wake and
++	 * hot-plug events from there: a wake GPE in _PRW (the PCIe PME GPE,
++	 * as on the vendor firmware), D3cold in _S0W and the property
++	 * HotPlugSupportInD3. Without them the port stays in D0, and the
++	 * power resource is never turned off.
++	 */
++	acpigen_write_PRW(GPE0_PCI_EXP, 4);
++	acpigen_write_name_integer("_S0W", ACPI_DEVICE_SLEEP_D3_COLD);
++	acpi_device_add_hotplug_support_in_d3(NULL);
++
 +	acpigen_write_power_res("PGPU", 0, 0, power_states, ARRAY_SIZE(power_states));
 +
 +	acpigen_write_method("_STA", 0);
@@ -214,3 +247,6 @@ index 50be150f04..8789386167 100644
 +void dgpu_fill_ssdt(const struct device *dev);
  
  #endif
+-- 
+2.56.0
+

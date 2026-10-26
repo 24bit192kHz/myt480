@@ -1,4 +1,4 @@
-From 6c8e32db29057ff805eeca126adc95d8b8c14dd3 Mon Sep 17 00:00:00 2001
+From cf8f89f0ba9f88f9d8b9c74b1ae9f0f81138001d Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 04/15] mb/lenovo/sklkbl_thinkpad: Keep the option of a
@@ -47,10 +47,10 @@ index 5585d1567b..103cc5dc42 100644
  
  /* dGPU */
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-index 8e8c8e80a6..1fedee19cc 100644
+index f09cba9495..3e750eb4ba 100644
 --- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
-@@ -137,6 +137,11 @@ void dgpu_fill_ssdt(const struct device *dev)
+@@ -152,6 +152,11 @@ void dgpu_fill_ssdt(const struct device *dev)
  	acpigen_write_scope_end();
  }
  
@@ -62,7 +62,7 @@ index 8e8c8e80a6..1fedee19cc 100644
  /* Runs after FSP-S and before the PCI scan; the GPU was powered before FSP-S */
  void dgpu_detect(void)
  {
-@@ -145,7 +150,7 @@ void dgpu_detect(void)
+@@ -160,7 +165,7 @@ void dgpu_detect(void)
  	const struct device *rp = dgpu->upstream ? dgpu->upstream->dev : NULL;
  	int dgfx_vram_id;
  
@@ -83,3 +83,6 @@ index 8789386167..9dd206c12a 100644
  void dgpu_detect(void);
  void dgpu_fill_ssdt(const struct device *dev);
  
+-- 
+2.56.0
+

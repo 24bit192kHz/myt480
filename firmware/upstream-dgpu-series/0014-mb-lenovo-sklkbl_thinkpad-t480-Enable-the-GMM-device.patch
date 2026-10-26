@@ -1,4 +1,4 @@
-From bda11c260f12ca9b78a2a7602a9dd4d30df85bdb Mon Sep 17 00:00:00 2001
+From 6be03996bcfac28a5fff5508cf7f727b39e8c1e6 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Thu, 1 Oct 2026 16:06:38 +0300
 Subject: [PATCH 14/15] mb/lenovo/sklkbl_thinkpad/t480: Enable the GMM device
@@ -27,3 +27,6 @@ index 2a1cc612bf..5615b33f25 100644
  		device ref lpc_espi on
  			chip ec/lenovo/h8
  				# The EC bit of the wireless switch reads 0; the vendor WLSW is a constant
+-- 
+2.56.0
+

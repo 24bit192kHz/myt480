@@ -1,4 +1,4 @@
-From 2e33ecccc4180a1a43c4bed0418ae4890e6f1c73 Mon Sep 17 00:00:00 2001
+From fdc5d1ea0da9873e28807b0821437e7c8e658524 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:41:56 +0300
 Subject: [PATCH 11/15] soc/intel/skylake: Hand the board's subsystem IDs to
@@ -55,3 +55,6 @@ index c84eb935b9..6c2f25c381 100644
  
  	params->PchPmWolEnableOverride = config->WakeConfigWolEnableOverride;
  	params->PchPmPcieWakeFromDeepSx = config->WakeConfigPcieWakeFromDeepSx;
+-- 
+2.56.0
+
