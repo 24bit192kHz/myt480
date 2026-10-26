@@ -109,6 +109,7 @@ clear_renderer() {
 # (measured 2026-10-26). Pause it with SIGSTOP while slock runs, resume on unlock.
 pause_watch() {
     local paused=0
+    exec 7>&- 8>&-   # do not hold the supervisor's locks in this loop
     while kill -0 "$renderer" 2>/dev/null; do
         if pgrep -x slock >/dev/null 2>&1; then
             if (( ! paused )); then
@@ -123,6 +124,7 @@ pause_watch() {
 
 stop_child() {
     local pid="${renderer:-}"
+    [[ "${watcher:-}" =~ ^[1-9][0-9]*$ ]] && kill "$watcher" 2>/dev/null
     [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null || return 0
     kill -CONT "$pid" 2>/dev/null || true
     kill -TERM "$pid" 2>/dev/null || true
