@@ -12,9 +12,9 @@ wifi_ps() {  # wifi_ps on|off: only when it differs from the current state
     local cur; cur="$(iw dev "$WLAN" get power_save 2>/dev/null | awk '{print $NF}')"
     [[ -n "$cur" && "$cur" != "$1" ]] && sudo -n /usr/bin/iw dev "$WLAN" set power_save "$1" 2>/dev/null
 }
-while sleep 5; do
+while sleep 2; do
     if pgrep -x slock >/dev/null 2>&1; then
-        t=$((t + 5))
+        t=$((t + 2))
         if (( !off && t >= LOCK_SECS )); then
             xset dpms force off 2>/dev/null && off=1
         fi
