@@ -254,3 +254,15 @@ on demand. The RNNoise block is removed (backup kept, `mic-denoise-toggle.sh on`
 PulseAudio idles at 0 % and DeepFilterNet engages only while something records from
 `mic_denoised`. C60 idle on battery afterwards: 8.19 W, package 2.0 W, still no package C8,
 so another OS-side wake source remains since 10-04.
+
+Idle power on battery, resolved 13:50: the 2 W above the 10-04 figure was the live globe
+wallpaper (`gxwc`, 15 fps), which keeps presenting under the lock screen because the
+compositor never reports it obscured: 8.09 W with it, 6.09 W with it killed. Fix in
+`gxwc-wallpaper` (`home/local-bin/`): the supervisor pauses the renderer with SIGSTOP while
+`slock` runs and resumes it on unlock; measured 6.29 W locked on C60. Not applied, measured
+only: USB autosuspend for the touchscreen and the fingerprint reader plus the card reader
+unbound saves 0.6 W (needs the fingerprint daemons to release the device when idle); Wi-Fi
+power save saves 0.4 W (off on purpose in the NM profile). Thunderbolt driver unloaded costs
+1 W more (controller stays in D0), keep it loaded. Package C8 is never reached on this
+machine in any of these states (no PSR, i915 DC5/DC6 counts stay 0); the gain comes from
+package C6 and the iGPU idling.

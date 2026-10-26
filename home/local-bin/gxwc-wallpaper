@@ -104,9 +104,27 @@ clear_renderer() {
     remove_if_owned "$STATE/renderer.pid" "${renderer:-}"
 }
 
+# The renderer keeps presenting at full rate under the lock screen (the compositor
+# never reports it obscured): about 2 W on battery for a globe nobody sees
+# (measured 2026-10-26). Pause it with SIGSTOP while slock runs, resume on unlock.
+pause_watch() {
+    local paused=0
+    while kill -0 "$renderer" 2>/dev/null; do
+        if pgrep -x slock >/dev/null 2>&1; then
+            if (( ! paused )); then
+                kill -STOP "$renderer" 2>/dev/null && { paused=1; log "paused: screen locked"; }
+            fi
+        elif (( paused )); then
+            kill -CONT "$renderer" 2>/dev/null; paused=0; log "resumed: screen unlocked"
+        fi
+        sleep 2
+    done
+}
+
 stop_child() {
     local pid="${renderer:-}"
     [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null || return 0
+    kill -CONT "$pid" 2>/dev/null || true
     kill -TERM "$pid" 2>/dev/null || true
     for _ in {1..30}; do
         kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null || true; return 0; }
@@ -117,7 +135,7 @@ stop_child() {
 }
 
 supervise() {
-    local renderer status delay started
+    local renderer status delay started watcher
     mkdir -p "$STATE"
     exec 7>&-
     exec 8>"$OWNER_LOCK"
@@ -139,8 +157,11 @@ supervise() {
         renderer=$!
         echo "$renderer" >"$STATE/renderer.pid"
         log "renderer started pid=$renderer"
+        pause_watch &
+        watcher=$!
         wait "$renderer"
         status=$?
+        kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null
         clear_renderer
         [[ -e "$STATE/stopping" ]] && break
         if (( status == 3 )) && [[ "$BIN" != "$FALLBACK_BIN" && -x "$FALLBACK_BIN" ]]; then
