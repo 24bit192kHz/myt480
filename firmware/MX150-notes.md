@@ -239,3 +239,11 @@ live PM1_STS). Flashed 12:32 and checked: port and GPU in D3cold 1 s after `gpu-
 `dGPU: skipped for this boot`, byte cleared, GPU back on the next boot), a cold boot from S5,
 an S3 cycle; TPM key resealed to the new PCR 2. C55.rom stays in `roms/` as the fallback;
 the 4 s hold itself is still untested by hand (the skip path behind it is).
+
+Battery idle, same conditions (2026-10-26 13:00, fresh boots, screen locked, backlight 24 %,
+driver unloaded, GPU and port in D3cold): C55 8.50 / 8.46 W, C60 8.63 / 8.55 W; package
+power 2.1 W on both, no package C8 on either. The two designs draw the same at idle. Both
+numbers are about 1.6 W above the 10-04 figures (6.7 to 6.9 W) because PulseAudio now runs
+the mic filter chain permanently (LADSPA `noise_suppressor_mono` sink, `rnnoise_mic`
+remap source, DeepFilterNet null sink): 28 % of a core on every boot, which keeps the
+package out of C8. That is an OS-side item, not firmware.
