@@ -1,0 +1,1 @@
+btw ALL=(root) NOPASSWD: /usr/bin/iw dev wlan0 set power_save on, /usr/bin/iw dev wlan0 set power_save off

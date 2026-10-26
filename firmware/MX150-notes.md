@@ -266,3 +266,19 @@ power save saves 0.4 W (off on purpose in the NM profile). Thunderbolt driver un
 1 W more (controller stays in D0), keep it loaded. Package C8 is never reached on this
 machine in any of these states (no PSR, i915 DC5/DC6 counts stay 0); the gain comes from
 package C6 and the iGPU idling.
+
+Battery policy, 2026-10-26 14:15 (the goal: fast on AC, cheap on battery, never sluggish):
+- `lock-powersave` (home/local-bin, started by chadwm run.sh): 120 s into a slock session the
+  panel goes off (−1.7 W); on battery Wi-Fi power save is on only while locked (−0.4 W) and
+  off again at unlock, so latency never suffers while someone types. Sudo rule
+  `system/etc/sudoers.d/lock-powersave` for the two `iw` commands; TLP leaves Wi-Fi power
+  save alone now (`WIFI_PWR_ON_BAT=off`), the NM profile keeps its `disable`.
+- TLP `CPU_ENERGY_PERF_POLICY_ON_BAT=balance_performance` (was balance_power): same idle
+  draw, quicker frequency ramp on battery. AC unchanged (performance governor and EPP,
+  64/90 W limits, undervolt, GPU offsets).
+- Globe wallpaper cost on battery, panel on, measured 60 s each: none 5.96 W, 6 fps 6.67,
+  8 fps 6.99, 10 fps 7.05, 12 fps 7.29, 15 fps 7.64. A floor of ~0.7 W comes from keeping
+  the iGPU and compositor awake at all; above 8 fps each frame costs little. Battery setting
+  now 10 fps (smooth for a slowly turning globe), AC stays 15; paused while locked.
+- Locked on battery with all of it: 4.00 W (8.1 W this morning). Card reader unbound saves
+  another 0.2 W, not applied.

@@ -1,0 +1,30 @@
+#!/bin/bash
+# lock-powersave: while the screen is locked (slock): panel off after 120 s, and on battery
+# Wi-Fi power save on. At unlock: panel on, Wi-Fi power save off again (latency matters when
+# someone is at the keyboard; TLP leaves Wi-Fi power save alone, see /etc/tlp.conf).
+# Started by chadwm run.sh. Measured 2026-10-26: panel off 1.7 W, Wi-Fi power save 0.4 W.
+export DISPLAY="${DISPLAY:-:0}"
+LOCK_SECS="${LOCK_POWERSAVE_SECS:-120}"
+WLAN="${LOCK_POWERSAVE_WLAN:-wlan0}"
+off=0; t=0
+on_battery() { [[ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" == 0 ]]; }
+wifi_ps() {  # wifi_ps on|off: only when it differs from the current state
+    local cur; cur="$(iw dev "$WLAN" get power_save 2>/dev/null | awk '{print $NF}')"
+    [[ -n "$cur" && "$cur" != "$1" ]] && sudo -n /usr/bin/iw dev "$WLAN" set power_save "$1" 2>/dev/null
+}
+while sleep 5; do
+    if pgrep -x slock >/dev/null 2>&1; then
+        t=$((t + 5))
+        if (( !off && t >= LOCK_SECS )); then
+            xset dpms force off 2>/dev/null && off=1
+        fi
+        if on_battery; then wifi_ps on; else wifi_ps off; fi
+    else
+        if (( off )); then
+            xset dpms force on 2>/dev/null
+            off=0
+        fi
+        t=0
+        wifi_ps off
+    fi
+done

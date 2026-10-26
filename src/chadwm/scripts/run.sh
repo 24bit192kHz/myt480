@@ -23,9 +23,18 @@ xset s off; xset s noblank; xset -dpms
 # brightd is only a fallback for a kernel without blkeys.
 [ -d /sys/module/blkeys ] ||
 	pgrep -x brightd >/dev/null 2>&1 || setsid ~/.local/bin/brightd >/dev/null 2>&1 &
-# External monitor: native mode, highest refresh, left of eDP-1; re-applied
-# on every hotplug (monitor.sh watch is a singleton).
+# External monitor takes over as the only display (preferred mode, audio
+# follows, per-display Hz in ~/.config/chadwm/monitors.conf); re-applied
+# on every connector change (monitor.sh watch is a singleton).
 ~/.config/chadwm/scripts/monitor.sh watch >/dev/null 2>&1 &
+# KDE Connect: the indicator (tray icon) starts kdeconnectd over D-Bus; chadwm
+# does not run /etc/xdg/autostart. Firewall: TCP/UDP 1714-1764 from the home LAN.
+pgrep -x kdeconnect-indi >/dev/null 2>&1 || kdeconnect-indicator >/dev/null 2>&1 &
+# Bluetooth: reconnect the buds/gamepad on login, resume and power-on (event driven).
+pgrep -f 'bin/bt-autoconnect$' >/dev/null 2>&1 || setsid ~/.local/bin/bt-autoconnect >/dev/null 2>&1 &
+# Mic: DeepFilterNet noise suppression, only running while something records (event driven).
+pgrep -f 'bin/dfn-mic$' >/dev/null 2>&1 || setsid ~/.local/bin/dfn-mic >"${XDG_RUNTIME_DIR:-/tmp}/dfn-mic.log" 2>&1 &
+pgrep -f "bin/lock[-]powersave$" >/dev/null 2>&1 || setsid ~/.local/bin/lock-powersave >/dev/null 2>&1 &
 # Neutral root prevents the static image from flashing beneath the live Earth.
 xsetroot -solid black >/dev/null 2>&1
 picom &
