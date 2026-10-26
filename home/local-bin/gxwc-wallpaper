@@ -11,7 +11,7 @@ OWNER_LOCK="$STATE/owner.lock"
 BIN="$USER_HOME/.local/bin/gxwc"
 # 30/15 fps: gxwc 3 presents only a globe-sized disc window (stars are a
 # static root pixmap), ~3% of one core while visible, 0 while covered.
-ARGS=(--fps-ac 15 --fps-bat 5)  # 30 on AC doubled compositing for no visible gain
+ARGS=(--fps-ac 15 --fps-bat 10)  # 30 on AC doubled compositing for no visible gain
 # Which planet: `gxwc-wallpaper planet NAME` writes it; planets are installed
 # from ~/Projects/software/gxwc/planets (params + baked maps).
 PLANETS="$USER_HOME/.local/share/gxwc/planets"

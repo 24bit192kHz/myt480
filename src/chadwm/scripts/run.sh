@@ -34,6 +34,7 @@ pgrep -x kdeconnect-indi >/dev/null 2>&1 || kdeconnect-indicator >/dev/null 2>&1
 pgrep -f 'bin/bt-autoconnect$' >/dev/null 2>&1 || setsid ~/.local/bin/bt-autoconnect >/dev/null 2>&1 &
 # Mic: DeepFilterNet noise suppression, only running while something records (event driven).
 pgrep -f 'bin/dfn-mic$' >/dev/null 2>&1 || setsid ~/.local/bin/dfn-mic >"${XDG_RUNTIME_DIR:-/tmp}/dfn-mic.log" 2>&1 &
+# Lock-time power save: panel off 2 min into a slock session, Wi-Fi power save while locked on battery (lock-powersave).
 pgrep -f "bin/lock[-]powersave$" >/dev/null 2>&1 || setsid ~/.local/bin/lock-powersave >/dev/null 2>&1 &
 # Neutral root prevents the static image from flashing beneath the live Earth.
 xsetroot -solid black >/dev/null 2>&1
