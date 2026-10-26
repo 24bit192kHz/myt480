@@ -103,8 +103,9 @@ Two things the image needs that the series cannot carry:
     size byte of its header (119808 bytes, or less), and the driver then fails with
     `RmInitAdapter failed! (0x24:0x40:1603)`. `../stock-reference/mx150-vbios-10de-1d10.rom`
     is such a cut dump, kept as a reference only.
-  - Take it from the Lenovo firmware image instead: `UEFIExtract <image> all`, then the
-    raw section of the FFS file `8B9BEF90-5FAF-46CF-A32A-7E1B7D33CC87` (T480) or
+  - Take it from the Lenovo firmware image instead: `../tools/extract-vbios.py <image>`
+    does it (needs `uefiextract`; `--list` shows every option ROM in the image). By hand:
+    `UEFIExtract <image> all`, then the raw section of the FFS file `8B9BEF90-5FAF-46CF-A32A-7E1B7D33CC87` (T480) or
     `17835F4C-5D9B-484D-ABBC-5FBDC11F891C` (T580, found by its owner); its body starts
     with `55 AA` and has a `PCIR` structure for 10de:1d10.
   - Check: the 16-bit image length at `PCIR + 0x10` is in 512-byte units (0x164 × 512 =
