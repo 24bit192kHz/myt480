@@ -247,3 +247,10 @@ numbers are about 1.6 W above the 10-04 figures (6.7 to 6.9 W) because PulseAudi
 the mic filter chain permanently (LADSPA `noise_suppressor_mono` sink, `rnnoise_mic`
 remap source, DeepFilterNet null sink): 28 % of a core on every boot, which keeps the
 package out of C8. That is an OS-side item, not firmware.
+
+Follow-up 13:15: the constant PulseAudio load was the old RNNoise chain in `~/.config/pulse/default.pa`
+(its loopback keeps the mic and the LADSPA sink running); DeepFilterNet (`dfn-mic`) was already
+on demand. The RNNoise block is removed (backup kept, `mic-denoise-toggle.sh on` restores it);
+PulseAudio idles at 0 % and DeepFilterNet engages only while something records from
+`mic_denoised`. C60 idle on battery afterwards: 8.19 W, package 2.0 W, still no package C8,
+so another OS-side wake source remains since 10-04.
