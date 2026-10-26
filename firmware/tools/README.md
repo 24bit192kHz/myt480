@@ -5,6 +5,7 @@
 | `bootmenu` | sets CMOS 0x6e so that GRUB shows its menu at the next boot, and reboots. Only argument: `--no-reboot`. Any other argument also reboots |
 | `t480-init` | PID 1 wrapper: mounts `/proc` and `/sys`, then starts s6. Needed because the kernel boots without an initramfs. Install as `/usr/local/sbin/t480-init` |
 | `mx150-revert.sh` | removes the NVIDIA driver setup |
+| `cfrdump.py` | `cbmem -r 43425442 \| python3 cfrdump.py` (root): lists the CFR setup-option records in the coreboot table (forms, options, flags); used to check patch 0004 without an edk2 payload |
 | `extract-vbios.py IMAGE [-o FILE]` | pulls the complete MX150 VBIOS (182272 bytes) out of a Lenovo firmware image: runs `uefiextract IMAGE all` (raw scan without it), checks every PCI option ROM's image chain and writes the complete 10de:1d10 one; `--list` shows all option ROMs in the image with their lengths and whether they are cut |
 | `tscmono.c`, `pm_ab.py` | boot time measurement |
 | `boot-times.sh` | one line of boot times for the current boot |

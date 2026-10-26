@@ -1,4 +1,4 @@
-From f44bb866c2d414a993efc45c18571f8ba34a0b79 Mon Sep 17 00:00:00 2001
+From 0d120faaade3afe467e0fc1c4124b5964fcc69e8 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Tue, 29 Sep 2026 22:37:54 +0300
 Subject: [PATCH 03/15] mb/lenovo/sklkbl_thinkpad: Add a power resource for the
@@ -23,33 +23,43 @@ and the GPU with it (T480 on battery, idle, no driver: 7.3 to 10.5 W
 against 6.9 W with the port in D3cold). _PRW uses the PCIe PME GPE, as
 the vendor firmware does on this port.
 
+If the power good signal does not come within 100 ms in _ON, cut the
+power again and return with the GPU in reset, like dgpu_power_on() does
+before FSP-S, instead of releasing the reset of an unpowered GPU.
+
 TEST=Lenovo ThinkPad T480 with GeForce MX150, Linux 7.2, this code in
      the local tree: with the NVIDIA driver 580.178.04 unloaded, the
      root port and the GPU reach D3cold within a second (the port's
      ACPI power state is D3cold, the rail is off) and stay there at
      idle; five load/unload cycles of the driver, S3 with the port in
-     D3cold and resume, without pciehp, Xid or AER messages. Earlier on
-     the same tree: 70 load/unload cycles in a row, S3 resume with a
-     program running on the GPU (video memory preserved by the driver).
+     D3cold and resume, without pciehp, Xid or AER messages. Also:
+     10 minutes of GPU load with pciehp bound to the port (8 GT/s x4,
+     no hot-plug events), 20 more load/unload cycles, hibernate and
+     resume, three cold boots, a boot with the GPU disabled (the port
+     stays as an empty hot-plug slot) and one with it enabled again
+     without an extra reset, and 30 minutes of S3 with the port in
+     D3cold, woken by the RTC alarm only. Earlier on the same tree: 70
+     load/unload cycles in a row, S3 resume with a program running on
+     the GPU (video memory preserved by the driver).
 
 Change-Id: I1e821855916e285123909cff581cccc6f48ca241
 Co-authored-by: Claude <noreply@anthropic.com>
 Signed-off-by: 24bit192kHz <24bit192khz@proton.me>
 ---
- .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 70 +++++++++++++++++++
- src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 54 ++++++++++++++
- src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl |  4 ++
+ .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      | 76 +++++++++++++++++++
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 54 +++++++++++++
+ src/mainboard/lenovo/sklkbl_thinkpad/dsdt.asl |  4 +
  .../lenovo/sklkbl_thinkpad/ramstage.c         |  4 +-
  .../lenovo/sklkbl_thinkpad/variant.h          |  3 +
- 5 files changed, 134 insertions(+), 1 deletion(-)
+ 5 files changed, 140 insertions(+), 1 deletion(-)
  create mode 100644 src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
 
 diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
 new file mode 100644
-index 0000000000..067a17a450
+index 0000000000..0ab938e9d2
 --- /dev/null
 +++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,76 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +
 +#include <variant/dgpu.h>
@@ -98,6 +108,12 @@ index 0000000000..067a17a450
 +		While (!\_SB.PCI0.GRXS (GPIO_DGFX_PWRGD) && Local0 < 100) {
 +			Sleep (1)
 +			Local0++
++		}
++		/* No power good: leave the GPU in reset without power, as the ramstage does */
++		If (!\_SB.PCI0.GRXS (GPIO_DGFX_PWRGD)) {
++			\_SB.PCI0.CTXS (GPIO_1R8VIDEO_AON_ON)
++			Sleep (100)
++			Return
 +		}
 +		Sleep (10)
 +

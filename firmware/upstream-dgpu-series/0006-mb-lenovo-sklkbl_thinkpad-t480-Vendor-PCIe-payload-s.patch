@@ -1,4 +1,4 @@
-From ab565e511ce539fc1e11aeee5dfdf17da81555e1 Mon Sep 17 00:00:00 2001
+From 9dbb3ccbdc779de92a2f6245cb9e9a0d90700a97 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Wed, 30 Sep 2026 18:38:33 +0300
 Subject: [PATCH 06/15] mb/lenovo/sklkbl_thinkpad/t480: Vendor PCIe payload

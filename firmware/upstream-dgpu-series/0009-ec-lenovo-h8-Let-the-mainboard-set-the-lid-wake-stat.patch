@@ -1,4 +1,4 @@
-From 6bab0664b01b8e3d3d5c8739496d528d1e5a7daa Mon Sep 17 00:00:00 2001
+From d573f5cdc2a9e82b5abc21149396807e52418088 Mon Sep 17 00:00:00 2001
 From: 24bit192kHz <24bit192khz@proton.me>
 Date: Thu, 1 Oct 2026 16:06:07 +0300
 Subject: [PATCH 09/15] ec/lenovo/h8: Let the mainboard set the lid wake state

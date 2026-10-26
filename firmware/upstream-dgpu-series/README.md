@@ -1,7 +1,7 @@
 # MX150 series for upstream coreboot
 
 The dGPU work and the T480 platform fixes as 15 patches on coreboot main
-6e7766c710 (2026-10-02), on Gerrit as topic `t480-dgpu` (v6, 2026-10-26):
+6e7766c710 (2026-10-02), on Gerrit as topic `t480-dgpu` (v7, 2026-10-26):
 https://review.coreboot.org/q/topic:t480-dgpu
 
 Author and sign-off: `24bit192kHz <24bit192khz@proton.me>`, the same person as
@@ -13,7 +13,7 @@ repository.
 | 0001 | `_ROM` gets the whole option ROM, not only what the one-byte size field of its header describes; never more than the CBFS file holds, and a warning in the log when the file ends before its last image (a truncated VBIOS dump) |
 | 0002 | root port 1 is marked hot-pluggable, so FSP-S keeps it without a link; the dGPU gets its power right before FSP-S and is found in the PCI scan; power off before sleep |
 | 0003 | ACPI power resource: the OS can turn the GPU off and on at runtime (D3cold); `_PRW`, `_S0W` and `HotPlugSupportInD3` on the root port, so that Linux puts the hot-plug port into D3cold too |
-| 0004 | keep the setup option visible after the dGPU was disabled |
+| 0004 | keep the setup option visible after the dGPU was disabled, and declare it as a boolean (it was an enum without values) |
 | 0005 | documentation of the board |
 | 0006 | T480: Max_Payload_Size 256 on the dGPU, WLAN and SSD ports, as the vendor firmware |
 | 0007 | ec/lenovo/h8: devicetree register `no_wireless_switch` for ECs without a radio switch (WLSW returns 1) |
@@ -32,8 +32,8 @@ repository.
 |---|---|
 | Builds | in the coreboot-sdk container (the toolchain of coreboot's Jenkins): every patch on its own for all sklkbl_thinkpad variants, X230 variants and X60; at the top of the series all 54 Lenovo configurations |
 | Lint | checkpatch on each commit, `lint-stable` clean |
-| Tested on hardware | T480, with the same code in the local tree (which reads a CMOS byte where 0002 reads the option): 0002: link down before FSP-S, port kept, link up before the PCI scan; cold boot, warm reset, first boot after enabling the GPU (no extra reset), GPU disabled, S3 resume; Linux binds pciehp to the port, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold (driven by my own tool; see the fixed problem below). v6 of 0003 on firmware C58 (the local tree with the same hot-plug port and ACPI objects): with the driver unloaded, Linux puts the root port and the GPU into D3cold within a second (ACPI real power state D3cold, the rail off through the power resource), both stay there at idle (60 s), 5 off/on cycles of the driver, no pciehp or Xid events. 0007, 0008, 0012: "radio switch found; radios are enabled", Bluetooth and WWAN unblocked, no tablet mode switch. Earlier builds: subsystem IDs 17aa:225d, MPS 256, hibernate/resume |
-| Not tested | this exact series booted on top of main; T480s, T580 and the other variants on hardware; the setup menu of 0004; an actual wake from S4 by opening the lid |
+| Tested on hardware | T480, with the same code in the local tree (which reads a CMOS byte where 0002 reads the option): 0002: link down before FSP-S, port kept, link up before the PCI scan; cold boot, warm reset, first boot after enabling the GPU (no extra reset), GPU disabled, S3 resume; Linux binds pciehp to the port, NVIDIA driver with GL and Vulkan, 5 GPU off/on cycles through D3cold (driven by my own tool; see the fixed problem below). v6 of 0003 on firmware C58 (the local tree with the same hot-plug port and ACPI objects): with the driver unloaded, Linux puts the root port and the GPU into D3cold within a second (ACPI real power state D3cold, the rail off through the power resource), both stay there at idle (60 s), 5 off/on cycles of the driver, no pciehp or Xid events. Then on the same firmware: 10 min of GPU load with pciehp bound (8 GT/s x4, no hot-plug events), 20 more driver off/on cycles, hibernate and resume, three cold boots from S5, a boot with the GPU disabled (the port stays as an empty hot-plug slot, the WLAN port keeps its address) and one with it enabled again without an extra reset, 30 min of S3 with the port in D3cold woken by the RTC alarm alone. 0004: the CFR records read back from the coreboot table (local build with `DRIVERS_OPTION_CFR` and the GRUB payload, `tools/cfrdump.py`): `dgpu_enable` listed without the SUPPRESS flag with the GPU enabled and disabled, and as a boolean record with v7. 0007, 0008, 0012: "radio switch found; radios are enabled", Bluetooth and WWAN unblocked, no tablet mode switch. Earlier builds: subsystem IDs 17aa:225d, MPS 256, hibernate/resume |
+| Not tested | this exact series booted on top of main; T480s, T580 and the other variants on hardware; the setup menu of 0004 rendered by edk2 (only its CFR data was checked); an actual wake from S4 by opening the lid |
 | Fixed in v6 | with root port 1 marked hot-pluggable (0002, v5), Linux kept the port in D0 when no driver was bound, so the power resource of 0003 was never turned off and the GPU stayed powered at idle (T480 on battery: 6.9 W without the flag, 7.3 to 10.5 W with it). Linux puts a hot-plug port into D3 only if it can signal wake and hot-plug events from there (`acpi_pci_bridge_d3()` in `drivers/pci/pci-acpi.c`): v6 of 0003 adds `_PRW` (the PCIe PME GPE, as the vendor firmware has on this port), `_S0W` = D3cold and the `_DSD` property `HotPlugSupportInD3` to the root port. Measured on C58, see "Tested on hardware". Reported on [CB:95873](https://review.coreboot.org/c/coreboot/+/95873) on 2026-10-04 |
 
 ## Found on the way (not in the series)
@@ -70,6 +70,10 @@ T480).
   `RmInitAdapter failed! (0x24:0x40:1603)`); 0003 adds `_PRW`, `_S0W` and
   `HotPlugSupportInD3` to the root port, which lets Linux put the hot-plug port and
   the GPU into D3cold (the idle power problem of v5, measured fixed on the T480).
+- v7, 2026-10-26: 0003 also cuts the power again when power good does not come in `_ON`
+  (instead of releasing the reset of an unpowered GPU); 0004 declares `dgpu_enable` as a
+  boolean (an enum without values has nothing to pick in the menu). Hot-plug design
+  validated on the T480 as listed under "Tested on hardware".
 
 ## Using the series
 

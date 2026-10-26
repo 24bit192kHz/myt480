@@ -193,3 +193,35 @@ A T580 owner (hustlerone) tried the Gerrit series (patch set 3) on
   messages. Patch 0003 (v6) carries the same change. C58 is an experiment image (branch
   `c58-hotplug-d3`, workstation + T480 trees, `roms/C58-hotplug-d3.rom`); the laptop went
   back to C55 afterwards, whose bootblock design reaches D3cold without a hot-plug port.
+
+### 2026-10-26, later: the hot-plug design validated, the setup option checked, Wayland tried
+
+All on firmware C58 (hot-plug port + the three ACPI objects), on AC, remotely:
+
+- 10 min `eglbench` with pciehp bound to the port: 8 GT/s x4 throughout, P0 up to 93 C
+  (AC clock offsets +200/+1250), no pciehp, Xid or AER line; 20 driver off/on cycles
+  (port D3cold each time); hibernate + RTC resume (`prev_sleep_state 4`, image restored,
+  driver loads afterwards); three cold boots from S5 (power good 4.7 ms, link down before
+  FSP-S, port kept and link up after, D3cold within 30 s); boot with `dgpu off`:
+  `dGPU: disabled`, no 01:00.0, the port stays as an empty hot-plug slot (`PresDet-`),
+  the WLAN port keeps 00:1c.6, no power resource emitted; `dgpu on` + warm reboot brings
+  the GPU back without the one-time full reset the bootblock design needs; 30 min S3 with
+  the port in D3cold: woken by the RTC alarm after 1807 s, nothing earlier.
+- Upstream v7: 0003 cuts the power again when `_ON` sees no power good; 0004 makes
+  `dgpu_enable` a boolean. Checked without edk2 by reading the CFR records from the
+  coreboot table (`tools/cfrdump.py`, firmware C59 = C58 + `DRIVERS_OPTION_CFR` + the
+  0004 logic): the option is listed with the GPU enabled and disabled, never SUPPRESSed;
+  main had it as an enum with no values (nothing to choose in the menu).
+- Wayland (headless `sway -V`, gles2 renderer on the Intel node, own runtime dir):
+  `eglinfo -p wayland` with the NVIDIA EGL works; `vkcube --wsi wayland` on the MX150
+  fails with "Could not find both graphics and present queues" (the compositor offers no
+  way to present NVIDIA buffers); `eglgears_wayland` segfaults in libwayland-client with
+  the Mesa EGL as well, so that is the demo, not the driver; GLX through Xwayland with
+  `__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia` renders on the MX150
+  (glxinfo, glxgears 5 s). Firmware-independent; the T580 owner's crashes are not
+  reproduced by this.
+- P-state note: with the driver loaded and nothing using the GPU, `nvidia-smi` reports
+  P0 at 1480 MHz today (the query wakes the GPU from D3cold); the P8 / 2.5 GT/s idle link
+  seen in the morning shows only while something keeps the GPU awake without using it.
+- The laptop is back on C55. ROMs kept: C58-hotplug-d3, C59-cfr, C59b-cfr-bool,
+  backup-before-C58.
