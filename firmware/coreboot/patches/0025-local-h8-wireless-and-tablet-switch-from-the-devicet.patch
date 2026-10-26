@@ -1,7 +1,7 @@
 From 1d6fe36a0762a9dcc986fef4d79d67c0e697aeb6 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Sun, 4 Oct 2026 16:34:02 +0300
-Subject: [PATCH 25/28] [local] h8: wireless and tablet switch from the
+Subject: [PATCH 25/29] [local] h8: wireless and tablet switch from the
  devicetree, as in upstream series v5
 
 Review on Gerrit (CB:95880, CB:95912): no Kconfig options for hardware facts.

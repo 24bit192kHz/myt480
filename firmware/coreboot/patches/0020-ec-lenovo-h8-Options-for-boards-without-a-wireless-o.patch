@@ -1,7 +1,7 @@
 From c33d1ec53060aaa56711af3223090e8f62bd7216 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 17:23:18 +0300
-Subject: [PATCH 20/28] ec/lenovo/h8: Options for boards without a wireless or
+Subject: [PATCH 20/29] ec/lenovo/h8: Options for boards without a wireless or
  tablet switch, lid wake state
 
 H8_NO_WIRELESS_SWITCH: WLSW returns 1. The T480's EC has no master wireless

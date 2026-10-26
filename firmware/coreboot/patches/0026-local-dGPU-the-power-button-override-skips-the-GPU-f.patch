@@ -1,7 +1,7 @@
 From 51aeef05485eb153617e6c2a696022cb5a3703f9 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 14:08:25 +0300
-Subject: [PATCH 26/28] [local] dGPU: the power-button override skips the GPU
+Subject: [PATCH 26/29] [local] dGPU: the power-button override skips the GPU
  for one boot, the option stays
 
 Holding power for 4 s (PRBTNOR) used to clear the dGPU request in CMOS 0x6f,

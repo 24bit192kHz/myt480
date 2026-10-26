@@ -1,7 +1,7 @@
 From ba80495db62fb9e18f32662c9fe2820a3796affb Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Tue, 29 Sep 2026 22:42:24 +0300
-Subject: [PATCH 13/28] [local] dGPU: wait for the link before FSP-S, bound the
+Subject: [PATCH 13/29] [local] dGPU: wait for the link before FSP-S, bound the
  _ROM length
 
 The review fixes of the upstream series, on the flashed code: up to 100 ms

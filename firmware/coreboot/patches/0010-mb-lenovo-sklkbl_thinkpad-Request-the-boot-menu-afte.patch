@@ -1,7 +1,7 @@
 From 9b56f7deff4c559fe52b883fc597e57fc967b959 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 20:56:33 +0300
-Subject: [PATCH 10/28] mb/lenovo/sklkbl_thinkpad: Request the boot menu after
+Subject: [PATCH 10/29] mb/lenovo/sklkbl_thinkpad: Request the boot menu after
  a power-button override
 
 The EC keyboard on these ThinkPads only answers ~2.5 s after power-on, so a

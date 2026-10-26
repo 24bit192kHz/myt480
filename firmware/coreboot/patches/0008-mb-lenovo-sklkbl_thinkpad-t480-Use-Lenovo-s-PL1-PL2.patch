@@ -1,7 +1,7 @@
 From 5fd5c5733362790d5ab2065bb7b89a2e1f8f0a12 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:54:47 +0300
-Subject: [PATCH 08/28] mb/lenovo/sklkbl_thinkpad/t480: Use Lenovo's PL1/PL2
+Subject: [PATCH 08/29] mb/lenovo/sklkbl_thinkpad/t480: Use Lenovo's PL1/PL2
 
 Without an override PL2 is 1.25 * TDP (18 W) and is also written to the
 MCHBAR copy, which caps the i7-8650U far below its turbo until an OS

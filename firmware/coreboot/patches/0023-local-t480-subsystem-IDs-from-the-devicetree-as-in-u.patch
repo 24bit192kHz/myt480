@@ -1,7 +1,7 @@
 From db7037c3e69feea24d4f8f8cc57faa9ce5a92858 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Thu, 1 Oct 2026 16:03:49 +0300
-Subject: [PATCH 23/28] [local] t480: subsystem IDs from the devicetree, as in
+Subject: [PATCH 23/29] [local] t480: subsystem IDs from the devicetree, as in
  upstream series v4
 
 soc/intel/skylake hands FSP the system agent's devicetree IDs instead of

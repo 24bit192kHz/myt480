@@ -1,0 +1,335 @@
+From b946c48cfb3ef3a22ec64985a3d55bfe2b2bd478 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 12:29:35 +0300
+Subject: [PATCH 29/29] [local] dGPU: hot-plug root port, powered right before
+ FSP-S, D3cold for Linux (as upstream series v7)
+
+Root port 1 is marked hot-pluggable, so FSP-S keeps it without a link; the GPU
+gets its power in the ramstage right before FSP-S instead of the bootblock, and
+dgpu_detect() waits for the link after FSP-S. The port is never disabled, so the
+one-time full reset after enabling the GPU (CMOS 0x6d) is gone, and with the GPU
+off the port stays as an empty hot-plug slot (the WLAN port keeps 00:1c.6).
+
+Linux puts a hot-plug port into D3 only with _PRW, _S0W and the _DSD property
+HotPlugSupportInD3 on it: RP01 gets the three objects next to the power
+resource. _ON cuts the power again when power good does not come. The option
+list (CFR) declares dgpu_enable as a boolean, like the series.
+
+The power-button override still skips the GPU for one boot: read from the power
+state saved in the romstage, as the boot menu request does.
+
+Tested as C58 (same code with debug prints): 10 min load under pciehp, 25 driver
+cycles, S3 (30 min), hibernate, 3 cold boots, GPU off and on, all in D3cold at idle.
+---
+ .../lenovo/sklkbl_thinkpad/Makefile.mk        |  2 +-
+ .../lenovo/sklkbl_thinkpad/acpi/dgpu.asl      |  6 ++
+ .../lenovo/sklkbl_thinkpad/bootblock.c        |  2 -
+ src/mainboard/lenovo/sklkbl_thinkpad/cfr.c    | 10 +--
+ src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c   | 74 +++++++------------
+ .../lenovo/sklkbl_thinkpad/dgpu_early.c       | 15 ++--
+ .../lenovo/sklkbl_thinkpad/ramstage.c         |  2 +-
+ .../lenovo/sklkbl_thinkpad/variant.h          |  5 +-
+ .../variants/t480/overridetree.cb             |  2 +
+ 9 files changed, 51 insertions(+), 67 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+index a9821adc10..7996ef0d14 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/Makefile.mk
+@@ -1,7 +1,7 @@
+ ## SPDX-License-Identifier: GPL-2.0-only
+ 
+ bootblock-y += bootblock.c
+-bootblock-$(CONFIG_VARIANT_HAS_DGPU) += dgpu_early.c
++ramstage-$(CONFIG_VARIANT_HAS_DGPU) += dgpu_early.c
+ 
+ romstage-y += variants/$(VARIANT_DIR)/memory_init_params.c
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+index 067a17a450..0ab938e9d2 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl
+@@ -47,6 +47,12 @@ Scope (\_SB.PCI0.RP01)
+ 			Sleep (1)
+ 			Local0++
+ 		}
++		/* No power good: leave the GPU in reset without power, as the ramstage does */
++		If (!\_SB.PCI0.GRXS (GPIO_DGFX_PWRGD)) {
++			\_SB.PCI0.CTXS (GPIO_1R8VIDEO_AON_ON)
++			Sleep (100)
++			Return
++		}
+ 		Sleep (10)
+ 
+ 		\_SB.PCI0.STXS (GPIO_GPU_RST)
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c b/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
+index 37e831edc9..0c05d488c5 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/bootblock.c
+@@ -11,6 +11,4 @@ void bootblock_mainboard_early_init(void)
+ 
+ void bootblock_mainboard_init(void)
+ {
+-	if (CONFIG(VARIANT_HAS_DGPU))
+-		dgpu_power_on();
+ }
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c b/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
+index 5585d1567b..9da0c2d462 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/cfr.c
+@@ -4,21 +4,17 @@
+ #include <drivers/option/cfr_frontend.h>
+ #include <intelblocks/cfr.h>
+ #include <soc/cfr.h>
+-#include <static.h>
+-
+-WEAK_DEV_PTR(dgpu);
++#include "variant.h"
+ 
+ /* Hide the dGPU CFR entry if dGPU not present */
+ static void update_dgpu(struct sm_object *new)
+ {
+-	struct device *dgpu = DEV_PTR(dgpu);
+-	if (!dgpu || !dgpu->enabled) {
++	if (!CONFIG(VARIANT_HAS_DGPU) || !dgpu_present())
+ 		new->sm_bool.flags = CFR_OPTFLAG_SUPPRESS;
+-	}
+ }
+ 
+ /* dGPU */
+-static const struct sm_object dgpu = SM_DECLARE_ENUM({
++static const struct sm_object dgpu = SM_DECLARE_BOOL({
+ 	.opt_name	= "dgpu_enable",
+ 	.ui_name	= "dGPU",
+ 	.ui_helptext	= "Enable or disable the dGPU",
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+index d771da7184..02fc6dd304 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu.c
+@@ -2,51 +2,40 @@
+ 
+ #include <acpi/acpi.h>
+ #include <acpi/acpigen.h>
+-#include <cf9_reset.h>
++#include <acpi/acpi_device.h>
+ #include <console/console.h>
+-#include <pc80/mc146818rtc.h>
+ #include <delay.h>
+ #include <device/device.h>
+ #include <device/pci_def.h>
+ #include <device/pci_ops.h>
+ #include <gpio.h>
+-#include <intelblocks/pmclib.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
+-#include <soc/pm.h>
+-#include <soc/pmc.h>
++#include <soc/gpe.h>
+ #include <static.h>
+ #include <timer.h>
+ #include <variant/dgpu.h>
+ 
+ #define DGPU_LINK_TIMEOUT_MS	100
+ 
+-/*
+- * FSP-S disables root port 1 if it has no link. PCIe gives a device 100 ms
+- * after its reset; do not let a fast boot path be faster than that.
+- */
+-void dgpu_wait_for_link(void)
++/* PCIe gives a device 100 ms after its reset; FSP-S has already run here */
++static bool dgpu_wait_for_link(void)
+ {
+ 	const pci_devfn_t rp = PCI_DEV(0, 0x1c, 0);
+ 	struct stopwatch sw;
+ 	u16 cap;
+ 
+-	if (!gpio_tx_get(GPIO_GPU_RST))
+-		return;
+-
+ 	cap = pci_s_find_capability(rp, PCI_CAP_ID_PCIE);
+ 	if (!cap)
+-		return;
++		return false;
+ 
+ 	stopwatch_init_msecs_expire(&sw, DGPU_LINK_TIMEOUT_MS);
+ 	while (!(pci_s_read_config16(rp, cap + PCI_EXP_LNKSTA) & PCI_EXP_LNKSTA_DLLLA)) {
+-		if (stopwatch_expired(&sw)) {
+-			printk(BIOS_WARNING, "dGPU: no link after %d ms\n",
+-			       DGPU_LINK_TIMEOUT_MS);
+-			return;
+-		}
++		if (stopwatch_expired(&sw))
++			return false;
+ 		mdelay(1);
+ 	}
+ 	printk(BIOS_DEBUG, "dGPU: link after %lld ms\n", stopwatch_duration_msecs(&sw));
++	return true;
+ }
+ 
+ static void dgpu_power_off(void)
+@@ -75,6 +64,18 @@ void dgpu_fill_ssdt(const struct device *dev)
+ 		return;
+ 
+ 	acpigen_write_scope(scope);
++
++	/*
++	 * Linux puts a hot-plug port into D3 only if it can signal wake and
++	 * hot-plug events from there: a wake GPE in _PRW (the PCIe PME GPE,
++	 * as on the vendor firmware), D3cold in _S0W and the property
++	 * HotPlugSupportInD3. Without them the port stays in D0, and the
++	 * power resource is never turned off.
++	 */
++	acpigen_write_PRW(GPE0_PCI_EXP, 4);
++	acpigen_write_name_integer("_S0W", ACPI_DEVICE_SLEEP_D3_COLD);
++	acpi_device_add_hotplug_support_in_d3(NULL);
++
+ 	acpigen_write_power_res("PGPU", 0, 0, power_states, ARRAY_SIZE(power_states));
+ 
+ 	acpigen_write_method("_STA", 0);
+@@ -93,7 +94,12 @@ void dgpu_fill_ssdt(const struct device *dev)
+ 	acpigen_write_scope_end();
+ }
+ 
+-/* The GPU was powered in the bootblock, see dgpu_early.c */
++bool dgpu_present(void)
++{
++	return gpio_get(GPIO_DISCRETE_PRESENCE) == 0;	/* active low */
++}
++
++/* Runs after FSP-S and before the PCI scan; the GPU was powered before FSP-S */
+ void dgpu_detect(void)
+ {
+ 	static const char * const dgfx_vram_id_str[] = { "1GB", "2GB", "4GB", "N/A" };
+@@ -101,7 +107,7 @@ void dgpu_detect(void)
+ 	const struct device *rp = dgpu->upstream ? dgpu->upstream->dev : NULL;
+ 	int dgfx_vram_id;
+ 
+-	if (gpio_get(GPIO_DISCRETE_PRESENCE) != 0) { // active low
++	if (!dgpu_present()) {
+ 		printk(BIOS_DEBUG, "dGPU: not present\n");
+ 		dgpu->enabled = 0;
+ 		return;
+@@ -116,31 +122,7 @@ void dgpu_detect(void)
+ 		return;
+ 	}
+ 
+-	/*
+-	 * FSP-S disables a root port without a link, and a disabled port stays
+-	 * disabled until the next power cycle: FSP-S does not find the GPU on
+-	 * the first boot after it was enabled. A full reset cycles the power.
+-	 * MEM_SR is only set after a reset without power cycle, so this
+-	 * happens once.
+-	 */
+-	if ((!rp || !rp->enabled) && !acpi_is_wakeup_s3()) {
+-		const struct chipset_power_state *ps = pmc_get_power_state();
+-
+-		if (ps && (ps->gen_pmcon_a & MEM_SR)) {
+-			/* Once: a link that never comes up must not reset forever */
+-			if (cmos_read(CMOS_DGPU_RESET) != DGPU_RESET_TRIED) {
+-				cmos_write(DGPU_RESET_TRIED, CMOS_DGPU_RESET);
+-				printk(BIOS_INFO, "dGPU: root port is disabled, full reset\n");
+-				full_reset();
+-			}
+-			cmos_write(0, CMOS_DGPU_RESET);
+-			printk(BIOS_ERR, "dGPU: root port still disabled after a reset, booting without the GPU\n");
+-		}
+-	}
+-	if (rp && rp->enabled && cmos_read(CMOS_DGPU_RESET) == DGPU_RESET_TRIED)
+-		cmos_write(0, CMOS_DGPU_RESET);
+-
+-	if (!rp || !rp->enabled) {
++	if (!rp || !rp->enabled || !dgpu_wait_for_link()) {
+ 		printk(BIOS_ERR, "dGPU: no PCIe link, powering it off\n");
+ 		dgpu_power_off();
+ 		dgpu->enabled = 0;
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+index 9d76de73fa..a642dc0763 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+@@ -1,12 +1,11 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ 
+-#include <arch/io.h>
+ #include <console/console.h>
+ #include <delay.h>
+ #include <gpio.h>
++#include <intelblocks/pmclib.h>
+ #include <mainboard/lenovo/sklkbl_thinkpad/variant.h>
+ #include <pc80/mc146818rtc.h>
+-#include <soc/iomap.h>
+ #include <soc/pm.h>
+ #include <stdbool.h>
+ #include <timer.h>
+@@ -17,9 +16,11 @@
+ #define DGPU_RESET_DELAY_MS	10
+ 
+ /*
+- * The dGPU sits behind PCIe root port 1. FSP-S disables root ports that have
+- * no link, so the GPU has to be powered and out of reset well before
+- * FspSiliconInit; the ramstage is too late for that. Do it in the bootblock.
++ * The dGPU sits behind PCIe root port 1. FSP-S disables root ports without a
++ * link, and the GPU has no link yet when FSP-S runs, so the devicetree marks
++ * the port as hot-pluggable: FSP-S then leaves it alone. Power the GPU and
++ * release its reset right before FSP-S (mainboard_silicon_init_params());
++ * dgpu_detect() waits for the link after FSP-S.
+  *
+  * Root port 1 uses CLKREQ0#, and the PCH only drives the reference clock
+  * while that pad is in its native function, so set it up here as well.
+@@ -52,7 +53,9 @@ void dgpu_power_on(void)
+ 	 * Clearing it instead cost the GPU after every rescue, battery swap or
+ 	 * hang until someone ran `dgpu on` again.
+ 	 */
+-	if (inw(ACPI_BASE_ADDRESS + PM1_STS) & PRBTNOR_STS)
++	const struct chipset_power_state *ps = pmc_get_power_state();
++
++	if (ps && (ps->pm1_sts & PRBTNOR_STS))
+ 		cmos_write(DGPU_SKIP_ONCE, CMOS_DGPU_SKIP);
+ 	skip = cmos_read(CMOS_DGPU_SKIP) == DGPU_SKIP_ONCE;
+ 	cmos_write(0, CMOS_DGPU_SKIP);
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index 5529765205..8840113eeb 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -56,7 +56,7 @@ void mainboard_silicon_init_params(FSP_SIL_UPD *params)
+ 	variant_config_gpios();
+ 
+ 	if (CONFIG(VARIANT_HAS_DGPU))
+-		dgpu_wait_for_link();
++		dgpu_power_on();
+ }
+ 
+ static void mainboard_enable(struct device *dev)
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index f3c704754f..c772bdb994 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -10,16 +10,13 @@ uint8_t variant_memory_sku(void);
+ 
+ /* CMOS byte 0x6f: 0xd6 powers the dGPU from the next boot on (`dgpu on` in Linux) */
+ #define CMOS_DGPU		0x6f
+-/* CMOS byte 0x6d: 0xa5 while a full reset for a missing GPU link is in flight */
+-#define CMOS_DGPU_RESET		0x6d
+-#define DGPU_RESET_TRIED	0xa5
+ /* CMOS byte 0x6c: 0x3c skips the dGPU on the next boot only (power-button override) */
+ #define CMOS_DGPU_SKIP		0x6c
+ #define DGPU_SKIP_ONCE		0x3c
+ #define  DGPU_REQUEST		0xd6
+ 
+ void dgpu_power_on(void);
+-void dgpu_wait_for_link(void);
++bool dgpu_present(void);
+ void dgpu_detect(void);
+ void dgpu_fill_ssdt(const struct device *dev);
+ 
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index f796cdcfb6..845628b8cf 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -66,6 +66,8 @@ chip soc/intel/skylake
+ 		# dGPU - x4
+ 		device ref pcie_rp1 on
+ 			register "PcieRpClkReqSupport[0]"		= "true"
++			# The GPU gets its power right before FSP-S: keep the port without a link
++			register "PcieRpHotPlug[0]"			= "true"
+ 			register "PcieRpClkReqNumber[0]"		= "0"
+ 			register "PcieRpClkSrcNumber[0]"		= "0"
+ 			register "PcieRpAdvancedErrorReporting[0]"	= "true"

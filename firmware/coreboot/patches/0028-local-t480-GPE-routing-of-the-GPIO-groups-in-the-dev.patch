@@ -1,7 +1,7 @@
 From 197b599dbdf039e45d98cf85faf2def9d23a5347 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 14:08:25 +0300
-Subject: [PATCH 28/28] [local] t480: GPE routing of the GPIO groups in the
+Subject: [PATCH 28/29] [local] t480: GPE routing of the GPIO groups in the
  devicetree
 
 gpe0_dw0..2 were unset, so the PMC logged "Duplicate GPE DW register values

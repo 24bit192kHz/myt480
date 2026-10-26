@@ -1,7 +1,7 @@
 From 52715c8712cb320ccd2a8f950081b7924f2a9aa0 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 14:08:25 +0300
-Subject: [PATCH 27/28] [local] h8: lid wake GPE from the mainboard; T480 uses
+Subject: [PATCH 27/29] [local] h8: lid wake GPE from the mainboard; T480 uses
  GPE 0x17 as the vendor _PRW
 
 lid.asl hard-coded GPE 0x18 in the lid's _PRW. On the T480 the EC's wake

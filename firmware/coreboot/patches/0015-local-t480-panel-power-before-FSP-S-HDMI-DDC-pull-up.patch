@@ -1,7 +1,7 @@
 From 6c84bf65f9bd0ef0e25b0d67c48d5649ee6b1cc1 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 02:18:03 +0300
-Subject: [PATCH 15/28] [local] t480: panel power before FSP-S, HDMI DDC
+Subject: [PATCH 15/29] [local] t480: panel power before FSP-S, HDMI DDC
  pull-ups
 
 Request eDP panel power in ramstage before FSP-S so the 210 ms power-up

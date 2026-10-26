@@ -1,7 +1,7 @@
 From 811e8fa967b27db300241efa405e2e379017d847 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Wed, 30 Sep 2026 17:23:18 +0300
-Subject: [PATCH 22/28] mb/lenovo/sklkbl_thinkpad/t480: Radios on, no tablet
+Subject: [PATCH 22/29] mb/lenovo/sklkbl_thinkpad/t480: Radios on, no tablet
  switch, lid wakes from S4, GMM, subsystem IDs
 
 As on the vendor firmware: the radios are never hard-blocked, no tablet

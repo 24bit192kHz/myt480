@@ -1,7 +1,7 @@
 From 5a79c2b281532b919b0fba2b4229ea99a3922f38 Mon Sep 17 00:00:00 2001
 From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 14:31:47 +0300
-Subject: [PATCH 02/28] mb/lenovo/sklkbl_thinkpad/t480: Cache SPD in
+Subject: [PATCH 02/29] mb/lenovo/sklkbl_thinkpad/t480: Cache SPD in
  RW_SPD_CACHE
 
 Reading both SO-DIMM SPDs (2 x 512 bytes DDR4) over SMBus took ~100 ms

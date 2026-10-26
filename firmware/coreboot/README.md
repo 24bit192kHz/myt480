@@ -39,36 +39,13 @@ On coreboot main of 2026-10-08. Two earlier local patches are upstream now and g
 | 0026 | the power-button override (power held 4 s) makes the next boot run without the MX150 once (CMOS 0x6c) and keeps the choice in 0x6f; before, it cleared the choice and the GPU stayed off until `dgpu on` | belongs in the series |
 | 0027 | ec/lenovo/h8: the mainboard can set the lid's wake GPE; the T480 uses 0x17 (EC_WAKE# on GPP_C23, as Lenovo's `_PRW {0x17, 4}`) instead of the hard-coded 0x18, which maps to no pad here. This GPE/vendor-state route did not enable S4 lid wake, and SMM analysis found no lid-specific arming path, so the earlier attribution to missing vendor SMM was unsupported. Later EC analysis recovered a separate byte0x01 bit6 gate; the installed sleep hook subsequently produced two owner-operated S4 lid wakes without flashing. The C55 firmware-only GPE declaration is not sufficient. From S3 the lid wakes by the EC's power-button pulse; see the [EC research/result](../../research/2026-10-09-t480/10-ec-firmware-and-lid-wake.md) | belongs in the series |
 | 0028 | t480: `gpe0_dw0..2 = GPP_C, GPP_D, GPP_E` in the devicetree, what the PMC fell back to from MISCCFG (no more "Duplicate GPE DW register values" warning) | belongs in the series |
-| 0029 | runtime MX150 power-on stops when PWRGD remains low: disable link, assert reset and clear rail request before returning | source-only research correction; actual AML/DSDT checked, not flashed |
-| 0030 | validate bounded CBFS ROM headers/PCIR and complete image chains; retain mapping size through fallback and ACPI copy | source-only; sanitizer checked; requires 0031's actual-size producer contract |
-| 0031 | CBFS returns actual loaded/decompressed bytes, uses raw extent for NONE and rejects output beyond capacity | source-only producer correction; no firmware deployment |
+| 0029 | dGPU: the hot-plug design of upstream series v7. Root port 1 is marked hot-pluggable so FSP-S keeps it without a link; the GPU is powered in the ramstage right before FSP-S (no bootblock code), `dgpu_detect()` waits for the link after FSP-S; the one-time full reset (CMOS 0x6d) is gone; RP01 gets `_PRW`, `_S0W` and `HotPlugSupportInD3` next to the power resource, so Linux puts the hot-plug port and the GPU into D3cold; `_ON` cuts the power again without power good; the power-button override still skips the GPU for one boot (read from the saved power state). Flashed as C60 on 2026-10-26 | patches 2, 3 and 4 of `../upstream-dgpu-series` |
 
-Patch 0029 was added by the [MX150 research continuation](../../research/2026-10-09-t480/12-mx150/04-sleep-and-firmware.md).
-It applies after 0028 and is absent from `dot-config-as-built`/the archived C55
-firmware's behavior. Forward/reverse application, eight ACPICA execution cases
-and complete matching T480 DSDT compilation were checked offline. Building/flashing
-or inducing a failed rail on the laptop requires separate approval. Reversing
-the patch restores source behavior; it does not alter already installed firmware.
-
-Patches 0030 and 0031 form the [CBFS ROM bounds correction](../../research/2026-10-09-t480/12-mx150/03-vbios-and-ec.md).
-Apply both in order after 0029. The original CBFS allocator could publish declared
-decompression capacity rather than actual output; using that value as a parser
-bound would leave 0030 incomplete. Actual-source host fixtures use ASAN/UBSAN,
-including baseline failure reproduction and full MX150 nonpadding preservation.
-They do not validate on-device/RAM ROM mappings, generic execution/VFCT, every
-ACPI AML read contract, the full firmware build or hardware behavior. Reverse
-0031 then 0030 in a source tree before rebuilding to remove them. Existing flashed
-firmware remains unchanged.
-
-Review of 2026-10-10 (independent of the author): the three patches apply on `c55`
-and `pci_rom.c`/`cbfs.c` compile cleanly with coreboot's own toolchain and `-Werror`.
-They have no effect on this board: the VBIOS is stored uncompressed in CBFS
-(`site-local/Makefile.mk`, 184320 bytes), so the stored and mapped sizes are already
-equal and the `_ROM` copy is byte-identical with or without 0030/0031; and Lenovo's own
-`HGON` never checks power-good at all (8–16 ms delay, then reset release), so the
-abort path of 0029 is new behaviour without a vendor precedent and has never been
-exercised. Treat them as hardening for a future build, gated by the QEMU scenarios;
-they do not justify a flash on their own.
+`proposals/` holds two source-only patches from the 2026-10-09 review that are not in the
+firmware: bounded CBFS option-ROM copies and the CBFS actual-size report. They have no
+effect on this board (the VBIOS is stored uncompressed, and the `_ROM` copy is now bounded
+by the file size in patch 0011); kept as hardening for a future build. The third proposal
+of that review, the power-good abort in `_ON`, is part of 0029.
 
 0003, 0004 and 0006 only change the commit that the submodule points to. They apply
 without the submodule's content, but the build needs the libgfxinit patches applied

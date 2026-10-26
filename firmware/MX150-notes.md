@@ -225,3 +225,17 @@ All on firmware C58 (hot-plug port + the three ACPI objects), on AC, remotely:
   seen in the morning shows only while something keeps the GPU awake without using it.
 - The laptop is back on C55. ROMs kept: C58-hotplug-d3, C59-cfr, C59b-cfr-bool,
   backup-before-C58.
+
+### 2026-10-26, evening: C60, the hot-plug design is now the T480's firmware
+
+The user chose the hot-plug design after the C58 validation. C60 = C55 + one clean local
+patch (0029 in `coreboot/patches/`): root port 1 hot-pluggable, GPU powered in the ramstage
+right before FSP-S, link wait after FSP-S, no bootblock GPU code, no one-time full reset,
+`_PRW {0x69, 4}` + `_S0W 4` + `HotPlugSupportInD3` on RP01, power-good abort in `_ON`,
+`dgpu_enable` as a boolean in the option list; the power-button override still skips the GPU
+for one boot, now read from the power state saved in the romstage (the bootblock read the
+live PM1_STS). Flashed 12:32 and checked: port and GPU in D3cold 1 s after `gpu-power off`,
+5 driver cycles, the one-boot skip (CMOS 0x6c written by hand, same as the 4 s hold sets:
+`dGPU: skipped for this boot`, byte cleared, GPU back on the next boot), a cold boot from S5,
+an S3 cycle; TPM key resealed to the new PCR 2. C55.rom stays in `roms/` as the fallback;
+the 4 s hold itself is still untested by hand (the skip path behind it is).
