@@ -1,0 +1,38 @@
+From 11e1269359469d48ffefff950679285558d29458 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 23:34:43 +0300
+Subject: [PATCH] [local] t480: Deep Sx in S3/S4/S5 on AC and battery, as the
+ vendor firmware
+
+The PMC power-gating policies were all zero, so the PCH suspend well
+stayed powered in every sleep state: hibernation drained 0.27-0.29 W
+(battwatch, 2026-10-06..10-28) against 0.09-0.19 W powered off. Lenovo's
+N24ET74P sets S3_PWRGATE_POL 0x3, S4_PWRGATE_POL 0x3, S5_PWRGATE_POL
+0xc000 and DSX_CFG 0x1 (probe/stock-full-*/inteltool-p.txt); do the same.
+WAKE# stays disabled (PCIEXPWAK_DIS) as before.
+---
+ .../sklkbl_thinkpad/variants/t480/overridetree.cb     | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+index 845628b8cf..c8d59b4922 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variants/t480/overridetree.cb
+@@ -16,6 +16,17 @@ chip soc/intel/skylake
+ 	register "gpe0_dw1" = "GPP_D"
+ 	register "gpe0_dw2" = "GPP_E"
+ 
++	# Deep Sx as the vendor firmware sets it (N24ET74P dump: S3/S4_PWRGATE_POL
++	# 0x3, S5_PWRGATE_POL 0xc000, DSX_CFG 0x1): the PCH suspend well is
++	# gated in S3, S4 and S5 on AC and battery, LAN_WAKE# stays a wake pin.
++	# Without it the suspend well stays powered and hibernation drained
++	# ~0.28 W. Lid, power button and RTC wake come through the DSW well.
++	register "deep_s3_enable_ac" = "true"
++	register "deep_s3_enable_dc" = "true"
++	register "deep_s5_enable_ac" = "true"
++	register "deep_s5_enable_dc" = "true"
++	register "deep_sx_config" = "DSX_EN_LAN_WAKE_PIN"
++
+ 	device domain 0 on
+ 		# The subsystemid of devicetree.cb does not survive this override of the
+ 		# domain in sconfig, so give it here.
