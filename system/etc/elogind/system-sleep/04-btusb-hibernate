@@ -1,0 +1,56 @@
+#!/bin/sh
+# elogind sleep hook: take the Bluetooth adapter out of a hibernation (pre/post, S4 phase only).
+# The Intel 8265 Bluetooth (8087:0a2b on usb 1-7) sometimes needed 41 s in its restore
+# callback after an S4 resume (usb_dev_restore returned 0 after 41376941 usecs, 2 of 7
+# resumes on 2026-11-02), and the whole device restore - and so the thaw - waited for it.
+# Unloading btusb straight away moved the stall to the entry (modprobe -r 35-37 s in 4 of 6
+# runs: bt-autoconnect keeps paging absent devices and the open HCI connect blocks the
+# close). Soft-blocking the adapter's own rfkill (hci0 only, not the ThinkPad switch the EC
+# remembers) first aborts that, then the unload takes ~0.6 s. post loads btusb again in the
+# background and puts the adapter's block state back; bluetoothd and bt-autoconnect pick
+# it up as after a hot-plug.
+case "$2" in
+	hibernate|hybrid-sleep) act=hibernate ;;
+	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
+	*) act=suspend ;;
+esac
+hci_rfkill() { # sysfs dir of the rfkill switch that belongs to hci0
+	for r in /sys/class/rfkill/rfkill*; do
+		[ "$(cat "$r/name" 2>/dev/null)" = hci0 ] && { echo "$r"; return 0; }
+	done
+	return 1
+}
+case "$1" in
+pre)
+	[ "$act" = hibernate ] || exit 0
+	[ -d /sys/module/btusb ] || exit 0
+	r=$(hci_rfkill) && {
+		cat "$r/soft" >/run/btusb-hibernate.soft
+		echo 1 >"$r/soft"
+		sleep 0.5
+	}
+	if modprobe -r btusb 2>/dev/null; then
+		: >/run/btusb-hibernate.unloaded
+		logger -t btusb-hibernate "btusb unloaded for $2"
+	else
+		logger -t btusb-hibernate "btusb busy, left loaded for $2"
+	fi ;;
+post)
+	[ -e /run/btusb-hibernate.unloaded ] || exit 0
+	rm -f /run/btusb-hibernate.unloaded
+	setsid sh -c '
+		modprobe btusb || exit 1
+		soft=$(cat /run/btusb-hibernate.soft 2>/dev/null); rm -f /run/btusb-hibernate.soft
+		i=0; while [ $i -lt 50 ]; do
+			for r in /sys/class/rfkill/rfkill*; do
+				if [ "$(cat "$r/name" 2>/dev/null)" = hci0 ]; then
+					echo "${soft:-0}" >"$r/soft"
+					logger -t btusb-hibernate "btusb loaded again, hci0 soft block ${soft:-0}"
+					exit 0
+				fi
+			done
+			sleep 0.1; i=$((i+1))
+		done
+		logger -t btusb-hibernate "btusb loaded again, hci0 did not appear"' >/dev/null 2>&1 </dev/null & ;;
+esac
+exit 0

@@ -15,7 +15,9 @@
 #    the keepalive restarts only when it matches; otherwise the watchdog stays disarmed.
 # 2. Wake-on-LAN on AC only (pre, every sleep), as Lenovo's "Wake On LAN: AC Only" default:
 #    with the GbE armed, its PHY stays powered through S3/S4 on battery for nothing
-#    (/proc/acpi/wakeup GLAN). post puts the wake setting back as it was.
+#    (/proc/acpi/wakeup GLAN). Hibernation disarms it on AC too: with Deep Sx and no cable,
+#    S4 on AC woke by itself after 8-50 s in 3 of 7 runs (PM1_STS WAK only, GPE0 PME_B0;
+#    none in 3 runs with GLAN off, 2026-11-02). post puts the wake setting back as it was.
 # 3. Hibernate (pre): the TCO watchdog is DISARMED first. Every user process, the keepalive
 #    included, is frozen while the kernel writes the image, so a hibernate that takes longer
 #    than the 30 s timeout ends in a TCO reset (2026-10-08 14:55:33, exactly 30 s after
@@ -94,7 +96,7 @@ rearm_watchdog() {
 
 case "$1" in
 pre)
-	if [ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" = 0 ] && \
+	if { [ "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" = 0 ] || [ "$act" = hibernate ]; } && \
 	   [ "$(cat $GLAN 2>/dev/null)" = enabled ]; then
 		echo disabled >$GLAN && touch "$WOL"
 	fi

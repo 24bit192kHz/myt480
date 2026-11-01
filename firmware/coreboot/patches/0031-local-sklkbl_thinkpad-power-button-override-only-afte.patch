@@ -1,0 +1,70 @@
+From f1de28c366082cad2a2115f507fa014995461231 Mon Sep 17 00:00:00 2001
+From: 24bit192khz <118996408+24bit192kHz@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 01:53:46 +0300
+Subject: [PATCH] [local] sklkbl_thinkpad: power-button override only after S0,
+ not after a wake
+
+With Deep Sx a PRBTNOR from an earlier 4 s hold comes back after every
+Deep S4 exit although coreboot clears PM1_STS on each boot. The restore
+boot of a hibernation then skipped the dGPU and requested the boot menu,
+the memory map differed and Linux refused the image ("Image mismatch:
+architecture specific data"), losing the session (seen 4 times on
+2026-11-02). A real override of a running or hung machine always shows
+prev_sleep_state S0.
+---
+ .../lenovo/sklkbl_thinkpad/dgpu_early.c          |  2 +-
+ src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c  |  2 +-
+ src/mainboard/lenovo/sklkbl_thinkpad/variant.h   | 16 ++++++++++++++++
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+index a642dc0763..91b0236481 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/dgpu_early.c
+@@ -55,7 +55,7 @@ void dgpu_power_on(void)
+ 	 */
+ 	const struct chipset_power_state *ps = pmc_get_power_state();
+ 
+-	if (ps && (ps->pm1_sts & PRBTNOR_STS))
++	if (power_button_override(ps))
+ 		cmos_write(DGPU_SKIP_ONCE, CMOS_DGPU_SKIP);
+ 	skip = cmos_read(CMOS_DGPU_SKIP) == DGPU_SKIP_ONCE;
+ 	cmos_write(0, CMOS_DGPU_SKIP);
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+index 8840113eeb..78f86635d1 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/ramstage.c
+@@ -39,7 +39,7 @@ static void boot_menu_request(void)
+ 	const struct chipset_power_state *ps = pmc_get_power_state();
+ 	u8 req = cmos_read(CMOS_BOOT_MENU) == BOOT_MENU_REQUEST ? BOOT_MENU_REQUEST : 0;
+ 
+-	if (ps && (ps->pm1_sts & PRBTNOR_STS))
++	if (power_button_override(ps))
+ 		req = BOOT_MENU_REQUEST;
+ 
+ 	cmos_write(req, CMOS_BOOT_MENU);
+diff --git a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+index c772bdb994..f1e4735988 100644
+--- a/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
++++ b/src/mainboard/lenovo/sklkbl_thinkpad/variant.h
+@@ -20,4 +20,20 @@ bool dgpu_present(void);
+ void dgpu_detect(void);
+ void dgpu_fill_ssdt(const struct device *dev);
+ 
++#include <acpi/acpi.h>
++#include <soc/pm.h>
++#include <stdbool.h>
++
++/*
++ * Power held for 4 s while the machine runs (or hangs in the firmware): PRBTNOR with a
++ * previous state of S0. After any wake the bit says nothing: with Deep Sx (S3/S4/S5 gated) a
++ * PRBTNOR from an earlier override comes back after every Deep Sx exit although it was
++ * cleared on each boot, which skipped the dGPU and showed the boot menu on the restore
++ * boot of a hibernation, so the kernel refused the image ("architecture specific data").
++ */
++static inline bool power_button_override(const struct chipset_power_state *ps)
++{
++	return ps && (ps->pm1_sts & PRBTNOR_STS) && ps->prev_sleep_state == ACPI_S0;
++}
++
+ #endif
