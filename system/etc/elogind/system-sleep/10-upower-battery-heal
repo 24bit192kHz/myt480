@@ -2,11 +2,13 @@
 # elogind sleep hook: heal UPower BAT1 energy-full corruption after resume.
 # Runs after suspend/hibernate/hybrid-sleep; waits for the EC fuel gauge to
 # settle, then heals only if D-Bus values are corrupt (cheap no-op otherwise).
+# The wait runs detached: elogind runs post hooks one after another and only
+# reports the wake (PrepareForSleep false: NetworkManager, lockers) after the
+# last one, so a 5 s sleep here delayed every resume by 5 s (2026-11-02).
 case "$1" in
   post)
     # EC needs a moment after "EC started" before gauge reads are sane
-    sleep 5
-    /usr/local/sbin/upower-battery-heal --check || true
+    setsid sh -c "sleep 5; /usr/local/sbin/upower-battery-heal --check" >/dev/null 2>&1 </dev/null &
     ;;
 esac
 exit 0
