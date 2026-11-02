@@ -1,5 +1,5 @@
 #!/bin/sh
-# elogind sleep hook: take the Bluetooth adapter out of a hibernation (pre/post, S4 phase only).
+# elogind sleep hook: take the Bluetooth adapter out of a hibernation (pre/post).
 # The Intel 8265 Bluetooth (8087:0a2b on usb 1-7) sometimes needed 41 s in its restore
 # callback after an S4 resume (usb_dev_restore returned 0 after 41376941 usecs, 2 of 7
 # resumes on 2026-11-02), and the whole device restore - and so the thaw - waited for it.
@@ -9,36 +9,32 @@
 # remembers) first aborts that, then the unload takes ~0.6 s. post loads btusb again in the
 # background and puts the adapter's block state back; bluetoothd and bt-autoconnect pick
 # it up as after a hot-plug.
+#
+# suspend-then-hibernate: the adapter goes already at the suspend phase. After the S3
+# wake the 8265 downloads its firmware again (~1.6 s); unloading it in the middle of that
+# (the hibernate phase follows at once) broke the download and the unload waited for a
+# 10 s HCI timeout (-110, 2026-11-02 02:43). So the S3 phase runs without btusb, and its
+# post loads it only 2 s later unless the hibernate phase has claimed it by then
+# (/run/btusb-hibernate.hold); a lid opening during S3 gets Bluetooth back after 2 s.
+# Plain suspend leaves the adapter alone.
 case "$2" in
-	hibernate|hybrid-sleep) act=hibernate ;;
-	suspend-then-hibernate) act=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
-	*) act=suspend ;;
+	hibernate|hybrid-sleep) phase=hibernate ;;
+	suspend-then-hibernate) phase=${SYSTEMD_SLEEP_ACTION:-suspend} ;;
+	*) exit 0 ;;
 esac
+U=/run/btusb-hibernate.unloaded
+H=/run/btusb-hibernate.hold
 hci_rfkill() { # sysfs dir of the rfkill switch that belongs to hci0
 	for r in /sys/class/rfkill/rfkill*; do
 		[ "$(cat "$r/name" 2>/dev/null)" = hci0 ] && { echo "$r"; return 0; }
 	done
 	return 1
 }
-case "$1" in
-pre)
-	[ "$act" = hibernate ] || exit 0
-	[ -d /sys/module/btusb ] || exit 0
-	r=$(hci_rfkill) && {
-		cat "$r/soft" >/run/btusb-hibernate.soft
-		echo 1 >"$r/soft"
-		sleep 0.5
-	}
-	if modprobe -r btusb 2>/dev/null; then
-		: >/run/btusb-hibernate.unloaded
-		logger -t btusb-hibernate "btusb unloaded for $2"
-	else
-		logger -t btusb-hibernate "btusb busy, left loaded for $2"
-	fi ;;
-post)
-	[ -e /run/btusb-hibernate.unloaded ] || exit 0
-	rm -f /run/btusb-hibernate.unloaded
+reload() { # load btusb again and put hci0's soft block back (runs in the background)
 	setsid sh -c '
+		[ -n "$1" ] && { sleep "$1"; [ -e '"$H"' ] && exit 0; }
+		[ -e '"$U"' ] || exit 0
+		rm -f '"$U"'
 		modprobe btusb || exit 1
 		soft=$(cat /run/btusb-hibernate.soft 2>/dev/null); rm -f /run/btusb-hibernate.soft
 		i=0; while [ $i -lt 50 ]; do
@@ -51,6 +47,35 @@ post)
 			done
 			sleep 0.1; i=$((i+1))
 		done
-		logger -t btusb-hibernate "btusb loaded again, hci0 did not appear"' >/dev/null 2>&1 </dev/null & ;;
+		logger -t btusb-hibernate "btusb loaded again, hci0 did not appear"' sh "$1" >/dev/null 2>&1 </dev/null &
+}
+case "$1" in
+pre)
+	if [ -e "$U" ]; then
+		# still out since the suspend phase: keep it out
+		: >"$H"
+		logger -t btusb-hibernate "btusb still unloaded for $2 ($phase)"
+		exit 0
+	fi
+	[ -d /sys/module/btusb ] || exit 0
+	r=$(hci_rfkill) && {
+		cat "$r/soft" >/run/btusb-hibernate.soft
+		echo 1 >"$r/soft"
+		sleep 0.5
+	}
+	if modprobe -r btusb 2>/dev/null; then
+		: >"$U"
+		logger -t btusb-hibernate "btusb unloaded for $2 ($phase)"
+	else
+		logger -t btusb-hibernate "btusb busy, left loaded for $2 ($phase)"
+	fi ;;
+post)
+	[ -e "$U" ] || exit 0
+	rm -f "$H"
+	if [ "$2" = suspend-then-hibernate ] && [ "$phase" = suspend ]; then
+		reload 2	# the hibernate phase may follow at once
+	else
+		reload ""
+	fi ;;
 esac
 exit 0

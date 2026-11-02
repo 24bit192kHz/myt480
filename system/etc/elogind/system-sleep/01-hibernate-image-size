@@ -1,0 +1,11 @@
+#!/bin/sh
+# elogind sleep hook: cap the hibernation image at 2 GiB (/sys/power/image_size;
+# the kernel default is 2/5 of RAM, 13 GB here, so it kept the whole page cache).
+# Resume time follows the image size (2026-11-02, LZ4, 8 threads): 2.2-2.6 GB
+# 7.4-9.4 s, 3.2 GB 12.3 s, 11 GB (8.8 GB cache) 21.5 s; with the cap the same
+# 8.8 GB cache gave a 2.1 GB image and 7.4 s. The price: the kernel drops cache
+# before the snapshot (2.8 s instead of 0.5 s with that much cache) and the cache
+# is cold after the resume. Set on every pre: the value does not survive a boot.
+[ "$1" = pre ] || exit 0
+echo 2147483648 >/sys/power/image_size 2>/dev/null
+exit 0

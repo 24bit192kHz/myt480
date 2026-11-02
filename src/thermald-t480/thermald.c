@@ -738,8 +738,11 @@ int main(int argc, char **argv)
                     if (g / 1000 > raw) raw = g / 1000;
                 }
             }
-            /* Fan keepalive must not depend on wall-clock corrections. */
-            if (!clock_gettime(CLOCK_MONOTONIC, &fan_time))
+            /* Fan keepalive must not depend on wall-clock corrections. BOOTTIME,
+               not MONOTONIC: it counts sleep, so the first poll after a resume
+               (S3, S4) sees 30 s passed and writes the level again at once;
+               firmware leaves the EC in automatic mode across a resume. */
+            if (!clock_gettime(CLOCK_BOOTTIME, &fan_time))
                 fan_apply(&c, raw, fan_time.tv_sec);
             else
                 fan_release();
