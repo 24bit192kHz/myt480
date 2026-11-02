@@ -183,7 +183,7 @@ _minor=8
 #_rcver=rc8
 pkgver=${_major}.${_minor}
 _tagrel=1
-pkgrel=8
+pkgrel=9
 _srcname=cachyos-${_major}.${_minor}-${_tagrel}
 pkgdesc='Linux EEVDF + LTO + AutoFDO + Propeller Cachy Sauce Kernel by CachyOS with other patches and improvements.'
 _kernver="$pkgver-$pkgrel"
@@ -511,7 +511,7 @@ prepare() {
     scripts/config \
         -e BLK_DEV_NVME -e NVME_CORE \
         -e ACPI_WMI -e ACPI_VIDEO -e CEC_CORE -e I2C_ALGOBIT \
-        -e DRM -e DRM_KMS_HELPER -e DRM_DISPLAY_HELPER -e DRM_I915 \
+        -e DRM -e DRM_KMS_HELPER -e DRM_DISPLAY_HELPER -m DRM_I915 \
         --set-str EXTRA_FIRMWARE "i915/kbl_dmc_ver1_04.bin" \
         --set-str EXTRA_FIRMWARE_DIR "$startdir/fw" \
         -e KERNEL_LZ4 -d KERNEL_ZSTD \
@@ -524,7 +524,7 @@ prepare() {
         -d MAXSMP --set-val NR_CPUS 8 \
         -d DEBUG_INFO_DWARF5 -d DEBUG_INFO_DWARF4 -d DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT \
         -e DEBUG_INFO_NONE -d DEBUG_INFO_BTF -d DEBUG_INFO_BTF_MODULES \
-        -d KFENCE -d FTRACE -d AUDIT \
+        -d KFENCE -d FTRACE -d AUDIT -d DEBUG_WX \
         -d SECURITY_SELINUX -d SECURITY_SMACK -d SECURITY_TOMOYO -d SECURITY_APPARMOR \
         -d INIT_ON_ALLOC_DEFAULT_ON -d INIT_ON_FREE_DEFAULT_ON \
         -m BTRFS_FS -d ANDROID_BINDER_IPC -d ANDROID_BINDERFS -d ATA \
@@ -611,6 +611,23 @@ _sign_modules() {
 build() {
     cd "$_srcname"
     make "${BUILD_FLAGS[@]}" -j"$(nproc)" all
+
+    # T480: i915 is a module the early init loads only when no hibernation image is
+    # restored (init.c, i915_load). Put this build's i915.ko into the built-in initramfs
+    # and link the kernel again, so the module always matches its kernel.
+    grep -q '^CONFIG_DRM_I915=m' .config || { echo "DRM_I915 must be =m"; return 1; }
+    # with i915=m the helpers only it selects are modules too: carry them, init.c loads
+    # them in this order (gfx_ko[])
+    local ko
+    rm -rf "$startdir/early/root/lib"
+    for ko in drivers/char/agp/intel-gtt.ko drivers/gpu/drm/drm_buddy.ko drivers/gpu/drm/ttm/ttm.ko \
+              drivers/i2c/algos/i2c-algo-bit.ko drivers/media/cec/core/cec.ko \
+              drivers/gpu/drm/display/drm_display_helper.ko drivers/gpu/drm/i915/i915.ko; do
+        install -Dm644 "$ko" "$startdir/early/root/lib/${ko##*/}"
+        llvm-strip --strip-debug "$startdir/early/root/lib/${ko##*/}"
+    done
+    rm -f usr/initramfs_data.cpio usr/initramfs_inc_data usr/.initramfs_data.cpio.d
+    make "${BUILD_FLAGS[@]}" -j"$(nproc)" bzImage
 
 
     local MODULE_FLAGS=(

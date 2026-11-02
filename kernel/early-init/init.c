@@ -49,6 +49,10 @@
 #define TPM_PARENT "0x81000101"
 #define KEY_SPEC_USER_KEYRING (-4)
 #define CRYPTSETUP "/bin/cryptsetup"
+/* i915 and the helpers only it selects, in load order (dependencies first) */
+static const char *const gfx_ko[] = { "/lib/intel-gtt.ko", "/lib/drm_buddy.ko", "/lib/ttm.ko",
+	"/lib/i2c-algo-bit.ko", "/lib/cec.ko", "/lib/drm_display_helper.ko", "/lib/i915.ko" };
+#define N_GFX (int)(sizeof gfx_ko / sizeof *gfx_ko)
 
 static int kmsg = -1, logfd = -1;	/* the T480 boots with printk.devkmsg=off: keep a copy in /dev */
 
@@ -481,6 +485,50 @@ static void passphrase_unlock(int need_root, int need_swap, int *root_minor, int
 	memset(pass, 0, sizeof pass);
 }
 
+/*
+ * i915 is a module carried in this initramfs and loaded only when no hibernation image is
+ * restored. In the restore kernel it lit the panel and switched it off again before the
+ * jump to the image, so the resumed kernel had to power-cycle the panel: its graphics
+ * restore took 0.96 s instead of 0.03 s and the wake 0.32 s longer (2026-11-02). Loaded in
+ * a child, parallel to the root mount; wait=1 waits for it (the passphrase prompt needs a
+ * screen). If this fails, udev loads the copies in /usr/lib/modules later.
+ */
+static pid_t i915_pid = -1;
+static int i915_started;
+
+static void gfx_insmod(const int *fd)
+{
+	for (int i = 0; i < N_GFX; i++)
+		if (fd[i] < 0 || syscall(SYS_finit_module, fd[i], "", 0))
+			say("%s: errno %d", gfx_ko[i], errno);
+}
+
+static void i915_load(int wait)
+{
+	int st, fd[N_GFX];
+
+	if (!i915_started) {
+		i915_started = 1;
+		/* opened here, before PID 1 moves the real root over / */
+		for (int i = 0; i < N_GFX; i++)
+			fd[i] = open(gfx_ko[i], O_RDONLY);
+		i915_pid = fork();
+		if (!i915_pid) {
+			gfx_insmod(fd);
+			_exit(0);
+		}
+		if (i915_pid < 0)
+			gfx_insmod(fd);
+		for (int i = 0; i < N_GFX; i++)
+			if (fd[i] >= 0)
+				close(fd[i]);
+	}
+	if (wait && i915_pid > 0) {
+		waitpid(i915_pid, &st, 0);
+		i915_pid = -1;
+	}
+}
+
 /* ---- main ---- */
 
 /* a bare word on the command line (t480.provision), not part of another word or value */
@@ -590,8 +638,10 @@ int main(void)
 	    swap_luks ? (swap_minor >= 0 ? "opened" : "LOCKED") : "plain", have_keys ? "released" : "not released",
 	    (int)((now() - t0) * 1000));
 
-	if ((root_luks && root_minor < 0) || (swap_luks && swap_minor < 0))
+	if ((root_luks && root_minor < 0) || (swap_luks && swap_minor < 0)) {
+		i915_load(1);	/* the prompt needs a screen */
 		passphrase_unlock(root_luks, swap_luks, &root_minor, &swap_minor);
+	}
 
 	/* resume before any file system is mounted for writing; returns only if there is no image */
 	if (swap_minor >= 0 && !strstr(cl, "noresume")) {
@@ -604,6 +654,9 @@ int main(void)
 			spit("/sys/power/resume", res);
 		}
 	}
+
+	/* here only if no image was restored: graphics now, parallel to the rest of the boot */
+	i915_load(0);
 
 	if (root_luks) {
 		static char dmdev[32];

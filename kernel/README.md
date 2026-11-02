@@ -12,15 +12,19 @@ laptop uses.
 | `config-7.2.8-3-t480` | adds the TPM 2.0 driver (`tpm_tis`, the Infineon chip coreboot declares as MSFT0101) and the PCH TCO watchdog (`iTCO_wdt`) |
 | `config-7.2.8-4-t480` | hibernation image compressed with LZ4 (resume 1.5 s faster than LZO) |
 | `config-7.2.8-7-t480` | dm-crypt, AES-NI and the TPM trusted/encrypted key types built in, and `early/` embedded as the initramfs (`CONFIG_INITRAMFS_SOURCE`) |
-| `config-7.2.8-8-t480` | the current build (2026-10-10): same configuration, built with clang 23.1.1 instead of 22.1.8; the embedded early init releases the TPM key only for a LUKS2 root (`early-init/README.md`) |
+| `config-7.2.8-8-t480` | build of 2026-10-10: same configuration, built with clang 23.1.1 instead of 22.1.8; the embedded early init releases the TPM key only for a LUKS2 root (`early-init/README.md`) |
+| `config-7.2.8-9-t480` | the current build (2026-11-02, clang 23.1.4): i915 is a module (with the helpers only it selects: intel-gtt, drm_buddy, ttm, i2c-algo-bit, cec, drm_display_helper) carried in the built-in initramfs, and the early init loads it only when no hibernation image is restored; `DEBUG_WX` off (its boot-time page table walk cost ~100 ms). Hibernation wake 6.36 -> 6.08 s from power-on (4 runs), graphics restore 0.96 -> 0.03 s; `build()` copies the modules into `early/root/lib` and links the kernel a second time |
 | `early/nodes.list`, `early-init/` | the early init that opens the encrypted disk; `early-init/README.md` |
 | `modprobed.db` | module list for `localmodconfig`, made from the two files below |
 | `lsmod.t480` | modules seen loaded |
 | `extra-modules.txt` | modules that were not loaded at that time but are needed |
 | `fw/` | firmware built into the kernel (i915 DMC) |
 
-NVMe, ext4 and i915 are built in, so the kernel needs no initramfs on disk; its only
+NVMe and ext4 are built in, so the kernel needs no initramfs on disk; its only
 initramfs is the built-in early init, which hands over to `firmware/tools/t480-init`.
+i915 (since 7.2.8-9) is a module inside that initramfs, loaded by the early init after
+the resume attempt (or before the passphrase prompt), so the restore kernel of a
+hibernation never touches the panel.
 Before `makepkg`, build `early/root/init` and `early/root/bin/cryptsetup` as
 `early-init/README.md` describes. The headers package is needed for the NVIDIA DKMS module.
 
