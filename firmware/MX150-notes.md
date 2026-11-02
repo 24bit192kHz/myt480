@@ -269,7 +269,8 @@ reached on this machine in any of these states (no PSR, i915 DC5/DC6 counts stay
 comes from package C6 and the iGPU idling.
 
 Battery policy, 2026-10-26 14:15 (the goal: fast on AC, cheap on battery, never sluggish):
-- `lock-powersave` (home/local-bin, started by chadwm run.sh): 120 s into a slock session the
+- `lock-powersave` (since 2026-11-02 the Rust `src/t480-watch`, installed as
+  `~/.local/bin/t480-watch` with `lock-powersave` a symlink to it; started by chadwm run.sh): 120 s into a slock session the
   panel goes off (−1.7 W); on battery Wi-Fi power save is on only while locked (−0.4 W) and
   off again at unlock, so latency never suffers while someone types. Sudo rule
   `system/etc/sudoers.d/lock-powersave` for the two `iw` commands; TLP leaves Wi-Fi power

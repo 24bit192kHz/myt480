@@ -1,0 +1,13 @@
+[package]
+name = "t480-watch"
+version = "0.1.0"
+edition = "2024"
+description = "Fork-free replacements for the T480 session polling loops (lock-powersave, monitor.sh watch)"
+license = "MIT"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

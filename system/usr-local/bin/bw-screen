@@ -11,6 +11,7 @@ Talks to $XDG_RUNTIME_DIR/bitwarden-screen.sock (patched Bitwarden, see
 ~/build/bitwarden-bin/bitwarden-slock.py).
 """
 import os
+import select
 import socket
 import subprocess
 import sys
@@ -34,16 +35,42 @@ def send(word, timeout=3.0):
         s.close()
 
 
-def locked():
+def locker_pids():
+    """live processes whose comm is exactly the locker's name (pgrep -x,
+    minus zombies: an exited, unreaped locker's pidfd is readable at once)"""
     locker = os.environ.get("BW_SCREEN_LOCKER", "slock")
-    return subprocess.run(["pgrep", "-x", locker], stdout=subprocess.DEVNULL).returncode == 0
+    pids = []
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            try:
+                with open(f"/proc/{d}/stat") as f:
+                    head, _, tail = f.read().rpartition(")")
+            except OSError:
+                continue
+            if head.partition("(")[2] == locker and tail.split()[0] != "Z":
+                pids.append(int(d))
+    return pids
+
+
+def wait_unlocked():
+    # Sleep on the locker's pidfd until it exits: the old pgrep loop every
+    # 0.25 s ran all through a locked screen, which is when the laptop idles.
+    while pids := locker_pids():
+        for pid in pids:
+            try:
+                fd = os.pidfd_open(pid)
+            except OSError:
+                continue  # already gone
+            try:
+                select.select([fd], [], [])
+            finally:
+                os.close(fd)
 
 
 def boot():
     # the boot lock comes up before the session bus and the keyring are
     # ready; Bitwarden starts only once the user is in
-    while locked():
-        time.sleep(0.25)
+    wait_unlocked()
     if not send("ping"):
         # --autostart + "run in background" = straight to the tray.
         # Through igpu-run (Intel/Mesa only): Electron otherwise probes the NVIDIA EGL and
