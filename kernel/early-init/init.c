@@ -496,11 +496,51 @@ static void passphrase_unlock(int need_root, int need_swap, int *root_minor, int
 static pid_t i915_pid = -1;
 static int i915_started;
 
+/*
+ * finit_module() hands a module only the parameters given here. "i915.enable_gvt=1" on the
+ * kernel command line reaches a built-in i915, or one loaded by modprobe (which reads
+ * /proc/cmdline itself), but not one loaded by this program: GVT-g was silently off from
+ * 7.2.8-9 on. So collect the "i915.name=value" words the way modprobe does.
+ */
+static char i915_params[256];
+
+static void i915_cmdline_params(const char *cl)
+{
+	const char *p = cl;
+	int n = 0, max = sizeof i915_params - 1;
+
+	while ((p = strstr(p, "i915."))) {
+		int word = p == cl || p[-1] == ' ';
+
+		p += 5;
+		if (!word)
+			continue;
+		if (n && n < max)
+			i915_params[n++] = ' ';
+		while (*p && *p != ' ' && *p != '\n' && n < max)
+			i915_params[n++] = *p++;
+	}
+	i915_params[n] = 0;
+}
+
 static void gfx_insmod(const int *fd)
 {
-	for (int i = 0; i < N_GFX; i++)
-		if (fd[i] < 0 || syscall(SYS_finit_module, fd[i], "", 0))
+	for (int i = 0; i < N_GFX; i++) {
+		const char *par = i == N_GFX - 1 ? i915_params : "";
+		int e;
+
+		if (fd[i] < 0) {
+			say("%s: not in the initramfs", gfx_ko[i]);
+			continue;
+		}
+		if (!syscall(SYS_finit_module, fd[i], par, 0))
+			continue;
+		e = errno;
+		say("%s (%s): errno %d", gfx_ko[i], par, e);
+		/* a bad parameter must not cost the screen: once more without any */
+		if (*par && e != EEXIST && syscall(SYS_finit_module, fd[i], "", 0))
 			say("%s: errno %d", gfx_ko[i], errno);
+	}
 }
 
 static void i915_load(int wait)
@@ -577,6 +617,7 @@ int main(void)
 	logfd = open("/dev/t480-early.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	t0 = now();
 	slurp("/proc/cmdline", cl, sizeof cl);
+	i915_cmdline_params(cl);
 
 	if (wait_for(P_ROOT, 10000)) {
 		tell("\n  T480: no disk (" P_ROOT "). Powering off in 10 s.\n");

@@ -5,13 +5,25 @@
 
 # Boot lock: cover screen during session bring-up. Inherits DISPLAY/XAUTHORITY from startx.
 export SLOCK_USER=btw
-/usr/local/bin/slock-ly &
+/usr/local/bin/slock &
 # dwm-titus boot env (theme/toolkit vars) — kept, toolkit apps still use it.
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
-export QT_QPA_PLATFORMTHEME=gtk3
+export QT_QPA_PLATFORMTHEME=qt6ct
 export XCURSOR_THEME=Capitaine-Cursors-White
 export XCURSOR_SIZE=32
+# T480 UHD 620 (KBL): force intel-media-driver (iHD) for Chromium VA-API.
+# Both iHD + i965 are installed; without this libva can pick i965 and
+# brave://gpu shows empty Video Acceleration tables.
+export LIBVA_DRIVER_NAME=iHD
+# Intel/Mesa only by default (same variables as igpu-run). With the NVIDIA driver loaded,
+# any program that merely enumerates GPUs (Vulkan loader, EGL vendor list; Wine does both)
+# opens the MX150 and pins it awake for as long as it runs, also after unplugging: the
+# driver cannot unload, the package never leaves C3. prime-run lifts these (2026-11-10).
+export __GLX_VENDOR_LIBRARY_NAME=mesa
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.json
+export VK_ICD_FILENAMES=$VK_DRIVER_FILES
 [ -f /home/btw/.config/dwm-titus/theme-env.sh ] && . /home/btw/.config/dwm-titus/theme-env.sh
 # (static feh wallpaper removed: the live earth is the background)
 xset r rate 250 50 2>/dev/null &

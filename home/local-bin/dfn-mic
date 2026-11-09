@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""DeepFilterNet on the laptop mic, only while something records from it.
+
+Static part (free when unused): null sink dfn_out and source mic_denoised
+(remap of dfn_out.monitor), set as default source.
+
+The filter itself runs in an ffmpeg process (mic -> LADSPA deep_filter_mono ->
+dfn_out) that is started when a real client records from mic_denoised and
+killed when the last one leaves. It is NOT loaded into PulseAudio any more
+(module-ladspa-sink): the plugin's worker thread polls ~1600 times a second
+for as long as it exists, even with every device suspended, and survives
+unload-module (each load leaked one more such thread, 2026-11-09). That kept
+the CPU package out of its deep idle states all day. A process can be killed.
+Event-driven via `pactl subscribe`, no polling.
+"""
+import json
+import signal
+import subprocess
+import sys
+import time
+
+MIC = "alsa_input.pci-0000_00_1f.3.analog-stereo"
+LADSPA = ("ladspa=file=libdeep_filter_ladspa:plugin=deep_filter_mono:"
+          "controls=c0=100|c1=-15|c2=35|c3=35|c4=0|c5=0")
+FILTER_CMD = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+              "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0",
+              "-f", "pulse", "-name", "dfn-mic", "-stream_name", "dfn-mic capture",
+              "-sample_rate", "48000", "-channels", "1", "-fragment_size", "1920",
+              "-i", MIC,
+              "-af", LADSPA, "-ar", "48000", "-ac", "1",
+              "-f", "pulse", "-name", "dfn-mic", "-stream_name", "dfn-mic filtered",
+              "-buffer_duration", "30", "-device", "dfn_out", "dfn"]
+IGNORE_MEDIA = {"Peak detect"}  # pavucontrol level meters
+
+filt = None
+
+
+def pactl(*args):
+    return subprocess.run(["pactl", *args], capture_output=True, text=True).stdout
+
+
+def pjson(*args):
+    out = pactl("-f", "json", *args)
+    return json.loads(out) if out.strip() else []
+
+
+def short_modules():
+    # module JSON has no index field, so use the short listing: idx<TAB>name<TAB>args
+    return [f for f in (l.split("\t") for l in pactl("list", "modules", "short").splitlines())
+            if len(f) > 2]
+
+
+def ensure_static():
+    # leftovers of the in-server filter (older dfn-mic): loopback first, then the LADSPA sink
+    for name in ("module-loopback", "module-ladspa-sink"):
+        for f in short_modules():
+            if f[1] == name and "dfn_in" in f[2]:
+                pactl("unload-module", f[0])
+    if "dfn_out" not in {s["name"] for s in pjson("list", "sinks")}:
+        pactl("load-module", "module-null-sink", "sink_name=dfn_out", "rate=48000",
+              "channels=1", "sink_properties=device.description=DeepFilterNet-out")
+    if "mic_denoised" not in {s["name"] for s in pjson("list", "sources")}:
+        pactl("load-module", "module-remap-source", "source_name=mic_denoised",
+              "master=dfn_out.monitor", "channels=1",
+              "source_properties=device.description=Laptop-mic-DeepFilterNet")
+    pactl("set-default-source", "mic_denoised")
+
+
+def in_use():
+    src = [s["index"] for s in pjson("list", "sources") if s["name"] == "mic_denoised"]
+    if not src:
+        return False
+    return any(o["source"] == src[0]
+               and o["properties"].get("media.name") not in IGNORE_MEDIA
+               for o in pjson("list", "source-outputs"))
+
+
+def stop_filter():
+    global filt
+    if filt is None:
+        return
+    if filt.poll() is None:
+        filt.terminate()
+        try:
+            filt.wait(2)
+        except subprocess.TimeoutExpired:
+            filt.kill()
+            filt.wait()
+    filt = None
+
+
+def sync():
+    global filt
+    if filt is not None and filt.poll() is not None:
+        print(f"filter exited ({filt.returncode})", flush=True)
+        filt = None
+    if in_use():
+        if filt is None:
+            filt = subprocess.Popen(FILTER_CMD, stdin=subprocess.DEVNULL)
+            print("mic in use: DeepFilterNet on", flush=True)
+    elif filt is not None:
+        stop_filter()
+        print("mic idle: DeepFilterNet off", flush=True)
+
+
+def bye(*_):
+    stop_filter()
+    sys.exit(0)
+
+
+def main():
+    signal.signal(signal.SIGTERM, bye)
+    signal.signal(signal.SIGINT, bye)
+    while True:
+        p = None
+        try:
+            ensure_static()
+            sync()
+            p = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE, text=True)
+            for line in p.stdout:
+                if "source-output" in line and ("'new'" in line or "'remove'" in line):
+                    sync()
+        except Exception as e:
+            print(f"dfn-mic: {e}", file=sys.stderr, flush=True)
+        finally:
+            if p is not None and p.poll() is None:
+                p.kill()
+            stop_filter()  # pulseaudio went away: its streams are gone too
+        time.sleep(2)  # pulseaudio restarted or pactl died
+
+
+if __name__ == "__main__":
+    main()

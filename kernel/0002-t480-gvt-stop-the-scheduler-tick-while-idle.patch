@@ -1,0 +1,55 @@
+--- a/drivers/gpu/drm/i915/gvt/sched_policy.c
++++ b/drivers/gpu/drm/i915/gvt/sched_policy.c
+@@ -238,6 +238,44 @@
+ 		try_to_schedule_next_vgpu(gvt);
+ }
+ 
++/*
++ * [t480] The 1 ms scheduler tick used to run from the first start of a vGPU until the
++ * last vGPU was destroyed: with the guest idle, paused or shut down the service thread
++ * still woke 1000 times a second, and the CPU package never got below C6 (2026-11-10:
++ * 0.6 W -> 1.1 W package power at idle on battery settings, 0.9 -> 3.8 W on AC).
++ *
++ * The tick is only needed while a vGPU has work: for time slices and their balancing.
++ * So stop it when the run queue has no pending workload and nothing but the idle vGPU
++ * is scheduled, and start it again from the next pass with work to do. A new workload
++ * always causes such a pass: intel_vgpu_queue_workload() kicks the scheduler
++ * (INTEL_GVT_REQUEST_EVENT_SCHED) after it has queued the workload, and a completed one
++ * does while a switch is pending (need_reschedule). Called with sched_lock held; the
++ * timer function takes no lock, so cancelling it here cannot deadlock.
++ */
++static void tbs_tick_update(struct gvt_sched_data *sched_data)
++{
++	struct intel_gvt *gvt = sched_data->gvt;
++	struct intel_gvt_workload_scheduler *scheduler = &gvt->scheduler;
++	struct vgpu_sched_data *vgpu_data;
++	bool busy = scheduler->next_vgpu ||
++		    (scheduler->current_vgpu && scheduler->current_vgpu != gvt->idle_vgpu);
++
++	if (!busy) {
++		list_for_each_entry(vgpu_data, &sched_data->lru_runq_head, lru_list) {
++			if (vgpu_has_pending_workload(vgpu_data->vgpu)) {
++				busy = true;
++				break;
++			}
++		}
++	}
++
++	if (!busy)
++		hrtimer_cancel(&sched_data->timer);
++	else if (!hrtimer_active(&sched_data->timer))
++		hrtimer_start(&sched_data->timer,
++			      ktime_add_ns(ktime_get(), sched_data->period), HRTIMER_MODE_ABS);
++}
++
+ void intel_gvt_schedule(struct intel_gvt *gvt)
+ {
+ 	struct gvt_sched_data *sched_data = gvt->scheduler.sched_data;
+@@ -258,6 +296,7 @@
+ 
+ 	vgpu_update_timeslice(gvt->scheduler.current_vgpu, cur_time);
+ 	tbs_sched_func(sched_data);
++	tbs_tick_update(sched_data);
+ 
+ 	mutex_unlock(&gvt->sched_lock);
+ }
