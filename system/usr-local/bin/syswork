@@ -121,6 +121,8 @@ cmd_diff() {
     count=$((count + 1))
     if [[ $full -eq 1 && -f "$M/$f" && -f "/$f" ]]; then
       diff -u --label "live/$f" --label "work/$f" "/$f" "$M/$f" || true
+    elif [[ -c "$(upper_of "$n")/$f" && ! -e "$M/$f" ]]; then
+      echo "$f  (deleted)"
     else
       echo "$f"
     fi
@@ -299,7 +301,16 @@ cmd_apply() {
       echo "WARNING: thermald-t480 is running and owns fan+MSR — parked thinkfan/throttled configs won't take effect until you switch the single writer." >&2
     fi
   fi
-  # rsync upper -> / (no --delete: deletions need explicit handling).
+  # A file deleted in the worktree is a whiteout in the upper: a character device 0,0.
+  # rsync -a would copy that node over the live file (2026-11-10: a removed script
+  # became /usr/local/bin/<name> c 0,0). Keep whiteouts out of the rsync and remove
+  # the live file instead; a deleted directory is reported, never removed.
+  local wh=() ex=() w
+  while IFS= read -r w; do
+    [[ -n "$w" && "$(stat -c '%t,%T' "$U/$w" 2>/dev/null)" == "0,0" ]] || continue
+    wh+=("$w"); ex+=(--exclude="/$w")
+  done < <(find "$U" -mindepth 1 -type c -printf '%P\n' 2>/dev/null)
+  # rsync upper -> / (no --delete: deletions are the whiteouts handled here).
   # Keep modes from upper (-p via -a): overlayfs copy-up records the lower's
   # modes, and explicit chmod in the merged view is intent. Do NOT take
   # ownership from upper (merged edits may be user-owned; live files keep
@@ -308,8 +319,13 @@ cmd_apply() {
     --exclude='/proc/***' --exclude='/sys/***' --exclude='/dev/***' --exclude='/run/***' \
     --exclude='/tmp/***' --exclude='/mnt/***' --exclude='/media/***' \
     --exclude='/var/lib/syswork/***' --exclude='/srv/work/***' --exclude='/swapfile' \
-    --exclude='.git/***' \
+    --exclude='.git/***' "${ex[@]}" \
     "$U/" /
+  for w in "${wh[@]}"; do
+    printf '%s\n' "${CHANGED[@]}" | grep -qxF -- "$w" || continue   # outside what apply covers
+    if [[ -d "/$w" && ! -L "/$w" ]]; then echo "  NOT removed (a directory, remove it by hand): /$w"
+    elif [[ -e "/$w" || -L "/$w" ]]; then rm -f -- "/$w" && echo "  removed: /$w"; fi
+  done
   # git commits per repo
   WT_NAME="$n" # exported for git_commit_repo message
   export WT_NAME
