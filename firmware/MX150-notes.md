@@ -20,7 +20,10 @@ egl-x11 (1.0.6, mirror no longer had 1.0.5), egl-gbm, egl-wayland, eglexternalpl
 - \TBTS in acpi/sleep.asl stays disabled (the file was never in the DSDT upstream).
 
 ## Going back
-`sudo sh firmware/tools/mx150-revert.sh`, then reboot.
+`dgpu off` (CMOS request) keeps the GPU unpowered from the next boot on. The one-command
+revert of that week (`mx150-revert.sh`, flash C18 and install the pre-MX150 kernel) was
+removed on 2026-11-10: that kernel has no early init and cannot open the disk since it
+was encrypted on 2026-10-04.
 
 ## Update 2026-09-29 evening: working on C32
 

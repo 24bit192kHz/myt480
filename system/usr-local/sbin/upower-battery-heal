@@ -61,7 +61,8 @@ do_heal() {
   log "healed, BAT1 EnergyFull now ${ef:-unknown} (daemon auto-respawned via D-Bus)"
 }
 
-exec 9>"$LOCK" 2>/dev/null || exec 9>/tmp/upower-battery-heal.lock
+# /run/lock can be missing early in the boot; the fallback stays in a root-only directory
+exec 9>"$LOCK" 2>/dev/null || exec 9>/run/upower-battery-heal.lock
 flock -n 9 || { echo "another heal in progress, exiting"; exit 0; }
 
 mode=${1:---check}
