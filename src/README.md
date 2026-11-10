@@ -3,7 +3,7 @@
 | Directory | What | Build |
 |---|---|---|
 | `thermald-t480/` | one daemon for fan, undervolt (MSR 0x150) and power limits | `make` (needs `musl-gcc`), install as `/usr/local/bin/thermald-t480`; configuration `/etc/thermald.conf`, kept in `system/etc/thermald.conf` (`thermald.conf` here is a link to it; set its undervolt values to 0 on another CPU) |
-| `slock-ly/` | lock screen with password and fingerprint | `make install` as root (setuid) |
+| `slock/` | lock screen with password and fingerprint | `make install` as root (setuid) |
 | `gpu-power/` | turns the MX150 on and off by loading and unloading the NVIDIA driver, and sets the clock offsets of `/etc/gpu-power.conf`; `prime-run` | `make install` as root (setuid) |
 | `syswork/` | overlay worktrees to change `/etc` and `/usr/local` safely | copy `syswork` to `/usr/local/bin` |
 | `validity-rs/` | driver for the fingerprint reader (06cb:009a), Rust | `cargo build --release`, see its README |

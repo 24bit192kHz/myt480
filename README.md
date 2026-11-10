@@ -11,14 +11,14 @@ when a program needs it. This repository has everything to build the same laptop
 | OS | Artix Linux, s6 init, no initramfs on disk; root and swap LUKS2-encrypted, opened by the TPM without a prompt |
 | Kernel | `linux-t480`: Linux 7.2.8, CachyOS PKGBUILD, BORE, only the modules this laptop uses, a 62 kB early init built in |
 | Boot chain | coreboot measures itself and GRUB into the TPM; GRUB only starts a signed kernel without a password; the kernel unseals the disk key |
-| Desktop | X11, chadwm, picom, st, rofi, slock-ly |
+| Desktop | X11, chadwm, picom, st, rofi, slock |
 | Graphics | Intel UHD 620 for everything; MX150 on demand through `prime-run` |
 
 Results on this machine: with measured boot, the signature check and the encrypted disk
 the desktop is up 3.5 to 3.6 s after power-on (3.6 to 3.9 s before all of that, see
 `docs/notes/2026-10-04-disk-encryption.md`), the laptop idles at 6.7 to 6.9 W on battery
 with the MX150 off, the MX150 is ready about 2 s after a program asks for it, hibernate
-resumes 6 s after the wake alarm, and a tested undervolt (-115 mV core on AC) gives about
+resumes 6 s after the wake alarm, and a tested undervolt (-105 mV core on AC since 2026-11-10; measured at -115 mV) gives about
 15 % more CPU throughput at the same temperature.
 
 ## Branches
@@ -30,8 +30,8 @@ resumes 6 s after the wake alarm, and a tested undervolt (-115 mV core on AC) gi
 | `testing` | C55 retained; kernel 7.2.8-8 (2026-10-10) | merged into `main` on 2026-10-10. The 2026-10-09 audit ([research](research/2026-10-09-t480/README.md)): fan watchdog, GPU helper and Intel routing; the same evening the remaining helper fixes, the sleep hooks (NVIDIA override now actually in effect, TCO disarm fallback), Bitwarden's real launch path and the EC lid-wake hook, RTC-wake S3/S4 cycles, lid wake from hibernation confirmed by hand; 2026-10-10: the MX150 push audited (coreboot patches 0029 to 0031 kept source-only), hook status fix deployed, and the early init releases the TPM key only for a LUKS2 root, built and booted as kernel 7.2.8-8 (`docs/notes/2026-10-09-evening.md`). New work lands here first |
 
 `main` and `speed` differ in `firmware/` and `hardware/kernel-cmdline.txt`.
-`main` supplies the running C60 firmware and, since 2026-10-10, the running kernel
-7.2.8-8 with the audit's fixes; `speed` is the state before the C55 review.
+`main` supplies the running C65 firmware and the running kernel 7.2.8-9 (rebuilt
+2026-11-09, see `docs/notes/2026-11-10-idle-power.md`); `speed` is the state before the C55 review.
 
 ## Layout
 
@@ -180,7 +180,7 @@ Cold boots for testing: `firmware/tools/coldboot.sh` (RTC alarm wake from S5 wor
   needs AC.
 
 - Tested on one T480. The firmware patches also build for the T480s and T580, untested.
-- `system/etc/thermald.conf` undervolts per power source: -115 mV core and cache on AC,
+- `system/etc/thermald.conf` undervolts per power source: -105 mV core and cache on AC (-115 mV until 2026-11-10: one machine check after a suspend),
   -100 mV on battery, found on this CPU with the sweep kit in `firmware/tools/undervolt/`
   (-124 mV gave machine-check errors on AC, -121 mV froze on battery). Every CPU differs:
   set `ac_uv_*` and `batt_uv_*` to 0 on another machine and sweep it.
