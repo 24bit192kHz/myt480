@@ -27,7 +27,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[3]
 BASELINE = Path(__file__).with_name("fixtures") / "coreboot_pci_rom_84126e3.c"
 HARNESS = Path(__file__).with_name("pci_rom_fixture.c")
-PATCH = REPO / "firmware/coreboot/patches/0030-local-pci-rom-bound-cbfs-probe-and-acpi-copy.patch"
+PATCH = REPO / "firmware/coreboot/proposals/pci-rom-bound-cbfs-probe-and-acpi-copy.patch"
 SOURCE_PATH = Path("src/device/pci_rom.c")
 BASELINE_SHA256 = "9770b6345ab1d15e74cb43e06691a0dbc5080ed6c874c7dbcb4fd92ebc025b24"
 MX150_SHA256 = "92936e91fbb591086473366fa6a73c40ec2450e58a90489fba83ce4b58803d82"

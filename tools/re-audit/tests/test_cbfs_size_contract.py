@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parents[3]
 SOURCE_PATH = Path("src/lib/cbfs.c")
 BASELINE = Path(__file__).with_name("fixtures") / "coreboot_cbfs_84126e3.c"
 HARNESS = Path(__file__).with_name("cbfs_size_fixture.c")
-PATCH = REPO / "firmware/coreboot/patches/0031-local-cbfs-report-actual-loaded-size.patch"
+PATCH = REPO / "firmware/coreboot/proposals/cbfs-report-actual-loaded-size.patch"
 BASELINE_SHA256 = "214706ef48ab64cffc21338ab3e5f9029bed2ded72c66983526da176957c36d3"
 
 

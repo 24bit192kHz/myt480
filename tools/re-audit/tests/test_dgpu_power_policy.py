@@ -23,7 +23,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[3]
 PATCHES = REPO / "firmware/coreboot/patches"
 CREATION_PATCH = PATCHES / "0012-local-mb-lenovo-sklkbl_thinkpad-dGPU-support-as-flas.patch"
-FIX_PATCH = PATCHES / "0029-local-dgpu-abort-runtime-power-on-without-power-good.patch"
+FIX_PATCH = Path(__file__).with_name("fixtures") / "dgpu-abort-runtime-power-on-without-power-good.patch"
 SOURCE_PATH = Path("src/mainboard/lenovo/sklkbl_thinkpad/acpi/dgpu.asl")
 BASELINE_SHA256 = "1cd672880aca951c7801e4d7076472fc96e76fbb7ce7d72f8af1c27094201afa"
 # T480 variant/dgpu.h: GPU_RST=GPP_E22, power=GPP_E23, PWRGD=GPP_F3.
