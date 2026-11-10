@@ -1,7 +1,8 @@
 /* thermald.c — unified fan + undervolt + RAPL daemon, T480 i7-8650U.
  *
  * Replaces throttled (python, ~32MB RSS) + thinkfan with one static binary.
- * Config: /etc/thermald.conf (key value per line), see thermald.conf.
+ * Config: /etc/thermald.conf (key value per line); the one in use is
+ * system/etc/thermald.conf of the kit (thermald.conf here links to it).
  *
  * v2 (2026-09-28): same behavior, cheaper to run and to ship.
  *  - integer fixed-point math (milli-units): no libm, no float printf
@@ -165,11 +166,19 @@ static void set_key(struct conf *c, const char *k, const char *v)
     for (i = 0; i < sizeof num / sizeof *num; i++)
         if (!strcmp(k, num[i].k)) {
             long long x = milli(v, 0);
+            size_t kl = strlen(k);
             /* bounds before anything reaches an MSR: undervolt 0..-250 mV, power limits
-               1..200 W, trip points 40..105 C; an out-of-range value keeps the default */
+               1..200 W, trip points 40..105 C, current limits 1..255 A (a 10-bit field in
+               quarter amperes: a negative or larger value would spill into the command
+               bits of the mailbox word), time windows 1 ms..128 s, iGPU clock
+               100..2000 MHz, turbo 0 or 1; an out-of-range value keeps the default */
             if ((strstr(k, "uv_") && (x > 0 || x < -250 * K)) ||
                 (strstr(k, "_w") && strstr(k, "pl") && (x < 1 * K || x > 200 * K)) ||
-                (strstr(k, "trip") && (x < 40 * K || x > 105 * K))) {
+                (strstr(k, "trip") && (x < 40 * K || x > 105 * K)) ||
+                (!strncmp(k, "icc_", 4) && (x < 1 * K || x > 255 * K)) ||
+                (strstr(k, "_pl") && kl > 2 && !strcmp(k + kl - 2, "_s") && (x < 1 || x > 128 * K)) ||
+                (strstr(k, "_igpu_mhz") && (x < 100 * K || x > 2000 * K)) ||
+                (strstr(k, "_turbo") && x != 0 && x != 1 * K)) {
                 logs("conf: out of range, ignored: ", k);
                 return;
             }
