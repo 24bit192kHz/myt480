@@ -29,6 +29,9 @@ power caps are reported metadata, not automatically measured draw or usable
 controls. P0–P15 queries can be individually unsupported. See the
 [interface/approval report](../../research/2026-10-09-t480/12-mx150/01-voltage-and-controls.md).
 
+`make check` at the repository root runs these tests together with the
+`src/gpu-power` and `src/thermald-t480` suites and a shell syntax pass.
+
 Hardware-independent tests:
 
 ```sh

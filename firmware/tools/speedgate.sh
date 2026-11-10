@@ -2,7 +2,7 @@
 # Speed gate (roadmap 3.1): raw swap partition vs the same partition under LUKS2/dm-crypt. Root.
 # Swap is off meanwhile (no hibernate); the partition is restored as swap with its old UUID.
 # fio: static build from the workstation in /run/fio (not packaged for Artix).
-P=/dev/nvme0n1p2; U=<UUID of the swap partition>; L=/home/btw/t480-build/work/speedgate.log; K=/run/speedgate.key
+P=/dev/nvme0n1p2; U=${SWAP_UUID:?set SWAP_UUID to the UUID of the swap partition}; L=/home/btw/t480-build/work/speedgate.log; K=/run/speedgate.key
 say(){ echo "$(date +%T) $*" >> $L; }
 one(){ # label device jobname fio-args...
   a=$1; d=$2; n=$3; shift 3
