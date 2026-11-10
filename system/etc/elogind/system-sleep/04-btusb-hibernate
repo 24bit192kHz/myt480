@@ -34,8 +34,9 @@ reload() { # load btusb again and put hci0's soft block back (runs in the backgr
 	setsid sh -c '
 		[ -n "$1" ] && { sleep "$1"; [ -e '"$H"' ] && exit 0; }
 		[ -e '"$U"' ] || exit 0
+		# the marker stays until the module is back: a failed load is retried by the next post
+		modprobe btusb || { logger -t btusb-hibernate "modprobe btusb failed, Bluetooth stays off until the next wake"; exit 1; }
 		rm -f '"$U"'
-		modprobe btusb || exit 1
 		soft=$(cat /run/btusb-hibernate.soft 2>/dev/null); rm -f /run/btusb-hibernate.soft
 		i=0; while [ $i -lt 50 ]; do
 			for r in /sys/class/rfkill/rfkill*; do

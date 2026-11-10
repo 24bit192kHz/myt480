@@ -42,9 +42,15 @@ pre)
 	logger -t lid-wake-s4 "pre $2: EC 0x01 $(hex "$cur") -> $(hex "$new") (bit 6 set = lid may wake S4)" ;;
 post)
 	[ -e "$MARK" ] || exit 0
-	rm -f "$MARK"
-	cur=$(ec01) || exit 0
-	"$ECTOOL" -w 0x01 -z "$(hex $((cur & 0xbf)))" >/dev/null 2>&1
+	# The marker goes only once the bit is written back: an unreadable EC or a failed write
+	# leaves it, and the post of the next sleep tries again.
+	cur=$(ec01) || { logger -t lid-wake-s4 "post $2: EC byte 0x01 unreadable, bit 6 still set, retry at the next wake"; exit 0; }
+	if "$ECTOOL" -w 0x01 -z "$(hex $((cur & 0xbf)))" >/dev/null 2>&1; then
+		rm -f "$MARK"
+	else
+		logger -t lid-wake-s4 "post $2: EC write failed, bit 6 still set, retry at the next wake"
+		exit 0
+	fi
 	new=$(ec01) || new=-1
 	logger -t lid-wake-s4 "post $2: EC 0x01 $(hex "$cur") -> $(hex "$new") (bit 6 cleared)" ;;
 esac
