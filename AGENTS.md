@@ -8,8 +8,9 @@ the programs written for it. It is public.
 
     make check
 
-It runs a shell syntax pass over every tracked script and the three test
-suites (`tools/re-audit/tests`, `src/gpu-power/tests`, `src/thermald-t480/tests`).
+It runs a shell syntax pass over every tracked script and the test suites
+(`tools/re-audit/tests`, `src/gpu-power/tests`, `src/thermald-t480/tests`,
+`kernel/early-init/tests`).
 It needs `python3`, `cc`, `patch` and, for the ACPI tests, `iasl` and
 `acpiexec`. It never touches hardware and needs no root. Three skipped tests
 are normal (they want `T480_COREBOOT_ROOT`, a coreboot source tree).
@@ -23,8 +24,14 @@ are normal (they want `T480_COREBOOT_ROOT`, a coreboot source tree).
 - Never run the scripts in `firmware/tools/`, `system/etc/elogind/system-sleep/`,
   `system/etc/local.d/` or `kernel/early-init/` to try them out. They flash
   firmware, suspend the machine or repartition disks. Read them.
-- `system/etc/` and `system/usr-local/` mirror live files. A change here does
-  nothing until the owner deploys it on the laptop; say so in your summary.
+- `system/etc/`, `system/usr-local/` and `home/` mirror live files. A change here
+  does nothing until the owner deploys it on the laptop; say so in your summary.
+  `tools/kit-drift/kit-drift` (read-only, needs a way to reach the laptop) lists
+  what differs; `tools/kit-drift/expected.txt` holds the differences that are
+  meant, each with its reason.
+- A change to `kernel/early-init/init.c` or `t480-reseal` is rehearsed with
+  `kernel/early-init/qemu/go.sh` (QEMU, software TPM) before it is built into a
+  kernel.
 - Files kept in two places must stay identical: `src/gpu-power/prime-run` and
   `system/usr-local/bin/prime-run`.
 - Commit messages are one plain sentence, no prefix, no trailers.

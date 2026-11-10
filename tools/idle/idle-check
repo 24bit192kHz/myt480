@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""idle-check: is the locked, dark laptop still as quiet as it was?
+
+Samples N seconds (default 30) and fails when the idle budget is broken:
+
+  deep package C-states (PC8 + PC9 + PC10)   at least --deep percent   (default 50)
+  package power (RAPL)                       at most --watts           (default 1.5)
+  busiest single thread                      at most --wakeups per s   (default 150)
+
+Run as root, with the screen locked and the panel off: on a session in use
+the numbers mean nothing, and the check says so and exits 2 (--anyway measures
+all the same). Read-only: MSRs are read, nothing is written. Start it detached
+(nohup, output to a file): an SSH session that waits for the output keeps the
+package in shallower states (49 % deep instead of 74 % in the same minute).
+
+Why it exists: two regressions sat unnoticed for weeks (a PulseAudio plugin
+thread polling 1600 times a second, the GVT-g scheduler tick at 1000 Hz). Both
+break every line of this budget; see docs/notes/2026-11-10-idle-power.md.
+Numbers on 2026-11-10, locked, panel off: deep 74 %, 0.6 W on battery and
+1.0 W on AC, busiest thread 42 wakeups/s.
+
+exit status: 0 within budget, 1 over budget, 2 not measurable.
+"""
+import argparse
+import glob
+import os
+import struct
+import subprocess
+import sys
+import time
+
+PKG = {"pc2": 0x60D, "pc3": 0x3F8, "pc6": 0x3F9, "pc7": 0x3FA, "pc8": 0x630, "pc9": 0x631, "pc10": 0x632}
+DEEP = ("pc8", "pc9", "pc10")
+
+
+def msr(index):
+    fd = os.open("/dev/cpu/0/msr", os.O_RDONLY)
+    try:
+        return struct.unpack("<Q", os.pread(fd, 8, index))[0]
+    finally:
+        os.close(fd)
+
+
+def threads():
+    counts = {}
+    for status in glob.glob("/proc/[0-9]*/task/[0-9]*/status"):
+        try:
+            text = open(status).read()
+            name = text.split("\n", 1)[0].split("\t", 1)[1]
+            switches = sum(int(text.split(key + ":\t")[1].split("\n")[0])
+                           for key in ("voluntary_ctxt_switches", "nonvoluntary_ctxt_switches"))
+        except (OSError, IndexError, ValueError):
+            continue
+        parts = status.split("/")
+        counts[(parts[2], parts[4], name)] = switches
+    return counts
+
+
+def snapshot():
+    state = {"tsc": msr(0x10), "time": time.monotonic(), "energy": msr(0x611) & 0xffffffff}
+    for name, index in PKG.items():
+        state[name] = msr(index)
+    return state, threads()
+
+
+def session_is_dark():
+    """locked (a locker runs) and the panel is off (backlight power or DPMS)"""
+    locked = subprocess.run(["pgrep", "-x", "slock"], capture_output=True).returncode == 0
+    dark = False
+    for path in glob.glob("/sys/class/drm/card*-eDP-*/dpms"):
+        try:
+            dark = dark or open(path).read().strip() == "Off"
+        except OSError:
+            pass
+    return locked, dark
+
+
+def main():
+    parser = argparse.ArgumentParser(description="idle budget of the locked, dark laptop")
+    parser.add_argument("seconds", nargs="?", type=float, default=30)
+    parser.add_argument("--deep", type=float, default=50, help="minimum PC8+PC9+PC10 residency, percent")
+    parser.add_argument("--watts", type=float, default=1.5, help="maximum package power")
+    parser.add_argument("--wakeups", type=float, default=150, help="maximum wakeups per second of one thread")
+    parser.add_argument("--anyway", action="store_true", help="measure even if the session is in use")
+    args = parser.parse_args()
+
+    if os.geteuid():
+        sys.exit("idle-check: needs root (MSRs, every process)")
+    try:
+        unit = 1.0 / (1 << ((msr(0x606) >> 8) & 0x1f))
+    except OSError as error:
+        print(f"idle-check: cannot read MSRs ({error.strerror}); modprobe msr", file=sys.stderr)
+        sys.exit(2)
+    locked, dark = session_is_dark()
+    if not (locked and dark):
+        print(f"idle-check: session is {'locked' if locked else 'not locked'}, panel {'off' if dark else 'on'}:"
+              " the budget is for a locked machine with the panel off")
+        if not args.anyway:
+            sys.exit(2)
+
+    before, threads_before = snapshot()
+    time.sleep(args.seconds)
+    after, threads_after = snapshot()
+    seconds = after["time"] - before["time"]
+    ticks = after["tsc"] - before["tsc"]
+    residency = {name: 100.0 * (after[name] - before[name]) / ticks for name in PKG}
+    deep = sum(residency[name] for name in DEEP)
+    watts = ((after["energy"] - before["energy"]) & 0xffffffff) * unit / seconds
+    rates = sorted(((count - threads_before.get(key, count)) / seconds, key)
+                   for key, count in threads_after.items())[::-1]
+    # the sampler itself wakes for nothing; leave it out
+    rates = [(rate, key) for rate, key in rates if int(key[0]) != os.getpid()]
+    top_rate, top = rates[0] if rates else (0.0, ("-", "-", "-"))
+
+    print("package: " + " ".join(f"{name}={value:.1f}%" for name, value in residency.items())
+          + f"   power {watts:.2f} W")
+    print("threads: " + "; ".join(f"{key[2]}[{key[0]}]={rate:.0f}/s" for rate, key in rates[:8]))
+    problems = []
+    if deep < args.deep:
+        problems.append(f"deep package C-states {deep:.0f} % (budget: at least {args.deep:.0f} %)")
+    if watts > args.watts:
+        problems.append(f"package power {watts:.2f} W (budget: at most {args.watts:.2f} W)")
+    if top_rate > args.wakeups:
+        problems.append(f"thread {top[2]} of pid {top[0]} wakes {top_rate:.0f} times a second"
+                        f" (budget: at most {args.wakeups:.0f})")
+    for problem in problems:
+        print("OVER BUDGET: " + problem)
+    if not problems:
+        print(f"idle-check: within budget (deep {deep:.0f} %, {watts:.2f} W, busiest thread {top_rate:.0f}/s)")
+    sys.exit(1 if problems else 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -33,7 +33,8 @@ Left as it is.
 Tools: `tools/idle/` (`pkgc.py` = package/core C-state residency and RAPL power from the
 MSRs, `wakeups.py` = context switches per thread, `irqdiff.py` = interrupt rates,
 `idle-matrix3.sh` = step-by-step matrix that restores every setting). The kernel has no
-ftrace, turbostat and powertop are not installed.
+ftrace, turbostat and powertop are not installed. `idle-check` (added later the same day,
+see `2026-11-10-kit-review.md`) turns these numbers into a pass/fail budget.
 
 ## GVT-g
 

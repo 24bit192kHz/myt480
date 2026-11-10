@@ -49,6 +49,7 @@ Every directory has its own README.
 | `system/` | package lists, s6 services, every `/etc` file that is not a package default, `/usr/local` scripts |
 | `src/` | the programs written for this laptop, chadwm as configured, changes to third-party programs |
 | `home/` | dotfiles and `~/.local/bin` scripts |
+| `tools/` | `idle/` (idle-power measurement and the `idle-check` budget), `kit-drift/` (does the kit still match the laptop), `re-audit/` (the 2026-10-09 audit's tests) |
 | `docs/` | notes on why things are the way they are |
 | `research/` | dated subject reports, complete audit work log, validation and recovery |
 

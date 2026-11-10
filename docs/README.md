@@ -25,3 +25,5 @@ author's machine; their sources are in this repository under `firmware/` and `sr
 | `notes/2026-10-04-disk-encryption.md` | measured boot, signed kernel, LUKS with the TPM: the design, the numbers and what went wrong on the way |
 | `notes/2026-10-08-port-fixes.md` | firmware C55, the lid-wake-from-S4 experiments and Lenovo's SMM |
 | `notes/2026-10-09-evening.md` | what of the 2026-10-09 audit (`research/2026-10-09-t480/`) was deployed, the fixes added the same evening, the RTC-wake S3/S4 tests and the EC lid-wake experiment |
+| `notes/2026-11-10-idle-power.md` | the lost package C8: the PulseAudio plugin thread, programs pinning the MX150, GVT-g parameters and its scheduler tick; measurements |
+| `notes/2026-11-10-kit-review.md` | the kit read as a code base: broken tests, stale files, the reseal and early-init hardening, `make check`, `kit-drift`, `idle-check` |
