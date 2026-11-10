@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""kit-drift: does the kit still describe the laptop?
+
+Compares the files the kit mirrors (system/etc, system/usr-local, home) with the
+live machine and lists every difference that expected.txt does not explain.
+Read-only on both sides.
+
+  kit-drift                          on the laptop itself (run as root to read everything)
+  kit-drift -- ssh HOST              from another machine
+  kit-drift -- ssh HOST ssh root@localhost      ... as root over the laptop's own root login
+
+Everything after `--` is the command that reaches a shell on the laptop; the
+remote side only needs python3. Exit status 0: no unexplained difference, 1: drift.
+
+expected.txt, one entry per line:   STATUS  LIVE-PATH  reason
+  differs   the kit copy is scrubbed or deliberately different
+  absent    in the kit, not on this machine (optional piece)
+  live-only on the machine, deliberately not in the kit
+A trailing * in the path matches any ending. Entries that no longer apply are
+reported as stale, so the list cannot rot.
+"""
+import fnmatch
+import hashlib
+import json
+import os
+import subprocess
+import sys
+
+KIT = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+# kit directory -> live directory ("~" is the home of the laptop's user, uid 1000)
+MAP = (("system/etc", "/etc"), ("system/usr-local", "/usr/local"),
+       ("home/config", "~/.config"), ("home/local-bin", "~/.local/bin"),
+       ("home/local-share", "~/.local/share"), ("home", "~"))
+NOT_FILES = {"home/README.md", "system/usr-local/BINARIES.txt"}
+# directories the kit claims completely: a live file missing from the kit is drift too
+# (/usr/local and ~/.local/bin are not: they also hold binaries, backups and private tools)
+OWNED = ("/etc/elogind/system-sleep", "/etc/local.d", "/etc/sudoers.d", "/etc/modprobe.d",
+         "/etc/udev/rules.d", "/etc/sysctl.d", "/etc/tlp.d", "/etc/modules-load.d")
+
+REMOTE = r'''
+import hashlib, json, os, pwd, sys
+req = json.loads(%r)
+home = pwd.getpwuid(1000).pw_dir
+def real(p): return home + p[1:] if p.startswith("~") else p
+out = {"files": {}, "dirs": {}}
+for p in req["files"]:
+    r = real(p)
+    try:
+        if os.path.islink(r):
+            out["files"][p] = "link:" + os.readlink(r)
+            if os.path.isfile(r): out["files"][p] += "|" + hashlib.sha256(open(r, "rb").read()).hexdigest()
+        elif os.path.isfile(r): out["files"][p] = hashlib.sha256(open(r, "rb").read()).hexdigest()
+        elif os.path.exists(r): out["files"][p] = "not-a-file"
+        else: out["files"][p] = "absent"
+    except OSError as e: out["files"][p] = "unreadable:" + e.strerror
+for d in req["dirs"]:
+    try: out["dirs"][d] = sorted(n for n in os.listdir(real(d)) if not os.path.isdir(os.path.join(real(d), n)) or os.path.islink(os.path.join(real(d), n)))
+    except OSError: out["dirs"][d] = None
+print(json.dumps(out))
+'''
+
+
+def kit_files():
+    tracked = subprocess.run(["git", "-C", KIT, "ls-files", "-z", "system/etc", "system/usr-local", "home"],
+                             check=True, capture_output=True).stdout.decode().split("\0")
+    files = {}
+    for rel in filter(None, tracked):
+        if rel in NOT_FILES:
+            continue
+        for src, dst in MAP:
+            if rel.startswith(src + "/"):
+                files[dst + rel[len(src):]] = rel
+                break
+    return files
+
+
+def kit_state(rel):
+    path = os.path.join(KIT, rel)
+    if os.path.islink(path):
+        return "link:" + os.readlink(path)
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def expected():
+    entries = []
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expected.txt")
+    for line in open(path) if os.path.exists(path) else ():
+        parts = line.split(None, 2)
+        if len(parts) >= 2 and not line.startswith("#"):
+            entries.append([parts[0], parts[1], parts[2].strip() if len(parts) > 2 else "", 0])
+    return entries
+
+
+def main():
+    reach = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    files = kit_files()
+    request = json.dumps({"files": sorted(files), "dirs": list(OWNED)})
+    live = subprocess.run(reach + ["python3", "-"], input=(REMOTE % request).encode(),
+                          capture_output=True)
+    if live.returncode:
+        sys.exit("kit-drift: cannot ask the laptop: " + live.stderr.decode().strip()[-300:])
+    live = json.loads(live.stdout)
+    binaries = set()
+    for line in open(os.path.join(KIT, "system/usr-local/BINARIES.txt")):
+        if line.strip():
+            binaries.add("/usr/local/" + line.strip())
+
+    found = []
+    for path, rel in sorted(files.items()):
+        state = live["files"].get(path, "absent")
+        if state == "absent":
+            found.append(("absent", path))
+        elif state.startswith("unreadable"):
+            found.append(("unreadable", path))
+        else:
+            # a live link is compared by its target with a kit link, by its content with a kit file
+            want = kit_state(rel)
+            target, _, content = state.partition("|")
+            if want != (target if want.startswith("link:") or not content else content):
+                found.append(("differs", path))
+    for directory, names in live["dirs"].items():
+        for name in names or ():
+            path = directory + "/" + name
+            if path not in files and path not in binaries:
+                found.append(("live-only", path))
+
+    allow = expected()
+    drift = 0
+    for status, path in found:
+        for entry in allow:
+            if entry[0] == status and fnmatch.fnmatchcase(path, entry[1]):
+                entry[3] += 1
+                break
+        else:
+            drift += 1
+            print(f"{status:10} {path}" + (f"   (kit: {files[path]})" if path in files else ""))
+    for entry in allow:
+        if not entry[3]:
+            drift += 1
+            print(f"{'stale':10} expected.txt: {entry[0]} {entry[1]}")
+    explained = len(found) - sum(1 for s, p in found if not any(e[0] == s and fnmatch.fnmatchcase(p, e[1]) for e in allow))
+    print(f"kit-drift: {len(files)} mirrored files, {explained} expected differences, {drift} unexplained")
+    sys.exit(1 if drift else 0)
+
+
+if __name__ == "__main__":
+    main()

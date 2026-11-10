@@ -1,0 +1,14 @@
+# STATUS    LIVE-PATH                                  reason
+differs     /etc/default/grub                          partition UUIDs are placeholders in the kit
+differs     /etc/fstab                                 partition UUIDs and the NFS host are placeholders in the kit
+differs     /etc/nftables.conf                         addresses and interface names are examples in the kit
+differs     /etc/s6/rc.local                           one private start line left out
+differs     /etc/sudoers.d/30-ondemand                 comment shortened
+differs     /etc/sysctl.d/99-bbr.conf                  comment shortened
+differs     /etc/validity-rs.conf                      product and serial number are placeholders in the kit
+differs     ~/.config/gxwc/planet                      whatever `gxwc-wallpaper planet` chose last
+absent      ~/.config/zsh/plugins/PLUGINS.txt          the list of plugins to clone exists only in the kit
+live-only   /etc/udev/rules.d/80-net-name-slot.rules   package file (artix-branding-base)
+live-only   /etc/tlp.d/00-template.conf                package file (tlp)
+live-only   /etc/tlp.d/README                          package file (tlp)
+live-only   /etc/elogind/system-sleep/10-winapps       the Windows VM setup is not part of the kit

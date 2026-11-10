@@ -28,7 +28,9 @@ setopt extended_history hist_expire_dups_first hist_ignore_dups \
 # --- options ----------------------------------------------------------------
 setopt auto_cd auto_pushd pushd_ignore_dups pushd_minus interactive_comments \
        extended_glob no_beep complete_in_word always_to_end
-WORDCHARS=${WORDCHARS//[\/]}
+# words stop at punctuation (/ - . _ = etc.), so Ctrl+Left/Right, Ctrl+Backspace
+# and Ctrl+Right on a suggestion go one piece at a time
+WORDCHARS=''
 
 # --- completion: dump rebuilt at most once a day, otherwise -C (no audit) ---
 autoload -Uz compinit
@@ -60,7 +62,10 @@ bindkey '^[[A' up-line-or-beginning-search   '^[OA' up-line-or-beginning-search
 bindkey '^[[B' down-line-or-beginning-search '^[OB' down-line-or-beginning-search
 bindkey '^[[H' beginning-of-line '^[[1~' beginning-of-line '^[OH' beginning-of-line
 bindkey '^[[F' end-of-line       '^[[4~' end-of-line       '^[OF' end-of-line
-bindkey '^[[3~' delete-char '^?' backward-delete-char '^H' backward-delete-char
+# st sends ^H for Ctrl+Backspace (plain Backspace is ^?)
+# st sends ^[[P for Delete, ^[[M for Ctrl+Delete (^[[3~ / ^[[3;5~ only in keypad mode)
+bindkey '^[[P' delete-char '^[[M' kill-word
+bindkey '^[[3~' delete-char '^?' backward-delete-char '^H' backward-kill-word
 bindkey '^[[1;5C' forward-word '^[[1;5D' backward-word '^[[3;5~' kill-word
 bindkey '^[[Z' reverse-menu-complete
 # Esc Esc: prefix (or strip) sudo on the current / last command
@@ -149,108 +154,43 @@ ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 source $_zp/zsh-autosuggestions/zsh-autosuggestions.zsh
 typeset -A ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_MAXLENGTH=300
-ZSH_HIGHLIGHT_STYLES=(unknown-token fg=167 command fg=255 builtin fg=255 alias fg=255
-  function fg=255 precommand fg=250,underline path underline globbing fg=250
+# commands that exist: palette C2 green; not found: red
+ZSH_HIGHLIGHT_STYLES=(unknown-token fg=167 command 'fg=#66aa66' builtin 'fg=#66aa66' alias 'fg=#66aa66'
+  function 'fg=#66aa66' precommand 'fg=#66aa66,underline' path underline globbing fg=250
   single-quoted-argument fg=246 double-quoted-argument fg=246 comment fg=240
-  reserved-word fg=250 arg0 fg=255)
+  reserved-word fg=250 arg0 'fg=#66aa66')
 source $_zp/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 unset _zp
 
-# --- startup fetch: spinning Artix logo pinned above the prompt --------------
-# fetch --pinned (patched build: ~/build/fetch3d, branch "pinned") keeps
-# spinning in a header while you type and while commands run below it. It
-# pauses only for programs that take over the screen (vim, less, htop, git's
-# pager, claude, ...) and comes back at the next prompt.
-# `fetchoff` stops it and gives the rows back. Skipped inside Claude Code,
-# nested shells (parent is a shell; SHLVL is already 3 under st), short windows.
+# --- startup fetch: spinning Artix logo above the prompt ---------------------
+# fetch --pinned (patched build: ~/build/fetch3d, branch "pinned") spins in a
+# header while you type. The first command you run freezes it on the face-on
+# logo (SIGHUP) and turns it into ordinary text that scrolls up with the
+# output. `fetchoff` stops it and gives the rows back. Skipped inside Claude
+# Code, nested shells (parent is a shell; SHLVL is already 3 under st), short
+# windows.
 if [[ -o interactive && -t 0 && -t 1 && -z $CLAUDECODE && $TERM != dumb
       && ${LINES:-0} -ge 20 && $(</proc/$PPID/comm) != (zsh|bash|sh|dash|fish|claude) ]] \
    && whence -p fetch >/dev/null; then
   _fetch=( $(fetch --pinned 2>/dev/null) )    # pid, header rows
   if (( ${#_fetch} == 2 && _fetch[1] > 0 )); then
-    # Programs that switch to the full (alternate) screen, and pagers; the
-    # header would be drawn over them. REPLs and fzf --height keep it spinning.
-    _fetch_tui=(vi vim nvim view vimdiff nano emacs micro hx helix less more most
-      man info htop btop top atop nvtop iotop bmon nethogs watch ranger lf nnn
-      yazi mc tmux screen ssh mosh mpv cmus ncmpcpp tig lazygit gitui w3m lynx links
-      alsamixer pulsemixer nmtui cfdisk crontab visudo sudoedit journalctl)
-    # Full-screen apps that draw on the normal screen instead of the alternate
-    # one: the header is taken off the screen for them and put back after.
-    _fetch_inline=(claude opencode codex)
     zmodload -F zsh/zselect b:zselect
-    # Does any command in this line (pipelines, &&, ;) take over the screen?
-    _fetch_takes_screen() {
-      local -a w=(${(z)1})
-      local i=1 at_cmd=1 cmd sub
-      for (( i = 1; i <= $#w; i++ )); do
-        case $w[i] in ('|'|'||'|'&&'|';'|'|&'|'&'|'('|')') at_cmd=1; continue ;; esac
-        (( at_cmd )) || continue
-        case $w[i] in (*=*|sudo|doas|env|nice|nohup|time|command|exec|noglob|builtin|-*) continue ;; esac
-        at_cmd=0 cmd=${w[i]:t} sub=$w[i+1]
-        (( $_fetch_inline[(Ie)$cmd] )) && { _fetch_away=1; return 0 }
-        (( $_fetch_tui[(Ie)$cmd] )) && return 0
-        case $cmd in
-          (git) [[ $sub == (log|diff|show|blame|help|commit|rebase|merge|tag|branch|grep|shortlog|reflog|add|stash) ]] && return 0 ;;
-          (systemctl) [[ -z $sub || $sub == (status|show|cat|edit|list-*|--user) ]] && return 0 ;;
-        esac
-      done
-      return 1
-    }
-    # $3 = the command line with aliases expanded
-    _fetch_pause() {
-      _fetch_ran=1
-      _fetch_takes_screen "$3" || return 0
-      kill -USR1 $_fetch[1] 2>/dev/null || { fetchoff; return }
-      (( ${+_fetch_away} )) || return 0
-      zselect -t 5    # let a frame already being drawn land first
-      # drop the scroll region and delete the header rows; the text under
-      # it moves up and the cursor follows
-      print -n "\e7\e[r\e[H\e[$_fetch[2]M\e8\e[$_fetch[2]A"
-    }
-    # After an inline app: make room above its output for the header again.
-    # Rows that don't fit go into scrollback, not off the bottom.
-    _fetch_return() {
-      local h=$_fetch[2] row=$REPLY s
-      print -n '\e[r'
-      (( s = row + h - LINES, s > 0 )) && {
-        print -n "\e[$LINES;1H${(pl:s::\n:)}"
-        (( row -= s ))
-      }
-      print -n "\e[H\e[${h}L\e[$(( row + h ));1H"
-    }
-    # Cursor row via the terminal's position report (DSR). Anything typed
-    # ahead during the last command arrives before the reply; it goes back
-    # into the line editor.
-    _fetch_row() {
-      local reply
-      print -n '\e[6n'
-      read -rs -t 0.3 -d R reply || return 1
-      [[ $reply == *$'\e['<->\;<-> ]] || return 1
-      [[ -n ${reply%$'\e['*} ]] && print -z -- "${reply%$'\e['*}"
-      reply=${reply##*$'\e['}
-      REPLY=${reply%%\;*}
-    }
-    # The header stays while output scrolls under it (st still saves those
-    # lines to scrollback). Only if something like `reset` put the prompt
-    # inside the header does it stop pinning.
-    _fetch_resume() {
-      # An empty Enter ran nothing that could have moved the prompt or reset
-      # the region: leave the header alone (holding Enter used to query the
-      # cursor and signal fetch 50 times a second).
-      (( ${+_fetch_ran} )) || return 0
-      unset _fetch_ran
-      if (( ${+_fetch_away} )); then
-        unset _fetch_away
-        _fetch_row || REPLY=$LINES    # no answer: assume the bottom row
-        _fetch_return
-      elif (( ! ${+_fetch_nodsr} )); then
-        if _fetch_row; then
-          (( REPLY <= _fetch[2] )) && { fetchoff; return }
-        else
-          _fetch_nodsr=1    # terminal doesn't answer; keep it pinned
-        fi
+    zmodload -F zsh/system p:sysparams
+    _fetch_shell=$sysparams[pid]
+    # zshexit also runs in forked copies of this shell (zsh-autosuggestions'
+    # completion pty exits after every lookup): only the real shell stops fetch
+    _fetch_exit() { [[ $sysparams[pid] == $_fetch_shell ]] && fetchoff }
+    # first command: freeze, wait (<= 0.5 s) for the last frame to land so the
+    # command's output can't mix into it, then drop the hooks
+    _fetch_freeze() {
+      local i
+      if kill -HUP $_fetch[1] 2>/dev/null; then
+        for i in {1..25}; do
+          kill -0 $_fetch[1] 2>/dev/null || break
+          zselect -t 2
+        done
       fi
-      kill -WINCH $_fetch[1] 2>/dev/null && kill -USR2 $_fetch[1] 2>/dev/null || fetchoff
+      fetchoff
     }
     # clear below the header, not the whole screen
     clear() { print -n "\e[$((_fetch[2] + 1));1H\e[J" }
@@ -259,17 +199,14 @@ if [[ -o interactive && -t 0 && -t 1 && -z $CLAUDECODE && $TERM != dumb
     fetchoff() {
       kill $_fetch[1] 2>/dev/null
       print -n '\e7\e[r\e8'
-      add-zsh-hook -d preexec _fetch_pause
-      add-zsh-hook -d precmd _fetch_resume
-      add-zsh-hook -d zshexit fetchoff
+      add-zsh-hook -d preexec _fetch_freeze
+      add-zsh-hook -d zshexit _fetch_exit
       zle -A .clear-screen clear-screen 2>/dev/null
-      unfunction clear _fetch_clear_screen _fetch_row _fetch_takes_screen \
-        _fetch_return 2>/dev/null
-      unset _fetch _fetch_nodsr _fetch_tui _fetch_inline _fetch_away _fetch_ran
+      unfunction clear _fetch_clear_screen _fetch_freeze _fetch_exit 2>/dev/null
+      unset _fetch _fetch_shell
     }
-    add-zsh-hook preexec _fetch_pause
-    add-zsh-hook precmd _fetch_resume
-    add-zsh-hook zshexit fetchoff
+    add-zsh-hook preexec _fetch_freeze
+    add-zsh-hook zshexit _fetch_exit
   else
     unset _fetch
   fi
