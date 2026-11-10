@@ -84,17 +84,27 @@ next-boot)
 	;;
 rekey)
 	T=$(mktemp -d /run/t480-rekey.XXXXXX)
-	trap 'rm -rf "$T"' EXIT
-	seal_new "$D"
+	# Everything is made in $T and moved to $D at the end. A wrong passphrase or a failed wrap
+	# then leaves the blobs on disk as they were; a new kmk.blob next to keys wrapped by the
+	# old one would boot to the passphrase. On failure the new master key also leaves the
+	# keyring, so that a later plain `t480-reseal` cannot write it out next to the old keys.
+	ok=
+	trap 'rm -rf "$T"; [ -n "$ok" ] || { id=$(kid trusted t480-kmk) && keyctl unlink "$id" @u >/dev/null 2>&1; echo "t480-reseal: rekey failed, $D is unchanged" >&2; }' EXIT
+	seal_new "$T"
+	made=
 	for n in root swap; do
 		case $n in root) dev=${DISK}1 ;; swap) dev=${DISK}2 ;; esac
 		cryptsetup isLuks "$dev" 2>/dev/null || continue
 		echo "LUKS passphrase for $dev ($n):"
 		cryptsetup luksDump --batch-mode --dump-volume-key --volume-key-file "$T/$n.vk" "$dev" >/dev/null ||
 			die "could not read the volume key of $dev"
-		"$0" wrap $n "$T/$n.vk" "$D"
-		"$0" dm $n "$dev" "$D"
+		"$0" wrap $n "$T/$n.vk" "$T"
+		rm -f "$T/$n.vk"
+		"$0" dm $n "$dev" "$T"
+		made="$made $n.key $n.dm"
 	done
+	for f in $made kmk.blob; do put "$D/$f" < "$T/$f"; done
+	ok=1
 	rm -f "$D/kmk.next"
 	sync
 	echo "t480-reseal: new master key sealed, volume keys wrapped."
@@ -108,7 +118,10 @@ wrap)
 	[ "$(wc -c < "$3")" = 64 ] || die "$3 is not a 64-byte key"
 	kid trusted t480-kmk >/dev/null || die "t480-kmk is not loaded"
 	id=$(kid encrypted "t480-$2") && keyctl unlink "$id" @u >/dev/null 2>&1 || :
-	id=$(keyctl add encrypted "t480-$2" "new default trusted:t480-kmk 64 $(xxd -p -c 64 "$3")" @u) ||
+	# the volume key goes in through a pipe (padd), never as an argument: /proc/PID/cmdline is
+	# readable by every user for as long as the command runs
+	id=$({ printf 'new default trusted:t480-kmk 64 '; xxd -p -c 64 "$3"; } | tr -d '\n' |
+		keyctl padd encrypted "t480-$2" @u) ||
 		die "cannot wrap the key (CONFIG_USER_DECRYPTED_DATA?)"
 	keyctl pipe "$id" | put "$4/$2.key"
 	;;

@@ -220,7 +220,14 @@ static int tpm_extend_pcr8(int fd)
 	memset(p, 0, 32);
 	memcpy(p, "t480-early-init: key released", 29);
 	p += 32;
-	return tpm_cmd(fd, c, p, r, sizeof r);
+	/* a TPM that is busy (TPM_RC_RETRY and friends) gets a few more tries */
+	for (int try = 0; ; try++) {
+		int rc = tpm_cmd(fd, c, p, r, sizeof r);
+
+		if (!rc || try >= 4)
+			return rc;
+		nap_ms(20);
+	}
 }
 
 /* ---- kernel keys ---- */
@@ -571,6 +578,23 @@ static void i915_load(int wait)
 
 /* ---- main ---- */
 
+/* "ro" / "rw" as the kernel reads them: whole words, the last one decides */
+static int cmdline_ro(const char *cl)
+{
+	int ro = 0;
+
+	for (const char *p = cl; *p; ) {
+		const char *e = p;
+
+		while (*e && *e != ' ' && *e != '\n')
+			e++;
+		if (e - p == 2 && p[0] == 'r' && (p[1] == 'o' || p[1] == 'w'))
+			ro = p[1] == 'o';
+		p = *e ? e + 1 : e;
+	}
+	return ro;
+}
+
 /* a bare word on the command line (t480.provision), not part of another word or value */
 static int cmdline_flag(const char *cl, const char *word)
 {
@@ -607,7 +631,7 @@ int main(void)
 {
 	static char cl[4096], initp[256], res[32];
 	const char *keydir = NULL, *rootdev = P_ROOT;
-	int root_luks, swap_luks, tpm, root_minor = -1, swap_minor = -1, have_keys = 0, provision;
+	int root_luks, swap_luks, tpm, root_minor = -1, swap_minor = -1, have_keys = 0, provision, sealed = 0;
 	double t0;
 
 	mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, "mode=0755");
@@ -650,16 +674,28 @@ int main(void)
 	wait_for("/dev/tpm0", 2000);
 	tpm = open("/dev/tpm0", O_RDWR);
 	if (keydir && !access(keydir, F_OK)) {
+		char blobpath[64];
+
+		snprintf(blobpath, sizeof blobpath, "%s/kmk.blob", keydir);
+		sealed = !access(blobpath, F_OK);
 		if (root_luks || provision)
 			have_keys = !load_trusted(keydir, tpm);
 		else
 			say("plain root: TPM key left sealed (no t480.provision on the command line)");
 	}
 	if (tpm < 0 || tpm_extend_pcr8(tpm)) {
-		/* without the extend a later system could unseal: only go on if nothing was unsealed */
+		/*
+		 * Without the extend whatever runs next can still ask the TPM for the key. After a
+		 * release that is never acceptable. With no release it is acceptable only when a
+		 * LUKS2 root follows: that one opens with the passphrase or not at all. A plain
+		 * root's init is unmeasured code with a sealed blob in reach (PCR 8 still zero),
+		 * the very case the plain-root rule above exists for.
+		 */
 		say("PCR 8 extend FAILED");
-		if (have_keys) {
-			tell("\n  T480: TPM error after the key release. Powering off in 10 s.\n");
+		if (have_keys || (sealed && !root_luks)) {
+			tell(have_keys ? "\n  T480: TPM error after the key release. Powering off in 10 s.\n" :
+			     "\n  T480: the TPM could not be locked for this boot and the disk is not\n"
+			     "  encrypted. Powering off in 10 s.\n");
 			nap_ms(10000);
 			stop(RB_POWER_OFF);
 		}
@@ -706,7 +742,7 @@ int main(void)
 		wait_for(dmdev, 2000);
 		rootdev = dmdev;
 	}
-	for (int try = 0; mount(rootdev, "/newroot", "ext4", strstr(cl, " ro ") ? MS_RDONLY : 0, NULL); try++) {
+	for (int try = 0; mount(rootdev, "/newroot", "ext4", cmdline_ro(cl) ? MS_RDONLY : 0, NULL); try++) {
 		say("mount %s: errno %d", rootdev, errno);
 		if (try >= 2) {
 			tell("\n  T480: the root file system cannot be mounted. Powering off in 15 s.\n");

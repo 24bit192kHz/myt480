@@ -77,8 +77,18 @@ case $stage in
 	ok "normal boot after the reseal. Now the harness changes the 'firmware' (PCR 2)"; echo 6 > $S/stage; sync; mount -o remount,ro /; echo T480-TEST-CHANGE-FIRMWARE; poweroff -f ;;
 6)	early "TPM did not release the master key"; enc_checks_skip=1
 	[ "$(awk '$2=="/"{print $1}' /proc/mounts | tail -1)" = /dev/dm-0 ] || fail "root is not dm-0"
-	mount -a; ok "passphrase boot after a firmware change; rekey (asks the passphrase twice)"
+	mount -a; ok "passphrase boot after a firmware change"
+	# a rekey that fails half-way (no passphrase on stdin) must leave every blob as it was
+	# and no master key behind in the keyring
+	md5sum /boot/t480/* > /run/blobs.md5
+	! t480-reseal rekey < /dev/null || fail "rekey without a passphrase succeeded"
+	md5sum -c /run/blobs.md5 >/dev/null 2>&1 || fail "a failed rekey changed /boot/t480: $(ls -la /boot/t480 | tr '\n' '|')"
+	ls /boot/t480/*.new >/dev/null 2>&1 && fail "a failed rekey left .new files"
+	keyctl link @u @s; ! keyctl search @u trusted t480-kmk >/dev/null 2>&1 || fail "a failed rekey left a master key in the keyring"
+	ok "failed rekey left the blobs alone; rekey (asks the passphrase twice)"
 	t480-reseal rekey || fail "rekey"
+	# the volume key must never be an argument of a command (ps would show it)
+	grep -q "keyctl padd encrypted" /usr/local/sbin/t480-reseal || fail "t480-reseal wraps through argv"
 	next 7 ;;
 7)	early "root opened, swap opened, TPM key released"; enc_checks
 	ok "automatic again after rekey"; echo T480-TEST-ALL-PASS; sync; mount -o remount,ro /; poweroff -f ;;

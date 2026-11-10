@@ -15,5 +15,8 @@ if [ $rc -eq 0 ] && grep -q "VERIFIED" $L; then
   sync; reboot
 else
   echo "$(date +%T) NOT VERIFIED - no power-off" >> $L
+  # the one-shot blob opens the disk under any firmware: take it back while this boot still can
+  /usr/local/sbin/t480-reseal >> $L 2>&1 ||
+    echo "$(date +%T) reseal failed: /boot/t480/kmk.next is still there, remove it by hand" >> $L
   exit 1
 fi

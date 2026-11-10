@@ -17,6 +17,10 @@ key it asks for the LUKS passphrase on the console.
 - The TPM policy is: PCR 2 has the sealed value and PCR 8 is still zero. The early
   init extends PCR 8 right after the attempt, so the key can be released once per boot
   and nothing that runs later can get it again.
+- If that extension fails (TPM error; it is tried five times), the boot stops when a key
+  was released, and since 2026-11-10 also when a sealed blob exists and the root is
+  plain: its init would run unmeasured with PCR 8 still zero. Before a LUKS2 root the
+  boot goes on, because that root opens with the passphrase or not at all.
 - Each partition is looked at on its own (LUKS2 header or not), so the same kernel boots
   the machine before and after the conversion.
 - The master key is released only to open a LUKS2 root (since 2026-10-10, kernel
@@ -38,6 +42,7 @@ single use; it exists only between `t480-reseal next-boot` and the next boot.
 | File | Use |
 |---|---|
 | `init.c` | the early init; log in `/dev/t480-early.log` |
+| `tests/cmdline.c` | its reading of the kernel command line (`ro`/`rw`, `t480.provision`, `init=`, `i915.*`), run by `make check` at the repository root |
 | `Dockerfile` | build and test image (Alpine): musl toolchain, a static cryptsetup for the passphrase fallback, swtpm and tpm2-tools for the tests |
 | `Dockerfile.toolbox` | the tool set the conversion runs from RAM; also the root of the first test replica |
 | `Dockerfile.archroot` | root of the second test replica: bash, util-linux and coreutils as on Artix |
@@ -61,7 +66,9 @@ cp out/init ../early/root/init && cp out/cryptsetup ../early/root/bin/cryptsetup
 ```
 
 Then build the kernel. `qemu/go.sh` needs the built `vmlinuz` in `qemu/work/` and runs
-the whole procedure with a software TPM; run it before touching a real disk.
+the whole procedure with a software TPM; run it before touching a real disk. Run it from
+a short path: QEMU refuses a socket path of more than 107 bytes, and the software TPM's
+socket lies in `qemu/work/tpm/`. A pass ends with `RESULT: PASS` after about a minute.
 
 ## Converting a machine
 
@@ -87,7 +94,7 @@ the whole procedure with a software TPM; run it before touching a real disk.
 |---|---|
 | `t480-reseal next-boot` | before every firmware flash; `firmware/tools/flashrom.sh` does it. The first boot of the new firmware then re-seals by itself (`local.d/t480-reseal.start`) |
 | `t480-reseal` | after a firmware change when the machine is up and the key is loaded |
-| `t480-reseal rekey` | after a boot with the passphrase: new master key, keys wrapped again |
+| `t480-reseal rekey` | after a boot with the passphrase: new master key, keys wrapped again. Everything is made in `/run` first; a wrong passphrase leaves `/boot/t480` as it was |
 | `t480-reseal status` | PCRs, loaded keys, blobs, dm tables |
 
 Anything that changes what coreboot measures into PCR 2 makes the next boot ask for
